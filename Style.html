@@ -12,6 +12,27 @@
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); padding-bottom: 80px; scroll-behavior: smooth; }
 
+        /* Che màn hình trong lúc chờ getData() trả về (thường 2-4s do round-trip Apps Script) —
+           để người dùng thấy đang tải chứ không tưởng trang bị treo/trắng. Tự ẩn khi có dữ liệu
+           (xem applyLoadedData() ở 0_TienIch.html), tự ẩn cả khi lỗi sau tối đa 8s phòng hờ. */
+        .app-loading {
+            position: fixed; inset: 0; z-index: 5000;
+            background: var(--bg);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+            transition: opacity 0.25s ease;
+        }
+        .app-loading.hide { opacity: 0; pointer-events: none; }
+        .app-loading i { font-size: 2.4rem; color: var(--primary); animation: appLoadingPulse 1.1s ease-in-out infinite; }
+        .app-loading span { font-size: 0.9rem; color: var(--text-muted); font-weight: 600; }
+        @keyframes appLoadingPulse { 0%, 100% { opacity: 0.4; transform: scale(0.94); } 50% { opacity: 1; transform: scale(1); } }
+
+        /* Header mobile (<768px) — ẩn hẳn trên desktop, xem @media(min-width:768px) phía dưới. */
+        .header { background: linear-gradient(135deg, var(--navy), var(--navy-light)); color: white; height: var(--header-h); padding: 0 1.5rem; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.1); position: sticky; top: 0; z-index: 100;}
+        .header .brand { display: flex; align-items: center; gap: 12px; }
+        .header .brand-text { display: flex; flex-direction: column; line-height: 1.25; }
+        .header .brand-text .brand-name { color: var(--accent); font-weight: 800; font-size: 0.75rem; letter-spacing: 2px; }
+        .header .brand-text .brand-sub { color: #cbd5e1; font-size: 0.7rem; font-weight: 500; }
+        .header-actions { display: flex; align-items: center; gap: 15px; }
         .header-user-info { display: none; text-align: right; line-height: 1.3; }
         .header-username { color: white; font-weight: bold; font-size: 0.85rem; }
         .header-change-pass { color: #bae6fd; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
@@ -62,6 +83,24 @@
         .nav-group.open .nav-group-items { max-height: 240px; }
         .side-nav-btn.nav-child { padding-left: 40px; font-size: 0.88rem; }
 
+        /* Thanh điều hướng dưới cùng + Trang chủ dạng ô lớn — chỉ dành cho mobile (<768px),
+           xem @media(min-width:768px) phía dưới để biết cách ẩn trên desktop. */
+        .nav-mobile { position: fixed; bottom: 0; left: 0; width: 100%; background: white; display: flex; justify-content: space-around; padding: 0.8rem 0; box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.05); z-index: 1000; }
+        .nav-mobile .nav-btn { display: flex; flex-direction: column; align-items: center; font-size: 0.75rem; color: var(--text-muted); padding: 0.5rem; border: none; }
+        .nav-mobile .nav-btn i { font-size: 1.4rem; margin-bottom: 5px; }
+        .nav-mobile .nav-btn.active { color: var(--primary); }
+
+        .home-greet { margin-bottom: 16px; }
+        .home-greet span { display: block; font-size: 1.2rem; font-weight: 800; color: var(--text-main); }
+        .home-greet small { color: var(--text-muted); font-size: 0.85rem; }
+        .home-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+        .home-tile {
+            background: var(--card-bg); border: 1px solid var(--border); border-top: 4px solid var(--tile-c, var(--primary));
+            border-radius: 14px; padding: 26px 10px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06); color: var(--text-main); font-weight: 700; font-size: 0.9rem;
+        }
+        .home-tile i { font-size: 1.7rem; color: var(--tile-c, var(--primary)); }
+
         .container { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
         .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
         .tab-content.active { display: block; }
@@ -75,13 +114,18 @@
         .bc-bar-scroll { overflow-x: auto; }
         #bcBarChartInner { height: 260px; }
         .bc-group-row td { background: #f8fafc; color: #0369a1; font-weight: 700; text-align: left !important; font-size: 0.85rem; padding: 0.55rem 0.6rem; }
-        .bc-bar-cell { min-width: 130px; display: flex; align-items: center; gap: 8px; }
+        /* LƯU Ý: display:flex đặt thẳng lên <td> sẽ khiến vertical-align bị bỏ qua (nội dung dạt
+           lên đỉnh ô thay vì canh giữa khi hàng bị kéo cao do cột khác xuống dòng nhiều) — nên đặt
+           flex lên 1 div bọc bên trong (.bc-bar-flex), còn <td> giữ nguyên vertical-align:middle. */
+        .bc-bar-cell { min-width: 130px; vertical-align: middle; }
+        .bc-bar-flex { display: flex; align-items: center; gap: 8px; }
         .bc-bar-track { flex: 1 1 auto; height: 7px; border-radius: 5px; background: var(--border); overflow: hidden; }
         .bc-bar-fill { height: 100%; border-radius: 5px; }
-        .bc-bar-fill.status-ok { background: var(--success); }
-        .bc-bar-fill.status-late { background: #B8860B; }
-        .bc-bar-fill.status-bad { background: var(--danger); }
-        .bc-bar-fill.status-done { background: #94a3b8; }
+        .bc-bar-fill.status-pending { background: #B8860B; }
+        .bc-bar-fill.status-inprogress { background: #2563EB; }
+        .bc-bar-fill.status-done { background: var(--success); }
+        .bc-bar-fill.status-late_done { background: var(--primary); }
+        .bc-bar-fill.status-overdue { background: var(--danger); }
         .bc-bar-pct { font-size: 12px; font-weight: 700; color: var(--text-main); white-space: nowrap; flex: 0 0 auto; }
         .bc-detail-note { font-size: 12px; color: var(--text-muted); max-width: 220px; }
         .bc-detail-note b { color: var(--danger); font-weight: 600; }
@@ -165,6 +209,11 @@
         .task-name-cell { display: flex; flex-direction: column; gap: 2px; }
         .task-name-cell .t-name { font-weight: 600; color: var(--text-main); }
         .task-name-cell .t-target { font-size: 0.76rem; color: var(--text-muted); }
+        /* Công việc đã bị Giám sát xóa: chỉ hiện ở tab "Thi công / Tiến độ" (không lên Tổng quan),
+           gạch ngang tên + mờ cả dòng thay vì ẩn hẳn, để vẫn thấy lịch sử. */
+        .task-row.deleted { opacity: 0.5; }
+        .task-row.deleted .t-name { text-decoration: line-through; }
+        .deleted-label { font-size: 0.76rem; font-style: italic; color: var(--text-muted); }
 
         .gantt-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 130px; }
         .gantt-track { flex: 1; height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; }
@@ -196,51 +245,61 @@
         .daily-log-item { border-left: 3px solid var(--border); padding: 6px 10px; margin-bottom: 6px; font-size: 0.82rem; }
         .daily-log-item .dl-date { font-weight: 700; color: var(--text-muted); font-size: 0.72rem; }
 
-        /* Web app này chỉ dùng trên máy tính/laptop — bỏ hẳn bản mobile, layout sidebar bên dưới
-           luôn áp dụng vô điều kiện (không còn gói trong @media nữa). */
-        body { padding-bottom: 0; }
-        .kpi-row { grid-template-columns: repeat(4, 1fr); }
-        .bc-charts-grid { grid-template-columns: 1fr 1fr; }
-        .form-row-3 { grid-template-columns: 1fr 1fr 1fr; display: grid; gap: 1rem;}
-        .btn { width: auto; }
+        /* Dưới 768px: header + trang chủ dạng ô lớn + thanh điều hướng dưới cùng (xem .header/
+           .nav-mobile/.home-* phía trên). Từ 768px trở lên: chuyển hẳn sang layout sidebar. */
+        @media (min-width: 768px) {
+            .nav-mobile { display: none; }
+            body { padding-bottom: 0; }
+            .kpi-row { grid-template-columns: repeat(4, 1fr); }
+            .bc-charts-grid { grid-template-columns: 1fr 1fr; }
+            .form-row-3 { grid-template-columns: 1fr 1fr 1fr; display: grid; gap: 1rem;}
+            .btn { width: auto; }
 
-        .app-layout { display: block; }
-        .sidebar-desktop {
-            display: flex; flex-direction: column;
-            width: var(--sidebar-w); flex-shrink: 0;
-            position: fixed; left: 0; top: 0;
-            height: 100vh;
-            background: var(--navy);
-            box-shadow: 2px 0 10px rgba(0,0,0,0.15);
-            z-index: 90;
-        }
-        .sidebar-brand {
-            display: flex; align-items: center; gap: 8px;
-            height: var(--header-h); flex-shrink: 0;
-            padding: 0 14px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .sidebar-brand .brand-icon { width: 30px; height: 30px; border-radius: 6px; background: var(--accent); color: var(--navy); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:0.9rem; flex-shrink:0; }
-        .sidebar-brand .brand-text { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
-        .sidebar-brand .brand-name, .sidebar-brand .brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .sidebar-brand .brand-name { color: var(--accent); font-weight: 800; font-size: 0.68rem; letter-spacing: 0.5px; }
-        .sidebar-brand .brand-sub { color: #93a9b8; font-size: 0.62rem; font-weight: 500; }
+            .app-layout { display: block; }
+            .sidebar-desktop {
+                display: flex; flex-direction: column;
+                width: var(--sidebar-w); flex-shrink: 0;
+                position: fixed; left: 0; top: 0;
+                height: 100vh;
+                background: var(--navy);
+                box-shadow: 2px 0 10px rgba(0,0,0,0.15);
+                z-index: 90;
+            }
+            .sidebar-brand {
+                display: flex; align-items: center; gap: 8px;
+                height: var(--header-h); flex-shrink: 0;
+                padding: 0 14px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+            .sidebar-brand .brand-icon { width: 30px; height: 30px; border-radius: 6px; background: var(--accent); color: var(--navy); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:0.9rem; flex-shrink:0; }
+            .sidebar-brand .brand-text { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+            .sidebar-brand .brand-name, .sidebar-brand .brand-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .sidebar-brand .brand-name { color: var(--accent); font-weight: 800; font-size: 0.68rem; letter-spacing: 0.5px; }
+            .sidebar-brand .brand-sub { color: #93a9b8; font-size: 0.62rem; font-weight: 500; }
 
-        /* Khối đăng nhập trong sidebar: nằm dưới logo, trên danh sách Tab. */
-        .sidebar-login {
-            display: flex; flex-direction: column; align-items: center; gap: 8px;
-            padding: 14px 16px; text-align: center;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .sidebar-login .header-user-info { text-align: center; }
-        .sidebar-login .js-lock-btn { width: 100%; }
+            /* Khối đăng nhập trong sidebar: nằm dưới logo, trên danh sách Tab. */
+            .sidebar-login {
+                display: flex; flex-direction: column; align-items: center; gap: 8px;
+                padding: 14px 16px; text-align: center;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+            }
+            .sidebar-login .header-user-info { text-align: center; }
+            .sidebar-login .js-lock-btn { width: 100%; }
 
-        .sidebar-nav {
-            display: flex; flex-direction: column; gap: 2px;
-            flex: 1; overflow-y: auto; padding: 16px 10px;
-        }
+            .sidebar-nav {
+                display: flex; flex-direction: column; gap: 2px;
+                flex: 1; overflow-y: auto; padding: 16px 10px;
+            }
 
-        .app-layout .container { margin-left: var(--sidebar-w); max-width: none; width: auto; padding: 1.5rem 2rem; }
+            /* Đăng nhập đã chuyển vào sidebar trên desktop — ẩn hẳn header mobile để nhường chỗ
+               hiển thị. */
+            .header { display: none; }
+            .header .header-username { color: var(--text-main); }
+            .header .header-change-pass { color: var(--primary); }
+            #home.home-screen { display: none !important; }
+
+            .app-layout .container { margin-left: var(--sidebar-w); max-width: none; width: auto; padding: 1.5rem 2rem; }
+        }
 
         /* ============================================================
            MODULE NHẬT KÝ TIẾN ĐỘ — CSS gộp từ 3 mockup (ntd-/wtd-/bc-).
@@ -254,11 +313,17 @@
             --ok: var(--success); --ok-dim: #E4F2E9;
             --warn: var(--danger); --warn-dim: #FBE6E6;
             --late: #B8860B; --late-dim: #FBF1DA;
+            --info: #2563EB; --info-dim: #E1EBFB;
             --radius: 14px;
         }
-        .gantt-fill.status-ok, .gantt-fill.status-done { background: linear-gradient(90deg, #34d399, var(--ok)); }
-        .gantt-fill.status-late { background: linear-gradient(90deg, #f2c14e, var(--late)); }
-        .gantt-fill.status-bad { background: linear-gradient(90deg, #f87171, var(--warn)); }
+        /* 4 mức trạng thái công việc (xem getData() ở Code.js): đang thực hiện (xanh dương) —
+           hoàn thành (xanh lá) — trễ tiến độ nhưng hoàn thành (cam) — trễ tiến độ không hoàn
+           thành (đỏ). Dùng chung 1 bảng màu này cho mọi tab (gantt/thanh tiến độ/badge). */
+        .gantt-fill.status-pending { background: linear-gradient(90deg, #e8c368, var(--late)); }
+        .gantt-fill.status-inprogress { background: linear-gradient(90deg, #60a5fa, var(--info)); }
+        .gantt-fill.status-done { background: linear-gradient(90deg, #34d399, var(--ok)); }
+        .gantt-fill.status-late_done { background: linear-gradient(90deg, #f2a154, var(--safety)); }
+        .gantt-fill.status-overdue { background: linear-gradient(90deg, #f87171, var(--warn)); }
 
         /* ---- 5_TienDo_NhatKy.html (mobile) ---- */
         .ntd-wrap{ background:var(--paper); color:var(--ink); }
@@ -361,16 +426,14 @@
         .bc-table tbody tr:hover{ background:#FBFAF7; cursor:pointer; }
         .bc-hm-name{ font-weight:600; } .bc-hm-sub{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
         .bc-gs{ font-size:12px; color:var(--ink-soft); white-space:nowrap; }
-        .bc-bar-cell{ min-width:150px; }
-        .bc-bar-track{ height:8px; border-radius:5px; background:var(--line); position:relative; overflow:hidden; }
-        .bc-bar-fill{ height:100%; border-radius:5px; }
         .bc-bar-plan{ position:absolute; top:-2px; width:2px; height:12px; background:var(--ink); }
         .bc-bar-nums{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-soft); margin-top:4px; }
         .bc-badge{ display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
-        .bc-badge.ok{ background:var(--ok-dim); color:var(--ok); }
-        .bc-badge.late{ background:var(--late-dim); color:var(--late); }
-        .bc-badge.bad{ background:var(--warn-dim); color:var(--warn); }
-        .bc-badge.done{ background:#E7E5DD; color:var(--ink-soft); }
+        .bc-badge.pending{ background:var(--late-dim); color:var(--late); }
+        .bc-badge.inprogress{ background:var(--info-dim); color:var(--info); }
+        .bc-badge.done{ background:var(--ok-dim); color:var(--ok); }
+        .bc-badge.late_done{ background:var(--safety-dim); color:var(--safety); }
+        .bc-badge.overdue{ background:var(--warn-dim); color:var(--warn); }
         .bc-note{ font-size:12px; color:var(--ink-soft); max-width:220px; }
         .bc-note em{ color:var(--warn); font-style:normal; font-weight:600; }
         .bc-detail-row td{ background:#FBFAF7; padding:0; }

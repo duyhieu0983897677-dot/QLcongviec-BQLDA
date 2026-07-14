@@ -29,9 +29,12 @@ function closeBaoCaoModal() {
 }
 
 function myReportableCongViec() {
+    // congViec toàn cục nay gồm cả Công việc đã bị xóa (active=false, chỉ để hiện gạch ngang ở
+    // tab "Thi công / Tiến độ") — loại hẳn khỏi đây, không cho báo cáo % vào việc đã xóa.
+    const active = congViec.filter(cv => cv.active !== false);
     return currentRole === 'ADMIN'
-        ? congViec
-        : congViec.filter(cv => cv.nguoiTaoId === mySupervisorId);
+        ? active
+        : active.filter(cv => cv.nguoiTaoId === mySupervisorId);
 }
 
 // Nhóm theo "Tên gói thầu · Phần" — đúng cấu trúc cố định I.Phần hồ sơ / II.Phần triển khai thi công.

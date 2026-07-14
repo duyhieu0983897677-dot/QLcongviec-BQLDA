@@ -57,7 +57,7 @@ function toggleAdmin() {
         body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
-        switchTab('dashboard');
+        switchTab(window.innerWidth < 768 ? 'home' : 'dashboard');
     }
 }
 

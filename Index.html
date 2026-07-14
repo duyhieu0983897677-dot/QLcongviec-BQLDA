@@ -4,16 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản Lý Công Việc - Ban QLDA Bãi Xép</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    <script src="https://npmcdn.com/flatpickr/dist/l10n/vi.js"></script>
+    <!-- defer: không chặn parse HTML/chạy script chính — Chart.js/flatpickr chỉ thật sự cần sau
+         khi getData() trả về (vài giây sau), nên không có lý do gì để browser dừng lại chờ tải
+         3 file này trước khi vẽ xong khung trang và bắn request getData() đi. -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/vi.js" defer></script>
 
     <?!= include('Style'); ?>
 </head>
 <body class="role-view view-only-mode">
+
+    <div id="appLoading" class="app-loading">
+        <i class="fa-solid fa-helmet-safety"></i>
+        <span>Đang tải dữ liệu...</span>
+    </div>
+
+    <header class="header">
+        <div class="brand">
+            <div class="sidebar-brand-icon" style="width:38px;height:38px;border-radius:8px;background:var(--accent);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:900;">CV</div>
+            <div class="brand-text">
+                <span class="brand-name">BAN QLDA BÃI XÉP</span>
+                <span class="brand-sub">Quản lý công việc</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <div class="js-user-info header-user-info">
+                <div class="header-username"><i class="fa-solid fa-user"></i> <span class="js-user-name">--</span></div>
+                <div class="header-change-pass" onclick="openChangePassModal()">Đổi mật khẩu</div>
+            </div>
+            <button class="js-lock-btn admin-btn locked" onclick="toggleAdmin()"><i class="fa-solid fa-lock"></i> Đăng nhập</button>
+        </div>
+    </header>
 
     <div class="app-layout">
         <aside class="sidebar-desktop">
@@ -40,6 +70,30 @@
         </aside>
 
     <main class="container">
+
+        <!-- TRANG CHỦ (chỉ hiện trên điện thoại, <768px) -->
+        <section id="home" class="tab-content home-screen">
+            <div class="home-greet">
+                <span>Xin chào 👋</span>
+                <small>Chọn 1 mục để bắt đầu</small>
+            </div>
+            <div class="home-tiles">
+                <button class="nav-btn home-tile" onclick="switchTab('dashboard')" style="--tile-c: var(--primary);">
+                    <i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span>
+                </button>
+                <button class="nav-btn home-tile" onclick="switchTab('danhsach')" style="--tile-c: var(--accent);">
+                    <i class="fa-solid fa-sitemap"></i><span>Thi công / Tiến độ</span>
+                </button>
+            </div>
+            <div class="home-tiles">
+                <button class="nav-btn home-tile" onclick="switchTab('diemdanh')" style="--tile-c: #b8860b;">
+                    <i class="fa-solid fa-calendar-check"></i><span>Điểm danh</span>
+                </button>
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7c3aed;">
+                    <i class="fa-solid fa-users-gear"></i><span>Giám sát</span>
+                </button>
+            </div>
+        </section>
 
         <!-- TAB: TỔNG QUAN — Báo cáo tổng (KPI) + Báo cáo chi tiết (theo Gói thầu/Hạng mục) -->
         <section id="dashboard" class="tab-content active">
@@ -79,12 +133,14 @@
                     <table class="data-table">
                         <thead><tr>
                             <th>STT</th>
-                            <th>Mã hạng mục</th>
-                            <th style="text-align:left;">Tên công việc</th>
-                            <th>Người phụ trách</th>
-                            <th>Ngày bắt đầu</th>
-                            <th>Ngày hoàn thành</th>
+                            <th style="min-width:110px;">Mã hạng mục</th>
+                            <th style="text-align:left; min-width:220px;">Tên công việc</th>
+                            <th style="min-width:100px;">Người phụ trách</th>
+                            <th style="min-width:90px;">Chức danh</th>
+                            <th style="min-width:100px;">Ngày bắt đầu</th>
+                            <th style="min-width:100px;">Ngày hoàn thành</th>
                             <th style="min-width:140px;">Tiến độ</th>
+                            <th style="min-width:150px;">Tình trạng</th>
                             <th style="text-align:left; min-width:180px;">Ghi chú</th>
                         </tr></thead>
                         <tbody id="bcDetailBody"></tbody>
@@ -143,17 +199,27 @@
                     </select>
                     <select id="filterTrangThaiMau" onchange="renderDanhSach()">
                         <option value="">-- Tất cả trạng thái --</option>
-                        <option value="ok">Đúng tiến độ</option>
-                        <option value="late">Trễ nhẹ</option>
-                        <option value="bad">Trễ nghiêm trọng</option>
+                        <option value="pending">Chờ thực hiện</option>
+                        <option value="inprogress">Đang thực hiện</option>
                         <option value="done">Hoàn thành</option>
+                        <option value="late_done">Trễ tiến độ nhưng hoàn thành</option>
+                        <option value="overdue">Trễ tiến độ không hoàn thành</option>
                     </select>
                     <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục..." oninput="renderDanhSach()" style="flex:1; min-width:180px;">
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead>
-                            <tr><th style="text-align:left;">Tên công việc</th><th>Người phụ trách</th><th>Chức danh</th><th>Tiến độ</th><th>Trạng thái</th><th>Hành động</th></tr>
+                            <tr>
+                                <th style="text-align:left; min-width:220px;">Tên công việc</th>
+                                <th style="min-width:100px;">Người phụ trách</th>
+                                <th style="min-width:90px;">Chức danh</th>
+                                <th style="min-width:100px;">Ngày bắt đầu</th>
+                                <th style="min-width:100px;">Ngày kết thúc</th>
+                                <th style="min-width:140px;">Tiến độ</th>
+                                <th style="min-width:150px;">Trạng thái</th>
+                                <th>Hành động</th>
+                            </tr>
                         </thead>
                         <tbody id="danhSachBody"></tbody>
                     </table>
@@ -197,6 +263,15 @@
         </section>
     </main>
     </div>
+
+    <!-- Thanh điều hướng mobile (<768px) -->
+    <nav class="nav-mobile">
+        <button class="nav-btn active" onclick="switchTab('home')"><i class="fa-solid fa-house"></i><span>Trang chủ</span></button>
+        <button class="nav-btn" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span></button>
+        <button class="nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-sitemap"></i><span>Thi công</span></button>
+        <button class="nav-btn" onclick="switchTab('diemdanh')"><i class="fa-solid fa-calendar-check"></i><span>Điểm danh</span></button>
+        <button class="nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i><span>Giám sát</span></button>
+    </nav>
 
     <!-- MODAL: THÊM/SỬA HẠNG MỤC (mã/tên tham chiếu, cây cha-con — chỉ Admin) -->
     <div id="hangMucModal" class="modal">

@@ -163,7 +163,9 @@ function readGoiThauRows_(sheet) {
   return result;
 }
 
-function readCongViecRows_(sheet) {
+// includeInactive: true để lấy cả Công việc đã bị Giám sát xóa (active=false) — dùng cho tab
+// "Thi công / Tiến độ" hiển thị gạch ngang, KHÔNG dùng cho báo cáo tổng hợp (xem getBaoCaoTongHop).
+function readCongViecRows_(sheet, includeInactive) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
@@ -172,7 +174,8 @@ function readCongViecRows_(sheet) {
   values.forEach((r, idx) => {
     const maCongViec = String(r[0] || '').trim();
     if (!maCongViec) return;
-    if (!isActiveVal_(r[9])) return;
+    const active = isActiveVal_(r[9]);
+    if (!active && !includeInactive) return;
     result.push({
       maCongViec,
       tenCongViec: String(r[1] || '').trim(),
@@ -183,6 +186,7 @@ function readCongViecRows_(sheet) {
       nguoiTaoTen: String(r[6] || '').trim(),
       ngayBatDauKH: formatDateCell_(r[7]),
       ngayKetThucKH: formatDateCell_(r[8]),
+      active,
       rowIndex: idx + 2
     });
   });
@@ -215,42 +219,52 @@ function readNhatKyRows_(sheet) {
   return result;
 }
 
-function daysBetween_(isoStart, isoEnd) {
-  const a = new Date(isoStart), b = new Date(isoEnd);
-  return Math.round((b - a) / 86400000);
-}
-
-// Trả về { hangMuc, goiThau, congViec, users } — congViec đã tính sẵn luyKe/phanTramKeHoach/
-// chenhLech/trangThaiMau (cộng dồn từ NhatKyTienDo theo maCongViec).
+// Trả về { hangMuc, goiThau, congViec, users } — congViec đã tính sẵn luyKe/trangThaiMau (cộng dồn
+// từ NhatKyTienDo theo maCongViec). trangThaiMau là 1 trong 4 giá trị, xét theo hạn ngayKetThucKH
+// (KHÔNG còn nội suy % kế hoạch theo thời gian đã trôi qua như trước):
+// - pending    : chưa hoàn thành và chưa tới ngayBatDauKH (chưa tới thời điểm bắt đầu)
+// - inprogress : chưa hoàn thành (luyKe<100), đã tới ngày bắt đầu và còn trong hạn
+// - done       : đã hoàn thành (luyKe>=100) đúng hạn (hoặc chưa đặt hạn để so)
+// - late_done  : đã hoàn thành nhưng ngày hoàn thành thực tế (log đưa lũy kế chạm mốc 100%
+//                đầu tiên) trễ hơn ngayKetThucKH
+// - overdue    : chưa hoàn thành và hôm nay đã qua ngayKetThucKH
+// congViec ở đây gồm CẢ Công việc đã bị Giám sát xóa (active=false) — để tab "Thi công / Tiến độ"
+// hiển thị gạch ngang; getBaoCaoTongHop() bên dưới tự lọc bỏ trước khi trả về báo cáo tổng hợp.
 function getData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const hangMuc = readHangMucRows_(ss.getSheetByName('HangMuc'));
   const goiThau = readGoiThauRows_(ss.getSheetByName('GoiThau'));
-  const congViec = readCongViecRows_(ss.getSheetByName('CongViec'));
+  const congViec = readCongViecRows_(ss.getSheetByName('CongViec'), true);
   const logs = readNhatKyRows_(ss.getSheetByName('NhatKyTienDo')).filter(l => l.active);
 
   const luyKeMap = {};
-  logs.forEach(l => { luyKeMap[l.maCongViec] = (luyKeMap[l.maCongViec] || 0) + l.phanTramNgay; });
+  const logsByCongViec = {};
+  logs.forEach(l => {
+    luyKeMap[l.maCongViec] = (luyKeMap[l.maCongViec] || 0) + l.phanTramNgay;
+    (logsByCongViec[l.maCongViec] = logsByCongViec[l.maCongViec] || []).push(l);
+  });
+  Object.keys(logsByCongViec).forEach(id => logsByCongViec[id].sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao)));
 
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   congViec.forEach(cv => {
     const luyKe = Math.round((luyKeMap[cv.maCongViec] || 0) * 10) / 10;
     cv.luyKe = luyKe;
-    let keHoach = 0;
-    if (cv.ngayBatDauKH && cv.ngayKetThucKH) {
-      const tongNgay = daysBetween_(cv.ngayBatDauKH, cv.ngayKetThucKH);
-      if (tongNgay > 0) {
-        const soNgayDaQua = daysBetween_(cv.ngayBatDauKH, today);
-        keHoach = Math.max(0, Math.min(100, (soNgayDaQua / tongNgay) * 100));
+
+    if (luyKe >= 100) {
+      let ngayHoanThanhThucTe = null;
+      let running = 0;
+      const logsOfThis = logsByCongViec[cv.maCongViec] || [];
+      for (let i = 0; i < logsOfThis.length; i++) {
+        running += logsOfThis[i].phanTramNgay;
+        if (running >= 99.999) { ngayHoanThanhThucTe = logsOfThis[i].ngayBaoCao; break; }
       }
+      cv.trangThaiMau = (cv.ngayKetThucKH && ngayHoanThanhThucTe && ngayHoanThanhThucTe > cv.ngayKetThucKH) ? 'late_done' : 'done';
+    } else if (cv.ngayBatDauKH && today < cv.ngayBatDauKH) {
+      cv.trangThaiMau = 'pending';
+    } else {
+      cv.trangThaiMau = (cv.ngayKetThucKH && today > cv.ngayKetThucKH) ? 'overdue' : 'inprogress';
     }
-    cv.phanTramKeHoach = Math.round(keHoach * 10) / 10;
-    cv.chenhLech = Math.round((luyKe - cv.phanTramKeHoach) * 10) / 10;
-    if (luyKe >= 100) cv.trangThaiMau = 'done';
-    else if (cv.chenhLech <= -15) cv.trangThaiMau = 'bad';
-    else if (cv.chenhLech < 0) cv.trangThaiMau = 'late';
-    else cv.trangThaiMau = 'ok';
   });
 
   return JSON.stringify({ hangMuc, goiThau, congViec, users: listSupervisors() });
@@ -260,6 +274,9 @@ function getData() {
 // mở rộng dòng xem chi tiết mà không cần round-trip riêng.
 function getBaoCaoTongHop() {
   const parsed = JSON.parse(getData());
+  // Công việc đã bị Giám sát xóa KHÔNG được tính vào báo cáo tổng hợp/Tổng quan — chỉ hiển thị
+  // (gạch ngang) ở tab "Thi công / Tiến độ" thông qua getData() ở trên.
+  parsed.congViec = parsed.congViec.filter(cv => cv.active);
   const logs = readNhatKyRows_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NhatKyTienDo')).filter(l => l.active);
   const logsByCongViec = {};
   logs.forEach(l => { (logsByCongViec[l.maCongViec] = logsByCongViec[l.maCongViec] || []).push(l); });

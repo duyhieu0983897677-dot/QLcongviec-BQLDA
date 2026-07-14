@@ -215,10 +215,24 @@ function saveCongViecModal() {
     const maCongViec = document.getElementById('cvEditId').value;
     const maGoiThau = document.getElementById('cvGoiThau').value;
     const maHangMucList = Array.from(document.querySelectorAll('.cv-hm-cb:checked')).map(cb => cb.value);
-    const tenCongViec = document.getElementById('cvTen').value.trim();
+    let tenCongViec = document.getElementById('cvTen').value.trim();
     if (!maGoiThau) { showCustomAlert('Vui lòng chọn Gói thầu!', 'error'); return; }
     if (maHangMucList.length === 0) { showCustomAlert('Vui lòng chọn ít nhất 1 Hạng mục!', 'error'); return; }
     if (!tenCongViec) { showCustomAlert('Vui lòng nhập Tên công việc!', 'error'); return; }
+
+    // Tạo mới (không phải sửa) mà trùng tên với 1 công việc ĐÃ XÓA trong cùng Gói thầu — cảnh báo
+    // và gợi ý đổi tên, tránh nhầm lẫn với việc cũ đã xóa trong lịch sử.
+    if (!maCongViec) {
+        const trung = congViec.find(cv => cv.active === false && cv.maGoiThau === maGoiThau
+            && cv.tenCongViec.trim().toLowerCase() === tenCongViec.toLowerCase());
+        if (trung) {
+            const goiY = tenCongViec + ' (tiếp theo 1)';
+            if (confirm(`Tên công việc này trùng với 1 công việc đã XÓA trước đó trong cùng Gói thầu.\n\nBấm OK để đổi tên thành "${goiY}", bấm Hủy để vẫn giữ tên "${tenCongViec}".`)) {
+                tenCongViec = goiY;
+                document.getElementById('cvTen').value = goiY;
+            }
+        }
+    }
 
     const payload = {
         maCongViec,

@@ -19,7 +19,7 @@
 let bcAllCongViec = [];
 let bcPieChartInstance = null;
 let bcBarChartInstance = null;
-const BC_STATUS_COLORS = { ok: '#2E7D4F', late: '#B8860B', bad: '#C23B3B', done: '#94a3b8' };
+const BC_STATUS_COLORS = { pending: '#B8860B', inprogress: '#2563EB', done: '#2E7D4F', late_done: '#E85D2C', overdue: '#C23B3B' };
 
 function renderDashboard() {
     gsRun('getBaoCaoTongHop').then(json => {
@@ -34,7 +34,7 @@ function renderDashboard() {
 }
 
 function renderBcCharts() {
-    const counts = { ok: 0, late: 0, bad: 0, done: 0 };
+    const counts = { pending: 0, inprogress: 0, done: 0, late_done: 0, overdue: 0 };
     bcAllCongViec.forEach(cv => { if (counts[cv.trangThaiMau] !== undefined) counts[cv.trangThaiMau]++; });
 
     const pieCanvas = document.getElementById('bcPieChart');
@@ -42,40 +42,75 @@ function renderBcCharts() {
     bcPieChartInstance = new Chart(pieCanvas.getContext('2d'), {
         type: 'pie',
         data: {
-            labels: ['Đúng/vượt tiến độ', 'Trễ nhẹ', 'Trễ nghiêm trọng', 'Hoàn thành'],
-            datasets: [{ data: [counts.ok, counts.late, counts.bad, counts.done], backgroundColor: [BC_STATUS_COLORS.ok, BC_STATUS_COLORS.late, BC_STATUS_COLORS.bad, BC_STATUS_COLORS.done] }]
+            labels: ['Chờ thực hiện', 'Đang thực hiện', 'Hoàn thành', 'Trễ tiến độ nhưng hoàn thành', 'Trễ tiến độ không hoàn thành'],
+            datasets: [{
+                data: [counts.pending, counts.inprogress, counts.done, counts.late_done, counts.overdue],
+                backgroundColor: [BC_STATUS_COLORS.pending, BC_STATUS_COLORS.inprogress, BC_STATUS_COLORS.done, BC_STATUS_COLORS.late_done, BC_STATUS_COLORS.overdue]
+            }]
         },
         options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
     });
 
     // Hiện đủ mọi nhân sự (Giám sát) trên biểu đồ, kể cả người chưa tạo công việc nào (đếm = 0).
-    const countsByUser = {};
-    users.filter(u => u.role !== 'ADMIN').forEach(u => { countsByUser[u.id] = 0; });
-    bcAllCongViec.forEach(cv => { countsByUser[cv.nguoiTaoId] = (countsByUser[cv.nguoiTaoId] || 0) + 1; });
-    const entries = Object.entries(countsByUser).sort((a, b) => b[1] - a[1] || nameOfUser(a[0]).localeCompare(nameOfUser(b[0]), 'vi'));
+    // Mỗi thanh xếp chồng theo trạng thái (chờ thực hiện/đang thực hiện/hoàn thành/trễ nhưng hoàn
+    // thành/trễ không hoàn thành) — rà chuột vào thanh sẽ liệt kê từng trạng thái + dòng cuối là
+    // tổng số công việc.
+    const countsByUserStatus = {};
+    users.filter(u => u.role !== 'ADMIN').forEach(u => { countsByUserStatus[u.id] = { pending: 0, inprogress: 0, done: 0, late_done: 0, overdue: 0 }; });
+    bcAllCongViec.forEach(cv => {
+        if (!countsByUserStatus[cv.nguoiTaoId]) countsByUserStatus[cv.nguoiTaoId] = { pending: 0, inprogress: 0, done: 0, late_done: 0, overdue: 0 };
+        if (countsByUserStatus[cv.nguoiTaoId][cv.trangThaiMau] !== undefined) countsByUserStatus[cv.nguoiTaoId][cv.trangThaiMau]++;
+    });
+    const tongCuaUser = id => Object.values(countsByUserStatus[id]).reduce((s, v) => s + v, 0);
+    const userIds = Object.keys(countsByUserStatus)
+        .sort((a, b) => tongCuaUser(b) - tongCuaUser(a) || nameOfUser(a).localeCompare(nameOfUser(b), 'vi'));
 
     // Nhiều nhân sự (>30) thì mỗi thanh chỉ cần bề rộng tối thiểu, phần dư cho cuộn ngang
     // thay vì bóp hết các thanh vào 1 khung cố định.
     const barWrap = document.getElementById('bcBarChartWrap');
     const barInner = document.getElementById('bcBarChartInner');
     const MIN_PX_PER_BAR = 26;
-    barInner.style.width = Math.max(entries.length * MIN_PX_PER_BAR, barWrap.clientWidth || 0) + 'px';
+    barInner.style.width = Math.max(userIds.length * MIN_PX_PER_BAR, barWrap.clientWidth || 0) + 'px';
+
+    const statusOrder = [
+        { key: 'pending', label: 'Chờ thực hiện' },
+        { key: 'inprogress', label: 'Đang thực hiện' },
+        { key: 'done', label: 'Hoàn thành' },
+        { key: 'late_done', label: 'Trễ tiến độ nhưng hoàn thành' },
+        { key: 'overdue', label: 'Trễ tiến độ không hoàn thành' }
+    ];
 
     const barCanvas = document.getElementById('bcBarChart');
     if (bcBarChartInstance) bcBarChartInstance.destroy();
     bcBarChartInstance = new Chart(barCanvas.getContext('2d'), {
         type: 'bar',
         data: {
-            labels: entries.map(([id]) => nameOfUser(id)),
-            datasets: [{ label: 'Số công việc', data: entries.map(([, c]) => c), backgroundColor: '#E85D2C', barPercentage: 0.6, categoryPercentage: 0.7 }]
+            labels: userIds.map(id => nameOfUser(id)),
+            datasets: statusOrder.map(s => ({
+                label: s.label,
+                data: userIds.map(id => countsByUserStatus[id][s.key]),
+                backgroundColor: BC_STATUS_COLORS[s.key],
+                stack: 'total',
+                barPercentage: 0.6,
+                categoryPercentage: 0.7
+            }))
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } },
+                tooltip: {
+                    filter: item => item.parsed.y > 0,
+                    callbacks: {
+                        footer: items => 'Tổng số công việc: ' + items.reduce((s, it) => s + (it.parsed.y || 0), 0)
+                    }
+                }
+            },
             scales: {
-                y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } },
-                x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 45, font: { size: 10 } } }
+                y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1, precision: 0 } },
+                x: { stacked: true, ticks: { autoSkip: false, maxRotation: 60, minRotation: 45, font: { size: 10 } } }
             }
         }
     });
@@ -101,7 +136,7 @@ function onBcDetailTypeChange() {
     renderBcDetail();
 }
 
-const BC_DETAIL_COLSPAN = 8;
+const BC_DETAIL_COLSPAN = 10;
 const BC_PHAN_ROMAN = { ho_so: 'I', thi_cong: 'II' };
 
 // Ghi chú của lần báo cáo gần nhất CÓ ghi chú (không nhất thiết là log mới nhất).
@@ -133,20 +168,26 @@ function renderBcDetail() {
         html += `<tr class="bc-group-row"><td colspan="${BC_DETAIL_COLSPAN}">${PHAN_LOAI_LABEL[phan] || phan}</td></tr>`;
         group.forEach((cv, idx) => {
             const note = lastNoteOf(cv);
-            const showNote = note && (cv.trangThaiMau === 'late' || cv.trangThaiMau === 'bad');
+            const showNote = note && (cv.trangThaiMau === 'overdue' || cv.trangThaiMau === 'late_done');
             const pct = Math.min(cv.luyKe || 0, 100);
+            const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
+            const mau = mauChucDanh(chucDanh);
             html += `
             <tr>
                 <td class="text-center">${BC_PHAN_ROMAN[phan]}.${idx + 1}</td>
                 <td class="text-center">${(cv.maHangMucList || []).join(', ') || '--'}</td>
                 <td>${cv.tenCongViec}</td>
                 <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
+                <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
                 <td class="text-center">${formatVN(cv.ngayBatDauKH)}</td>
                 <td class="text-center">${formatVN(cv.ngayKetThucKH)}</td>
                 <td class="bc-bar-cell">
-                    <div class="bc-bar-track"><div class="bc-bar-fill status-${cv.trangThaiMau}" style="width:${pct}%;"></div></div>
-                    <span class="bc-bar-pct">${cv.luyKe || 0}%</span>
+                    <div class="bc-bar-flex">
+                        <div class="bc-bar-track"><div class="bc-bar-fill status-${cv.trangThaiMau}" style="width:${pct}%;"></div></div>
+                        <span class="bc-bar-pct">${cv.luyKe || 0}%</span>
+                    </div>
                 </td>
+                <td class="text-center"><span class="bc-badge ${cv.trangThaiMau}">${TRANGTHAI_LABEL[cv.trangThaiMau] || '--'}</span></td>
                 <td class="bc-detail-note">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
             </tr>`;
         });

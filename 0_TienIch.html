@@ -8,7 +8,8 @@
 
    DANH SÁCH HÀM CHÍNH:
    - switchTab()      : Chuyển tab đang xem
-   - window.onload    : Tải dữ liệu (Hạng mục/Gói thầu/User) từ Google Sheet khi mở trang
+   - (cuối file)      : Gọi getData() ngay khi script này chạy (không đợi window.onload) để tải
+                        dữ liệu (Hạng mục/Gói thầu/Công việc/User) từ Google Sheet khi mở trang
    - reloadData()      : Tải lại dữ liệu sau khi ghi Nhật ký / sửa Hạng mục / Gói thầu
    - gsRun()           : Bọc google.script.run thành Promise, dùng để chain nhiều lệnh backend
    - showCustomAlert() : Hiện thông báo xanh/đỏ
@@ -18,11 +19,18 @@
 let hangMuc = [];    // Cây mã/tên Hạng mục tham chiếu (capDo 1/2/3) — chỉ để lọc, không nhận %
 let goiThau = [];    // Danh sách Gói thầu, mỗi Gói thầu gộp nhiều Hạng mục
 let congViec = [];   // Công việc do Admin/Giám sát tự tạo — ĐÂY là đơn vị nhận Nhật ký tiến độ,
-                      // đã có sẵn luyKe/phanTramKeHoach/chenhLech/trangThaiMau tính từ NhatKyTienDo
+                      // đã có sẵn luyKe/trangThaiMau (inprogress/done/late_done/overdue) tính từ
+                      // NhatKyTienDo, xem chi tiết logic ở getData() trong Code.js
 let users = [];      // Danh sách Giám sát / Admin
 let collapsedGroups = new Set();
 
-const TRANGTHAI_LABEL = { ok: 'Đúng tiến độ', late: 'Trễ nhẹ', bad: 'Trễ nghiêm trọng', done: 'Hoàn thành' };
+const TRANGTHAI_LABEL = {
+    pending: 'Chờ thực hiện',
+    inprogress: 'Đang thực hiện',
+    done: 'Hoàn thành',
+    late_done: 'Trễ tiến độ nhưng hoàn thành',
+    overdue: 'Trễ tiến độ không hoàn thành'
+};
 const PHAN_LOAI_LABEL = { ho_so: 'I. Phần hồ sơ', thi_cong: 'II. Phần triển khai thi công' };
 
 function switchTab(tabId) {
@@ -66,6 +74,11 @@ function gsRun(fnName, ...args) {
     });
 }
 
+function hideAppLoading_() {
+    const el = document.getElementById('appLoading');
+    if (el) el.classList.add('hide');
+}
+
 function applyLoadedData(response) {
     const parsed = JSON.parse(response);
     hangMuc = parsed.hangMuc || [];
@@ -73,16 +86,27 @@ function applyLoadedData(response) {
     congViec = parsed.congViec || [];
     users = parsed.users || [];
     updateUI();
+    hideAppLoading_();
 }
 
-window.onload = function() {
-    if (typeof google !== 'undefined') {
-        google.script.run.withSuccessHandler(applyLoadedData).getData();
-    } else {
-        // Chế độ xem thử (không có backend Google Apps Script) — không load gì cả
-        updateUI();
-    }
-};
+// Màn hình nhỏ (điện thoại, <768px): mở trang chủ dạng ô lớn thay vì thẳng vào Tổng quan.
+if (window.innerWidth < 768 && document.getElementById('home')) {
+    switchTab('home');
+}
+
+// KHÔNG đợi window.onload (chỉ bắn sau khi mọi ảnh/font/CDN script tải xong) — script này nằm
+// cuối <body> nên DOM cần dùng đã sẵn sàng, gọi getData() ngay để round-trip lên Apps Script chạy
+// SONG SONG với phần tải font/icon còn lại, thay vì phải đợi xong hết rồi mới bắt đầu (đây là
+// nguyên nhân chính gây cảm giác trễ 4-5s lúc vào trang).
+if (typeof google !== 'undefined') {
+    google.script.run.withSuccessHandler(applyLoadedData).getData();
+} else {
+    // Chế độ xem thử (không có backend Google Apps Script) — không load gì cả
+    updateUI();
+    hideAppLoading_();
+}
+// Phòng hờ nếu getData() bị treo/lỗi im lặng — không để màn hình che vĩnh viễn.
+setTimeout(hideAppLoading_, 8000);
 
 // Gọi lại sau khi ghi Nhật ký tiến độ / sửa Hạng mục / Gói thầu — server luôn là nguồn sự thật
 // (lũy kế % được server tính lại từ NhatKyTienDo), không tự suy đoán ở client.
