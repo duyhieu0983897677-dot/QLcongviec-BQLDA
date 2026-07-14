@@ -22,11 +22,6 @@
 </head>
 <body class="role-view view-only-mode">
 
-    <div id="appLoading" class="app-loading">
-        <i class="fa-solid fa-helmet-safety"></i>
-        <span>Đang tải dữ liệu...</span>
-    </div>
-
     <header class="header">
         <div class="brand">
             <div class="sidebar-brand-icon" style="width:38px;height:38px;border-radius:8px;background:var(--accent);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:900;">CV</div>
@@ -102,7 +97,7 @@
                     <h2 style="font-size:0.92rem; margin:0;"><i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG — <span id="bc-kpi-total">0</span> công việc</h2>
                     <p style="font-size:0.7rem; color:#cbd5e1; margin:1px 0 0;">Tự động tổng hợp từ Nhật ký tiến độ · Cập nhật lúc <span id="bcUpdatedAt">--</span></p>
                 </div>
-                <button class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="renderDashboard()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
+                <button class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="reloadData()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
             </div>
 
             <div class="card">

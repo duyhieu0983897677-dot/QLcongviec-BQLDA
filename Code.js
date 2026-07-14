@@ -219,9 +219,11 @@ function readNhatKyRows_(sheet) {
   return result;
 }
 
-// Trả về { hangMuc, goiThau, congViec, users } — congViec đã tính sẵn luyKe/trangThaiMau (cộng dồn
-// từ NhatKyTienDo theo maCongViec). trangThaiMau là 1 trong 4 giá trị, xét theo hạn ngayKetThucKH
-// (KHÔNG còn nội suy % kế hoạch theo thời gian đã trôi qua như trước):
+// Trả về { hangMuc, goiThau, congViec, users } — congViec đã tính sẵn luyKe/trangThaiMau/recentLogs
+// (cộng dồn từ NhatKyTienDo theo maCongViec, 1 lần đọc sheet duy nhất — KHÔNG tách riêng hàm/lệnh
+// gọi khác để lấy recentLogs nữa, tránh round-trip kép lên Apps Script làm chậm lần tải đầu).
+// trangThaiMau là 1 trong 5 giá trị, xét theo hạn ngayKetThucKH (KHÔNG nội suy % kế hoạch theo
+// thời gian đã trôi qua như trước):
 // - pending    : chưa hoàn thành và chưa tới ngayBatDauKH (chưa tới thời điểm bắt đầu)
 // - inprogress : chưa hoàn thành (luyKe<100), đã tới ngày bắt đầu và còn trong hạn
 // - done       : đã hoàn thành (luyKe>=100) đúng hạn (hoặc chưa đặt hạn để so)
@@ -243,13 +245,18 @@ function getData() {
     luyKeMap[l.maCongViec] = (luyKeMap[l.maCongViec] || 0) + l.phanTramNgay;
     (logsByCongViec[l.maCongViec] = logsByCongViec[l.maCongViec] || []).push(l);
   });
-  Object.keys(logsByCongViec).forEach(id => logsByCongViec[id].sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao)));
+  const recentLogsByCongViec = {};
+  Object.keys(logsByCongViec).forEach(id => {
+    recentLogsByCongViec[id] = logsByCongViec[id].slice().sort((a, b) => b.logId.localeCompare(a.logId)).slice(0, 5);
+    logsByCongViec[id].sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao));
+  });
 
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   congViec.forEach(cv => {
     const luyKe = Math.round((luyKeMap[cv.maCongViec] || 0) * 10) / 10;
     cv.luyKe = luyKe;
+    cv.recentLogs = recentLogsByCongViec[cv.maCongViec] || [];
 
     if (luyKe >= 100) {
       let ngayHoanThanhThucTe = null;
@@ -270,21 +277,13 @@ function getData() {
   return JSON.stringify({ hangMuc, goiThau, congViec, users: listSupervisors() });
 }
 
-// Giống getData() nhưng gắn kèm 5 log gần nhất cho mỗi Công việc — dùng cho màn Báo cáo tổng hợp
-// mở rộng dòng xem chi tiết mà không cần round-trip riêng.
+// Giống getData() nhưng chỉ giữ Công việc còn hoạt động (active) — dùng cho màn Báo cáo tổng hợp.
+// KHÔNG đọc lại NhatKyTienDo nữa (getData() ở trên đã gắn sẵn recentLogs), tránh round-trip kép.
 function getBaoCaoTongHop() {
   const parsed = JSON.parse(getData());
   // Công việc đã bị Giám sát xóa KHÔNG được tính vào báo cáo tổng hợp/Tổng quan — chỉ hiển thị
   // (gạch ngang) ở tab "Thi công / Tiến độ" thông qua getData() ở trên.
   parsed.congViec = parsed.congViec.filter(cv => cv.active);
-  const logs = readNhatKyRows_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NhatKyTienDo')).filter(l => l.active);
-  const logsByCongViec = {};
-  logs.forEach(l => { (logsByCongViec[l.maCongViec] = logsByCongViec[l.maCongViec] || []).push(l); });
-
-  parsed.congViec.forEach(cv => {
-    const list = (logsByCongViec[cv.maCongViec] || []).slice().sort((a, b) => b.logId.localeCompare(a.logId));
-    cv.recentLogs = list.slice(0, 5);
-  });
   return JSON.stringify(parsed);
 }
 

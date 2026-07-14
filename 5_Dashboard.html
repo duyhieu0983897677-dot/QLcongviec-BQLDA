@@ -10,7 +10,10 @@
      Công việc + % + trạng thái của đúng lựa chọn đó.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderDashboard()      : Gọi getBaoCaoTongHop() rồi vẽ lại 2 biểu đồ + đổ danh sách chọn
+   - renderDashboard()      : Đọc từ congViec toàn cục (đã tải sẵn) rồi vẽ lại 2 biểu đồ + đổ danh
+                              sách chọn — KHÔNG gọi round-trip riêng lên Apps Script nữa (trước đây
+                              gọi getBaoCaoTongHop() làm chậm gấp đôi lần tải đầu tiên, vì getData()
+                              đã tự gắn sẵn recentLogs cho mọi Công việc rồi, xem Code.js)
    - renderBcCharts()       : Vẽ biểu đồ tròn trạng thái + biểu đồ thanh theo người phụ trách
    - onBcDetailTypeChange() : Đổi giữa "Xem theo Gói thầu" / "Xem theo Hạng mục"
    - renderBcDetail()       : Vẽ bảng chi tiết theo Gói thầu/Hạng mục đang chọn
@@ -19,18 +22,17 @@
 let bcAllCongViec = [];
 let bcPieChartInstance = null;
 let bcBarChartInstance = null;
-const BC_STATUS_COLORS = { pending: '#B8860B', inprogress: '#2563EB', done: '#2E7D4F', late_done: '#E85D2C', overdue: '#C23B3B' };
+const BC_STATUS_COLORS = { pending: '#94A3B8', inprogress: '#60A5FA', done: '#34D399', late_done: '#FBBF24', overdue: '#F87171' };
 
+// Bấm "Làm mới" gọi reloadData() (tải lại toàn bộ congViec/hangMuc/goiThau/users rồi tự render lại
+// tab đang mở) thay vì tự gọi riêng 1 lệnh backend khác ở đây — nhất quán với mọi tab khác.
 function renderDashboard() {
-    gsRun('getBaoCaoTongHop').then(json => {
-        const parsed = JSON.parse(json);
-        bcAllCongViec = parsed.congViec || [];
-        document.getElementById('bc-kpi-total').textContent = bcAllCongViec.length;
-        renderBcCharts();
-        fillBcDetailSelect();
-        renderBcDetail();
-        document.getElementById('bcUpdatedAt').textContent = new Date().toLocaleString('vi-VN');
-    }).catch(handleBackendError);
+    bcAllCongViec = (congViec || []).filter(cv => cv.active !== false);
+    document.getElementById('bc-kpi-total').textContent = bcAllCongViec.length;
+    renderBcCharts();
+    fillBcDetailSelect();
+    renderBcDetail();
+    document.getElementById('bcUpdatedAt').textContent = new Date().toLocaleString('vi-VN');
 }
 
 function renderBcCharts() {

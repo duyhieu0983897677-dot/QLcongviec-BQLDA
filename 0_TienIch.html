@@ -74,11 +74,6 @@ function gsRun(fnName, ...args) {
     });
 }
 
-function hideAppLoading_() {
-    const el = document.getElementById('appLoading');
-    if (el) el.classList.add('hide');
-}
-
 function applyLoadedData(response) {
     const parsed = JSON.parse(response);
     hangMuc = parsed.hangMuc || [];
@@ -86,7 +81,6 @@ function applyLoadedData(response) {
     congViec = parsed.congViec || [];
     users = parsed.users || [];
     updateUI();
-    hideAppLoading_();
 }
 
 // Màn hình nhỏ (điện thoại, <768px): mở trang chủ dạng ô lớn thay vì thẳng vào Tổng quan.
@@ -96,17 +90,13 @@ if (window.innerWidth < 768 && document.getElementById('home')) {
 
 // KHÔNG đợi window.onload (chỉ bắn sau khi mọi ảnh/font/CDN script tải xong) — script này nằm
 // cuối <body> nên DOM cần dùng đã sẵn sàng, gọi getData() ngay để round-trip lên Apps Script chạy
-// SONG SONG với phần tải font/icon còn lại, thay vì phải đợi xong hết rồi mới bắt đầu (đây là
-// nguyên nhân chính gây cảm giác trễ 4-5s lúc vào trang).
+// SONG SONG với phần tải font/icon còn lại, thay vì phải đợi xong hết rồi mới bắt đầu.
 if (typeof google !== 'undefined') {
     google.script.run.withSuccessHandler(applyLoadedData).getData();
 } else {
     // Chế độ xem thử (không có backend Google Apps Script) — không load gì cả
     updateUI();
-    hideAppLoading_();
 }
-// Phòng hờ nếu getData() bị treo/lỗi im lặng — không để màn hình che vĩnh viễn.
-setTimeout(hideAppLoading_, 8000);
 
 // Gọi lại sau khi ghi Nhật ký tiến độ / sửa Hạng mục / Gói thầu — server luôn là nguồn sự thật
 // (lũy kế % được server tính lại từ NhatKyTienDo), không tự suy đoán ở client.
