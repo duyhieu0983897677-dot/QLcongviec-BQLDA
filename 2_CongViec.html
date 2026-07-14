@@ -7,11 +7,17 @@
    4_ViecCuaToi.html (không nằm ở đây vì khác luồng UI).
 
    DANH SÁCH HÀM CHÍNH:
-   - openTaskModal(taskId)  : Mở modal thêm (không truyền id) / sửa (có id)
+   - openTaskModal(taskId, restrict) : Mở modal thêm (không truyền id) / sửa (có id).
+     `restrict` (tuỳ chọn) dùng khi Giám sát tự thêm việc của mình từ tab
+     "Việc của tôi": khoá cứng Giám sát phụ trách = chính họ, và giới hạn
+     Hạng mục được chọn chỉ trong số Hạng mục họ được Admin gán phụ trách.
    - saveTaskModal()        : Lưu công việc từ Modal
    - deleteTask(taskId)     : Xóa 1 đầu việc
    - fillSupervisorSelect() : Đổ danh sách Giám sát vào 1 thẻ <select>
+   - fillGroupSelect()      : Đổ danh sách Hạng mục vào 1 thẻ <select>
    ================================================================ */
+
+let taskModalRestrict = null;
 
 function fillSupervisorSelect(selectEl, selectedName) {
     let html = '<option value="">-- Chưa gán --</option>';
@@ -22,31 +28,57 @@ function fillSupervisorSelect(selectEl, selectedName) {
     if (selectedName) selectEl.value = selectedName;
 }
 
+// allowedGroupIds (tuỳ chọn): nếu truyền vào, chỉ liệt kê các Hạng mục có id nằm trong danh sách này.
+function fillGroupSelect(selectEl, selectedId, allowedGroupIds) {
+    let headers = tasks.filter(t => t.isHeader);
+    if (allowedGroupIds) headers = headers.filter(h => allowedGroupIds.includes(h.id));
+    let html = '<option value="">-- Chọn Hạng mục --</option>';
+    headers.forEach(h => html += `<option value="${h.id}">${h.name}</option>`);
+    selectEl.innerHTML = html;
+    if (selectedId !== undefined && selectedId !== null) selectEl.value = String(selectedId);
+}
+
 function onTaskIsHeaderChange() {
     const isHeader = document.getElementById('taskIsHeader').value === '1';
     document.getElementById('taskDetailFields').style.display = isHeader ? 'none' : 'block';
+    document.getElementById('taskGroupField').style.display = isHeader ? 'none' : 'block';
 }
 
-function openTaskModal(taskId) {
+// restrict = { lockSupervisor: 'Tên Giám sát', allowedGroupIds: [id, id, ...] }
+function openTaskModal(taskId, restrict) {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
+    taskModalRestrict = restrict || null;
+
     document.getElementById('taskEditId').value = taskId || '';
-    fillSupervisorSelect(document.getElementById('taskSupervisor'), '');
+
+    const isHeaderField = document.getElementById('taskIsHeader');
+    const supervisorField = document.getElementById('taskSupervisor');
+    const groupField = document.getElementById('taskGroup');
+
+    isHeaderField.disabled = false;
+    supervisorField.disabled = false;
+    document.getElementById('taskIsHeaderField').style.display = 'block';
+    document.getElementById('taskSupervisorField').style.display = 'block';
+
+    fillSupervisorSelect(supervisorField, '');
+    fillGroupSelect(groupField, '', taskModalRestrict ? taskModalRestrict.allowedGroupIds : null);
 
     if (taskId) {
         const t = tasks.find(x => x.id === taskId);
         if (!t) return;
         document.getElementById('taskModalTitle').innerText = 'Sửa công việc';
-        document.getElementById('taskIsHeader').value = t.isHeader ? '1' : '0';
+        isHeaderField.value = t.isHeader ? '1' : '0';
         document.getElementById('taskName').value = t.name || '';
         document.getElementById('taskTarget').value = t.target || '';
-        fillSupervisorSelect(document.getElementById('taskSupervisor'), t.supervisorName || '');
+        fillSupervisorSelect(supervisorField, t.supervisorName || '');
+        fillGroupSelect(groupField, t.groupId, taskModalRestrict ? taskModalRestrict.allowedGroupIds : null);
         document.getElementById('taskStartDate').value = formatVN(t.startDate);
         document.getElementById('taskEndDate').value = formatVN(t.endDate);
         document.getElementById('taskPercent').value = t.percent || 0;
         document.getElementById('taskNote').value = t.note || '';
     } else {
         document.getElementById('taskModalTitle').innerText = 'Thêm công việc';
-        document.getElementById('taskIsHeader').value = '0';
+        isHeaderField.value = '0';
         document.getElementById('taskName').value = '';
         document.getElementById('taskTarget').value = '';
         document.getElementById('taskStartDate').value = '';
@@ -54,6 +86,20 @@ function openTaskModal(taskId) {
         document.getElementById('taskPercent').value = 0;
         document.getElementById('taskNote').value = '';
     }
+
+    if (taskModalRestrict) {
+        // Nhân sự tự thêm việc: luôn là 1 dòng Việc, gán đúng chính họ, không được đổi Loại dòng / Giám sát.
+        isHeaderField.value = '0';
+        isHeaderField.disabled = true;
+        document.getElementById('taskIsHeaderField').style.display = 'none';
+        fillSupervisorSelect(supervisorField, taskModalRestrict.lockSupervisor);
+        supervisorField.disabled = true;
+        document.getElementById('taskSupervisorField').style.display = 'none';
+        if (taskModalRestrict.allowedGroupIds && taskModalRestrict.allowedGroupIds.length === 1) {
+            groupField.value = String(taskModalRestrict.allowedGroupIds[0]);
+        }
+    }
+
     onTaskIsHeaderChange();
     document.getElementById('taskModal').classList.add('active');
 
@@ -71,6 +117,7 @@ function openTaskModal(taskId) {
 
 function closeTaskModal() {
     document.getElementById('taskModal').classList.remove('active');
+    taskModalRestrict = null;
 }
 
 function saveTaskModal() {
@@ -81,14 +128,20 @@ function saveTaskModal() {
 
     let payload = { isHeader, name };
     if (!isHeader) {
+        const groupIdRaw = document.getElementById('taskGroup').value;
+        if (!groupIdRaw) { showCustomAlert('Vui lòng chọn Hạng mục!', 'error'); return; }
+
         const startISO = convertDMYtoISO(document.getElementById('taskStartDate').value.trim());
         const endISO = convertDMYtoISO(document.getElementById('taskEndDate').value.trim());
+        payload.groupId = parseInt(groupIdRaw, 10);
         payload.target = document.getElementById('taskTarget').value.trim();
         payload.supervisorName = document.getElementById('taskSupervisor').value;
         payload.startDate = startISO || '';
         payload.endDate = endISO || '';
         payload.percent = Math.max(0, Math.min(100, parseNumberSafely(document.getElementById('taskPercent').value) || 0));
         payload.note = document.getElementById('taskNote').value.trim();
+    } else {
+        payload.groupId = null;
     }
 
     if (id) {
@@ -98,7 +151,7 @@ function saveTaskModal() {
         saveData(`Sửa công việc: ${name}`);
     } else {
         const newId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
-        tasks.push(Object.assign({ id: newId, groupId: null, duration: '', dailyLogs: [] }, payload));
+        tasks.push(Object.assign({ id: newId, duration: '', dailyLogs: [] }, payload));
         saveData(`Thêm công việc: ${name}`);
     }
 

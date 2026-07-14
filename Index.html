@@ -123,6 +123,24 @@
                         </table>
                     </div>
                 </div>
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-layer-group"></i> Báo cáo theo Hạng mục</div>
+                    <div class="form-group" style="max-width:420px; margin-bottom:15px;">
+                        <select id="dashGroupSelect" class="form-control" onchange="renderDashboardGroupDetail()">
+                            <option value="">-- Chọn Hạng mục --</option>
+                        </select>
+                    </div>
+                    <div style="max-width:320px; margin:0 auto 15px;">
+                        <canvas id="dashGroupPieChart" style="display:none;"></canvas>
+                    </div>
+                    <p id="dashGroupEmptyMsg" style="color:gray; text-align:center; padding:10px;">Chọn 1 Hạng mục ở trên để xem báo cáo.</p>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr><th style="text-align:left;">Tên việc</th><th>Nhân sự phụ trách</th><th>Tiến độ</th><th>Tình trạng</th><th>Ghi chú</th></tr></thead>
+                            <tbody id="dashGroupTaskBody"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -160,7 +178,10 @@
         <!-- TAB: VIỆC CỦA TÔI -->
         <section id="viecuatoi" class="tab-content">
             <div class="card">
-                <div class="card-title"><i class="fa-solid fa-user-clock"></i> Việc của tôi</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-user-clock"></i> Việc của tôi</div>
+                    <button id="btnAddMyTask" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openMyTaskModal()"><i class="fa-solid fa-plus"></i> Thêm việc</button>
+                </div>
                 <div id="viecCuaToiAdminSelectWrap" class="admin-only" style="margin-bottom:12px;">
                     <select id="viecCuaToiSupervisorSelect" class="form-control" onchange="renderViecCuaToi()">
                         <option value="">-- Chọn Giám sát để xem việc --</option>
@@ -179,7 +200,7 @@
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Số việc đang phụ trách</th><th>Hành động</th></tr></thead>
+                        <thead><tr><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Hạng mục phụ trách</th><th>Số việc đang phụ trách</th><th>Hành động</th></tr></thead>
                         <tbody id="nguoiDungBody"></tbody>
                     </table>
                 </div>
@@ -202,7 +223,7 @@
         <div class="modal-content" style="max-width:520px;">
             <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="taskModalTitle">Thêm công việc</span></h3>
             <input type="hidden" id="taskEditId">
-            <div class="form-group" style="margin-bottom:10px;">
+            <div class="form-group" id="taskIsHeaderField" style="margin-bottom:10px;">
                 <label>Loại dòng</label>
                 <select id="taskIsHeader" class="form-control" onchange="onTaskIsHeaderChange()">
                     <option value="0">Công việc (có tiến độ)</option>
@@ -214,11 +235,15 @@
                 <input type="text" id="taskName" class="form-control" placeholder="Tên nhóm hoặc tên công việc...">
             </div>
             <div id="taskDetailFields">
+                <div class="form-group" id="taskGroupField" style="margin-bottom:10px;">
+                    <label>Hạng mục</label>
+                    <select id="taskGroup" class="form-control"></select>
+                </div>
                 <div class="form-group" style="margin-bottom:10px;">
                     <label>Mục tiêu giao việc của cấp trên</label>
                     <input type="text" id="taskTarget" class="form-control">
                 </div>
-                <div class="form-group" style="margin-bottom:10px;">
+                <div class="form-group" id="taskSupervisorField" style="margin-bottom:10px;">
                     <label>Giám sát phụ trách</label>
                     <select id="taskSupervisor" class="form-control"></select>
                 </div>
@@ -265,6 +290,10 @@
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Mật khẩu <span id="userPassHint" style="font-weight:400; color:var(--text-muted);">(để trống nếu không đổi)</span></label>
                 <input type="text" id="userPassword" class="form-control" placeholder="Mật khẩu ban đầu...">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Hạng mục phụ trách <span style="font-weight:400; color:var(--text-muted);">(giữ Ctrl để chọn nhiều)</span></label>
+                <select id="userGroups" class="form-control" multiple size="5"></select>
             </div>
             <div style="display:flex; gap:10px; margin-top:10px;">
                 <button class="btn" style="background:var(--success);" onclick="saveUserModal()">Lưu</button>

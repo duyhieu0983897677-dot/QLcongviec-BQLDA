@@ -3,11 +3,16 @@
    FILE 5: 5_Dashboard.html
    ------------------------------------------------------------------
    PHẠM VI: Tab "Tổng quan" — KPI tổng, danh sách việc trễ tiến độ,
-   bảng khối lượng việc theo từng Giám sát.
+   bảng khối lượng việc theo từng Giám sát, và báo cáo tròn theo Hạng mục.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderDashboard() : Tính toán & vẽ toàn bộ KPI + 2 bảng của tab Tổng quan
+   - renderDashboard()             : Tính toán & vẽ toàn bộ KPI + các bảng của tab Tổng quan
+   - renderDashboardGroupSelect()  : Đổ danh sách Hạng mục vào ô chọn
+   - renderDashboardGroupDetail()  : Vẽ biểu đồ tròn + danh sách việc của Hạng mục đang chọn
    ================================================================ */
+
+const STATUS_CHART_COLORS = { completed: '#047857', in_progress: '#1d4ed8', delayed: '#b91c1c', not_started: '#94a3b8' };
+let dashGroupChartInstance = null;
 
 function renderDashboard() {
     const leafTasks = tasks.filter(t => !t.isHeader);
@@ -56,5 +61,71 @@ function renderDashboard() {
         <td class="text-center" style="color:var(--success); font-weight:700;">${s.completed}</td>
         <td class="text-center" style="color:var(--danger); font-weight:700;">${s.delayed}</td>
     </tr>`).join('') : '<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu.</td></tr>';
+
+    renderDashboardGroupSelect();
+    renderDashboardGroupDetail();
+}
+
+function renderDashboardGroupSelect() {
+    const select = document.getElementById('dashGroupSelect');
+    const currentVal = select.value;
+    const headers = tasks.filter(t => t.isHeader);
+    let html = '<option value="">-- Chọn Hạng mục --</option>';
+    headers.forEach(h => html += `<option value="${h.id}">${h.name}</option>`);
+    select.innerHTML = html;
+    if (currentVal && headers.some(h => String(h.id) === currentVal)) select.value = currentVal;
+}
+
+function renderDashboardGroupDetail() {
+    const select = document.getElementById('dashGroupSelect');
+    const groupId = select.value ? parseInt(select.value, 10) : null;
+    const chartCanvas = document.getElementById('dashGroupPieChart');
+    const listBody = document.getElementById('dashGroupTaskBody');
+    const emptyMsg = document.getElementById('dashGroupEmptyMsg');
+
+    if (!groupId) {
+        if (dashGroupChartInstance) { dashGroupChartInstance.destroy(); dashGroupChartInstance = null; }
+        chartCanvas.style.display = 'none';
+        listBody.innerHTML = '';
+        emptyMsg.style.display = 'block';
+        emptyMsg.innerText = 'Chọn 1 Hạng mục ở trên để xem báo cáo.';
+        return;
+    }
+
+    const groupTasks = tasks.filter(t => !t.isHeader && t.groupId === groupId);
+    const counts = { completed: 0, in_progress: 0, delayed: 0, not_started: 0 };
+    groupTasks.forEach(t => counts[getTaskStatus(t)]++);
+
+    chartCanvas.style.display = 'block';
+    if (dashGroupChartInstance) dashGroupChartInstance.destroy();
+    dashGroupChartInstance = new Chart(chartCanvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: ['Hoàn thành', 'Đang thực hiện', 'Trễ tiến độ', 'Chưa bắt đầu'],
+            datasets: [{
+                data: [counts.completed, counts.in_progress, counts.delayed, counts.not_started],
+                backgroundColor: [STATUS_CHART_COLORS.completed, STATUS_CHART_COLORS.in_progress, STATUS_CHART_COLORS.delayed, STATUS_CHART_COLORS.not_started]
+            }]
+        },
+        options: { plugins: { legend: { position: 'bottom' } } }
+    });
+
+    if (groupTasks.length === 0) {
+        emptyMsg.style.display = 'block';
+        emptyMsg.innerText = 'Hạng mục này chưa có công việc nào.';
+        listBody.innerHTML = '';
+    } else {
+        emptyMsg.style.display = 'none';
+        listBody.innerHTML = groupTasks.map(t => {
+            const status = getTaskStatus(t);
+            return `<tr>
+                <td>${t.name}</td>
+                <td class="text-center">${t.supervisorName || '--'}</td>
+                <td class="text-center">${t.percent || 0}%</td>
+                <td class="text-center"><span class="status-badge ${status}">${STATUS_LABEL[status]}</span></td>
+                <td>${t.note || ''}</td>
+            </tr>`;
+        }).join('');
+    }
 }
 </script>

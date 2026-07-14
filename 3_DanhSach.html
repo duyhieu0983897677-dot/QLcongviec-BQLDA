@@ -5,15 +5,45 @@
    PHẠM VI: Tab "Danh sách công việc" — bảng cây Nhóm/Hạng mục -> Việc,
    lọc theo Giám sát/trạng thái, tìm kiếm, thu gọn/mở rộng từng nhóm.
 
+   Nhóm được xác định qua t.groupId (không còn dựa vào thứ tự trong mảng
+   tasks[]), để việc do Nhân sự tự thêm (luôn được push vào cuối mảng)
+   vẫn hiện đúng dưới Hạng mục của nó. Việc nào có groupId không khớp
+   Hạng mục nào (dữ liệu lỗi/cũ) sẽ rơi vào nhóm "Chưa phân loại".
+
    DANH SÁCH HÀM CHÍNH:
    - renderDanhSach()  : Vẽ lại toàn bộ bảng (gọi lại mỗi khi đổi bộ lọc/dữ liệu)
    - toggleTaskGroup()  : Thu gọn / mở rộng 1 nhóm
    ================================================================ */
 
+const UNGROUPED_KEY = '__ungrouped__';
+
 function toggleTaskGroup(groupId) {
     if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId);
     else collapsedGroups.add(groupId);
     renderDanhSach();
+}
+
+function renderTaskRow(t) {
+    const status = getTaskStatus(t);
+    const initials = getSupervisorInitials(t.supervisorName);
+    return `<tr class="task-row">
+        <td class="task-name-cell">
+            <span class="t-name">${t.name}</span>
+            ${t.target ? `<span class="t-target">${t.target}</span>` : ''}
+        </td>
+        <td class="text-center"><span class="supervisor-chip"><span class="avatar">${initials}</span> ${t.supervisorName || '--'}</span></td>
+        <td>
+            <div class="gantt-bar-wrap">
+                <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, t.percent || 0)}%;"></div></div>
+                <span class="gantt-pct">${t.percent || 0}%</span>
+            </div>
+        </td>
+        <td class="text-center"><span class="status-badge ${status}">${STATUS_LABEL[status]}</span></td>
+        <td class="text-center admin-only">
+            <button class="btn btn-sm" style="background:var(--primary);" onclick="openTaskModal(${t.id})"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})"><i class="fa-solid fa-trash"></i></button>
+        </td>
+    </tr>`;
 }
 
 function renderDanhSach() {
@@ -30,66 +60,47 @@ function renderDanhSach() {
     const fSearch = document.getElementById('filterSearch').value.trim().toLowerCase();
     const hasFilter = !!(fSup || fStatus || fSearch);
 
-    // Xác định trước danh sách Việc nào khớp bộ lọc, để biết Nhóm nào nên hiện/ẩn
-    const matchedTaskIds = new Set();
-    tasks.forEach(t => {
-        if (t.isHeader) return;
-        if (fSup && t.supervisorName !== fSup) return;
-        if (fStatus && getTaskStatus(t) !== fStatus) return;
-        if (fSearch && !(t.name || '').toLowerCase().includes(fSearch)) return;
-        matchedTaskIds.add(t.id);
-    });
-
-    let html = '';
-    let currentGroupOpen = true;
-    let currentGroupId = null;
-    let groupHasVisibleChild = false;
-    let pendingGroupRow = '';
-
-    function flushGroup() {
-        if (pendingGroupRow && (groupHasVisibleChild || !hasFilter)) html += pendingGroupRow;
-        pendingGroupRow = '';
-        groupHasVisibleChild = false;
+    function matchesFilter(t) {
+        if (fSup && t.supervisorName !== fSup) return false;
+        if (fStatus && getTaskStatus(t) !== fStatus) return false;
+        if (fSearch && !(t.name || '').toLowerCase().includes(fSearch)) return false;
+        return true;
     }
 
+    const headers = tasks.filter(t => t.isHeader);
+    const headerIds = new Set(headers.map(h => h.id));
+    const childrenByGroup = {};
+    headers.forEach(h => childrenByGroup[h.id] = []);
+    const ungrouped = [];
+
     tasks.forEach(t => {
-        if (t.isHeader) {
-            flushGroup();
-            currentGroupId = t.id;
-            currentGroupOpen = !collapsedGroups.has(t.id);
-            const chevClass = currentGroupOpen ? 'fa-chevron-down' : 'fa-chevron-right';
-            pendingGroupRow = `<tr class="task-group-row" onclick="toggleTaskGroup(${t.id})">
-                <td colspan="5"><i class="fa-solid ${chevClass}" style="margin-right:8px; color:var(--accent);"></i>${t.name}</td>
-            </tr>`;
-            return;
+        if (t.isHeader) return;
+        if (t.groupId !== null && t.groupId !== undefined && headerIds.has(t.groupId)) {
+            childrenByGroup[t.groupId].push(t);
+        } else {
+            ungrouped.push(t);
         }
-
-        if (!matchedTaskIds.has(t.id)) return;
-        if (currentGroupId !== null) groupHasVisibleChild = true;
-        if (!currentGroupOpen && !hasFilter) return; // nhóm đang thu gọn và không có bộ lọc -> ẩn con
-
-        const status = getTaskStatus(t);
-        const initials = getSupervisorInitials(t.supervisorName);
-        html += `<tr class="task-row">
-            <td class="task-name-cell">
-                <span class="t-name">${t.name}</span>
-                ${t.target ? `<span class="t-target">${t.target}</span>` : ''}
-            </td>
-            <td class="text-center"><span class="supervisor-chip"><span class="avatar">${initials}</span> ${t.supervisorName || '--'}</span></td>
-            <td>
-                <div class="gantt-bar-wrap">
-                    <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, t.percent || 0)}%;"></div></div>
-                    <span class="gantt-pct">${t.percent || 0}%</span>
-                </div>
-            </td>
-            <td class="text-center"><span class="status-badge ${status}">${STATUS_LABEL[status]}</span></td>
-            <td class="text-center admin-only">
-                <button class="btn btn-sm" style="background:var(--primary);" onclick="openTaskModal(${t.id})"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})"><i class="fa-solid fa-trash"></i></button>
-            </td>
-        </tr>`;
     });
-    flushGroup();
+
+    function renderGroup(groupKey, groupLabel, children) {
+        const visibleChildren = children.filter(matchesFilter);
+        if (hasFilter && visibleChildren.length === 0) return '';
+
+        const isOpen = !collapsedGroups.has(groupKey);
+        const chevClass = isOpen ? 'fa-chevron-down' : 'fa-chevron-right';
+        let rows = `<tr class="task-group-row" onclick="toggleTaskGroup('${groupKey}')">
+            <td colspan="5"><i class="fa-solid ${chevClass}" style="margin-right:8px; color:var(--accent);"></i>${groupLabel}</td>
+        </tr>`;
+
+        if (isOpen || hasFilter) {
+            (hasFilter ? visibleChildren : children).forEach(t => { rows += renderTaskRow(t); });
+        }
+        return rows;
+    }
+
+    let html = '';
+    headers.forEach(h => { html += renderGroup(h.id, h.name, childrenByGroup[h.id]); });
+    if (ungrouped.length) html += renderGroup(UNGROUPED_KEY, '-- Chưa phân loại Hạng mục --', ungrouped);
 
     document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="5" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
 }

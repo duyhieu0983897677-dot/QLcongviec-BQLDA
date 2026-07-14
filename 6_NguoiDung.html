@@ -17,6 +17,11 @@
    - deleteUser()       : Xóa 1 Giám sát
    ================================================================ */
 
+function groupNamesFromIds(ids) {
+    if (!ids || !ids.length) return '--';
+    return ids.map(id => { const h = tasks.find(t => t.isHeader && t.id === id); return h ? h.name : null; }).filter(Boolean).join(', ') || '--';
+}
+
 function renderNguoiDung() {
     if (currentRole !== 'ADMIN') return;
     const taskCountByName = {};
@@ -27,19 +32,29 @@ function renderNguoiDung() {
 
     const body = document.getElementById('nguoiDungBody');
     if (users.length === 0) {
-        body.innerHTML = '<tr><td colspan="5" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="6" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
         return;
     }
     body.innerHTML = users.map(u => `<tr>
         <td>${u.id}</td>
         <td>${u.name}</td>
         <td class="text-center">${u.role === 'ADMIN' ? 'Quản trị' : 'Giám sát'}</td>
+        <td>${groupNamesFromIds(u.assignedGroupIds)}</td>
         <td class="text-center">${taskCountByName[u.name] || 0}</td>
         <td class="text-center">
             <button class="btn btn-sm" style="background:var(--primary);" onclick="openUserModal('${u.id}')"><i class="fa-solid fa-pen"></i></button>
             <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')"><i class="fa-solid fa-trash"></i></button>
         </td>
     </tr>`).join('');
+}
+
+function fillUserGroupsSelect(selectedIds) {
+    const select = document.getElementById('userGroups');
+    const headers = tasks.filter(t => t.isHeader);
+    select.innerHTML = headers.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+    if (selectedIds && selectedIds.length) {
+        Array.from(select.options).forEach(opt => { opt.selected = selectedIds.includes(parseInt(opt.value, 10)); });
+    }
 }
 
 function openUserModal(userId) {
@@ -54,6 +69,7 @@ function openUserModal(userId) {
         document.getElementById('userRole').value = u.role;
         document.getElementById('userPassword').value = '';
         document.getElementById('userPassHint').innerText = '(để trống nếu không đổi)';
+        fillUserGroupsSelect(u.assignedGroupIds);
     } else {
         document.getElementById('userModalTitle').innerText = 'Thêm Giám sát';
         document.getElementById('userLoginId').value = '';
@@ -62,6 +78,7 @@ function openUserModal(userId) {
         document.getElementById('userRole').value = 'SUPERVISOR';
         document.getElementById('userPassword').value = '';
         document.getElementById('userPassHint').innerText = '(bắt buộc khi tạo mới)';
+        fillUserGroupsSelect([]);
     }
     document.getElementById('userModal').classList.add('active');
 }
@@ -76,6 +93,7 @@ function saveUserModal() {
     const name = document.getElementById('userDisplayName').value.trim();
     const role = document.getElementById('userRole').value;
     const password = document.getElementById('userPassword').value.trim();
+    const assignedGroupIds = Array.from(document.getElementById('userGroups').selectedOptions).map(o => o.value).join(',');
 
     if (!loginId) { showCustomAlert('Vui lòng nhập Tên đăng nhập!', 'error'); return; }
     if (!name) { showCustomAlert('Vui lòng nhập Họ tên!', 'error'); return; }
@@ -106,7 +124,7 @@ function saveUserModal() {
     }).withFailureHandler(function(err) {
         btn.innerHTML = origText; btn.disabled = false;
         showCustomAlert(err.message || 'Lỗi khi lưu Giám sát!', 'error');
-    }).adminSaveSupervisor(myUserId, myPassword, loginId, name, role, password);
+    }).adminSaveSupervisor(myUserId, myPassword, loginId, name, role, password, assignedGroupIds);
 }
 
 function deleteUser(userId) {

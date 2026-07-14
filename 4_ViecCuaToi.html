@@ -8,9 +8,23 @@
 
    DANH SÁCH HÀM CHÍNH:
    - renderViecCuaToi()      : Vẽ danh sách việc của Giám sát đang xem
+   - openMyTaskModal()       : Giám sát tự thêm 1 việc mới, tự động vào đúng Hạng mục phụ trách
    - updateMyTaskPercent()   : Cập nhật % khi kéo thanh trượt (chỉ đổi hiển thị, chưa lưu)
    - saveMyTaskUpdate()      : Lưu % + ghi chú + thêm 1 dòng Nhật ký báo cáo ngày
    ================================================================ */
+
+// Giám sát tự thêm việc của mình: khoá cứng người phụ trách = chính họ,
+// và chỉ được chọn trong số Hạng mục mà Admin đã gán cho họ (users[].assignedGroupIds).
+function openMyTaskModal() {
+    if (currentRole !== 'SUPERVISOR') { showCustomAlert('Chỉ Giám sát mới tự thêm được việc của mình!', 'error'); return; }
+    const me = users.find(u => u.id === mySupervisorId);
+    const allowedGroupIds = (me && me.assignedGroupIds) || [];
+    if (allowedGroupIds.length === 0) {
+        showCustomAlert('Bạn chưa được Admin gán Hạng mục phụ trách. Vui lòng liên hệ Quản trị trước khi tự thêm việc.', 'error');
+        return;
+    }
+    openTaskModal(null, { lockSupervisor: myUserName, allowedGroupIds });
+}
 
 function updateMyTaskPercent(taskId, val) {
     document.getElementById('mt-pct-' + taskId).innerText = val + '%';
@@ -39,6 +53,8 @@ function saveMyTaskUpdate(taskId) {
 }
 
 function renderViecCuaToi() {
+    document.getElementById('btnAddMyTask').style.display = currentRole === 'SUPERVISOR' ? 'flex' : 'none';
+
     const wrap = document.getElementById('viecCuaToiAdminSelectWrap');
     const select = document.getElementById('viecCuaToiSupervisorSelect');
     let targetName = '';

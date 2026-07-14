@@ -14,9 +14,9 @@ function thietLapBanDauSheet() {
 
   if (!ss.getSheetByName('DanhSachUser')) {
     const sh = ss.insertSheet('DanhSachUser');
-    sh.getRange(1, 1, 2, 4).setValues([
-      ['ID', 'MatKhau', 'VaiTro', 'HoTen'],
-      ['admin', '123456', 'ADMIN', 'Ban QLDA']
+    sh.getRange(1, 1, 2, 5).setValues([
+      ['ID', 'MatKhau', 'VaiTro', 'HoTen', 'HangMucPhuTrach'],
+      ['admin', '123456', 'ADMIN', 'Ban QLDA', '']
     ]);
   }
 
@@ -32,6 +32,17 @@ function thietLapBanDauSheet() {
   });
 
   return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy.';
+}
+
+// Chạy 1 lần khi cần xóa sạch toàn bộ Hạng mục + Công việc để làm lại từ đầu.
+// Có backup lại dữ liệu cũ trước khi xóa (xem tab Backup_...).
+function resetAllTasks() {
+  backupCurrentData();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Data');
+  sheet.clearContents();
+  sheet.getRange('A1').setValue('Dữ liệu hệ thống');
+  sheet.getRange('A2').setValue(JSON.stringify({ tasks: [] }));
+  return 'Đã xóa toàn bộ Hạng mục và Công việc (đã backup dữ liệu cũ).';
 }
 
 function doGet() {
@@ -57,6 +68,13 @@ function getData() {
   return JSON.stringify(parsed);
 }
 
+// Cột E (index 4) của DanhSachUser lưu danh sách id Hạng mục phụ trách, dạng "3,7,12".
+function parseAssignedGroupIds(rawValue) {
+  return String(rawValue || '').split(',')
+    .map(s => parseInt(s.trim(), 10))
+    .filter(n => !isNaN(n));
+}
+
 // Đọc danh sách tài khoản (Giám sát/Admin) trực tiếp từ tab DanhSachUser — KHÔNG trả về mật khẩu.
 function listSupervisors() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
@@ -65,24 +83,33 @@ function listSupervisors() {
   const result = [];
   for (let i = 1; i < data.length; i++) {
     if (!data[i][0]) continue;
-    result.push({ id: String(data[i][0]).trim(), role: String(data[i][2]).trim().toUpperCase(), name: String(data[i][3]).trim() });
+    result.push({
+      id: String(data[i][0]).trim(),
+      role: String(data[i][2]).trim().toUpperCase(),
+      name: String(data[i][3]).trim(),
+      assignedGroupIds: parseAssignedGroupIds(data[i][4])
+    });
   }
   return result;
 }
 
 // (Admin) Thêm mới hoặc sửa 1 tài khoản Giám sát trực tiếp vào tab DanhSachUser.
-function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPassword) {
+// assignedGroupIdsStr: chuỗi các id Hạng mục phụ trách, cách nhau bởi dấu phẩy (vd "3,7,12").
+function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPassword, assignedGroupIdsStr) {
   const adminUser = login(adminId, adminPass);
   if (adminUser.role !== 'ADMIN') throw new Error("Chỉ Quản trị mới có quyền quản lý tài khoản!");
 
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
   if (!sheet) throw new Error("Chưa cấu hình Tab DanhSachUser trên Google Sheet!");
+  if (!sheet.getRange(1, 5).getValue()) sheet.getRange(1, 5).setValue('HangMucPhuTrach'); // tự thêm cột nếu Sheet cũ chưa có
   const data = sheet.getDataRange().getValues();
+  const assignedGroupIds = String(assignedGroupIdsStr || '').trim();
 
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === String(targetId).trim()) {
       sheet.getRange(i + 1, 3).setValue(role);
       sheet.getRange(i + 1, 4).setValue(name);
+      sheet.getRange(i + 1, 5).setValue(assignedGroupIds);
       if (newPassword) sheet.getRange(i + 1, 2).setValue(newPassword); // lưu thường, tự mã hóa ở lần đăng nhập đầu (xem login())
       logActivity(adminId, adminUser.name, "Sửa Giám sát", `Sửa tài khoản ${targetId}`);
       return "Success";
@@ -90,7 +117,7 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
   }
 
   if (!newPassword) throw new Error("Vui lòng đặt mật khẩu ban đầu cho tài khoản mới!");
-  sheet.appendRow([targetId, newPassword, role, name]);
+  sheet.appendRow([targetId, newPassword, role, name, assignedGroupIds]);
   logActivity(adminId, adminUser.name, "Thêm Giám sát", `Thêm tài khoản ${targetId}`);
   return "Success";
 }
