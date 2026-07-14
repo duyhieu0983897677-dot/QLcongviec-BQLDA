@@ -45,7 +45,7 @@ function switchTab(tabId) {
 
     if (tabId === 'dashboard') safeRender_('renderDashboard', 'Tổng quan');
     if (tabId === 'danhsach') safeRender_('renderDanhSach', 'Danh sách');
-    if (tabId === 'viecuatoi') safeRender_('renderViecCuaToi', 'Nhật ký tiến độ');
+    if (tabId === 'diemdanh') safeRender_('renderDiemDanh', 'Điểm danh & Phép');
     if (tabId === 'nguoidung') safeRender_('renderNguoiDung', 'Quản lý Giám sát');
     window.scrollTo(0, 0);
 }
@@ -76,10 +76,6 @@ function applyLoadedData(response) {
 }
 
 window.onload = function() {
-    if (window.innerWidth < 768 && document.getElementById('home')) {
-        switchTab('home');
-    }
-
     if (typeof google !== 'undefined') {
         google.script.run.withSuccessHandler(applyLoadedData).getData();
     } else {
@@ -117,7 +113,7 @@ function safeRender_(fnName, label, attempt) {
 function updateUI() {
     if (document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')) safeRender_('renderDashboard', 'Tổng quan');
     if (document.getElementById('danhsach') && document.getElementById('danhsach').classList.contains('active')) safeRender_('renderDanhSach', 'Danh sách');
-    if (document.getElementById('viecuatoi') && document.getElementById('viecuatoi').classList.contains('active')) safeRender_('renderViecCuaToi', 'Nhật ký tiến độ');
+    if (document.getElementById('diemdanh') && document.getElementById('diemdanh').classList.contains('active')) safeRender_('renderDiemDanh', 'Điểm danh & Phép');
     if (document.getElementById('nguoidung') && document.getElementById('nguoidung').classList.contains('active')) safeRender_('renderNguoiDung', 'Quản lý Giám sát');
 }
 
@@ -207,5 +203,31 @@ function getGoiThauName(maGoiThau) {
 function nameOfUser(id) {
     const u = users.find(x => x.id === id);
     return u ? u.name : (id || '--');
+}
+
+function chucDanhOfUser(id) {
+    const u = users.find(x => x.id === id);
+    return u ? (u.chucDanh || '') : '';
+}
+
+// Bảng màu cố định cho badge Chức danh — cùng 1 chức danh luôn ra cùng 1 màu (hash chuỗi đơn giản).
+// Phần tử cuối dùng riêng cho trường hợp chưa gán Chức danh.
+const CHUCDANH_COLORS_ = [
+    { bg: '#E4F2E9', fg: '#2E7D4F' },
+    { bg: '#FBF1DA', fg: '#B8860B' },
+    { bg: '#FCE6DA', fg: '#C4491F' },
+    { bg: '#E6ECFB', fg: '#3452B4' },
+    { bg: '#F3E6FB', fg: '#7C3AED' },
+    { bg: '#FBE6E6', fg: '#C23B3B' },
+    { bg: '#E6F7FB', fg: '#0E7C9C' },
+    { bg: '#F0EEE7', fg: '#5B6560' }
+];
+
+function mauChucDanh(chucDanh) {
+    const s = String(chucDanh || '').trim();
+    if (!s) return CHUCDANH_COLORS_[CHUCDANH_COLORS_.length - 1];
+    let hash = 0;
+    for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+    return CHUCDANH_COLORS_[hash % (CHUCDANH_COLORS_.length - 1)];
 }
 </script>

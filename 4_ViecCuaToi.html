@@ -2,23 +2,31 @@
 /* ================================================================
    FILE 4: 4_ViecCuaToi.html
    ------------------------------------------------------------------
-   PHẠM VI: Tab "Nhật ký tiến độ" (id tab vẫn là #viecuatoi để khỏi
-   sửa switchTab/nav) — 1 form đơn giản dùng chung cho cả điện thoại
-   lẫn máy tính: chọn 1 Công việc (do chính mình tạo, hoặc mọi Công
-   việc nếu là Admin), nhập % hoàn thành trong ngày, ghi vào
-   NhatKyTienDo qua themNhatKyTienDo (backend tự validate tổng % <=
-   100 và khoá LockService chống ghi đè). Nút "+ Thêm công việc" mở
-   modal Công việc (2_CongViec.html) vì phải tự tạo Công việc trước
-   khi log % được.
+   PHẠM VI: Modal "Báo cáo" (Nhật ký tiến độ) — mở từ nút "Báo cáo" ở
+   góc phải bảng Danh sách Công việc (tab "Thi công / Tiến độ"), KHÔNG
+   còn là 1 tab riêng nữa. Form: chọn 1 Công việc (do chính mình tạo,
+   hoặc mọi Công việc nếu là Admin), nhập % hoàn thành trong ngày, ghi
+   vào NhatKyTienDo qua themNhatKyTienDo (backend tự validate tổng % <=
+   100 và khoá LockService chống ghi đè). Việc tạo Công việc mới nằm ở
+   nút "+ Thêm công việc" cùng chỗ (mở modal Công việc, 2_CongViec.html).
 
    DANH SÁCH HÀM CHÍNH:
-   - renderViecCuaToi()      : Điểm vào, dựng lại form mỗi lần vào tab
+   - openBaoCaoModal()       : Mở modal, dựng lại form mỗi lần mở
+   - closeBaoCaoModal()      : Đóng modal
    - myReportableCongViec()  : Công việc mà user hiện tại được phép log %
-   - resizeImageFile()       : Nén/resize ảnh bằng canvas trước khi gửi lên Drive
    ================================================================ */
 
-const NTD_MAX_PHOTOS = 4;
-let ntdState = { congViec: null, photos: [] };
+let ntdState = { congViec: null };
+
+function openBaoCaoModal() {
+    if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
+    document.getElementById('baoCaoModal').classList.add('active');
+    renderViecCuaToi();
+}
+
+function closeBaoCaoModal() {
+    document.getElementById('baoCaoModal').classList.remove('active');
+}
 
 function myReportableCongViec() {
     return currentRole === 'ADMIN'
@@ -37,45 +45,18 @@ function groupCongViecByGoiThauPhan(list) {
     return groups;
 }
 
-function resizeImageFile(file, maxDim, quality) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => {
-            const img = new Image();
-            img.onload = () => {
-                let width = img.width, height = img.height;
-                if (width > maxDim || height > maxDim) {
-                    const ratio = Math.min(maxDim / width, maxDim / height);
-                    width = Math.round(width * ratio);
-                    height = Math.round(height * ratio);
-                }
-                const canvas = document.createElement('canvas');
-                canvas.width = width; canvas.height = height;
-                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', quality));
-            };
-            img.onerror = reject;
-            img.src = e.target.result;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
 function renderViecCuaToi() {
     document.getElementById('ntdUserLabel').textContent = myUserName || myUserId || '--';
 
-    ntdState = { congViec: null, photos: [] };
+    ntdState = { congViec: null };
     document.getElementById('ntdNgay').value = formatVN(getTodayDate());
     fillNtdCongViecOptions();
     document.getElementById('ntdPct').value = '';
     document.getElementById('ntdGhiChu').value = '';
-    renderNtdPhotoGrid();
     selectNtdCongViec('');
 
     document.getElementById('ntdCongViec').onchange = e => selectNtdCongViec(e.target.value);
     document.getElementById('ntdPct').oninput = updateNtdProgress;
-    document.getElementById('ntdPhotoInput').onchange = e => handleNtdPhotoFiles(e.target.files);
     document.getElementById('ntdSubmit').onclick = submitNtd;
 
     setTimeout(() => {
@@ -100,7 +81,7 @@ function fillNtdCongViecOptions() {
     groupNames.sort().forEach(groupName => {
         html += `<optgroup label="${groupName}">`;
         groups[groupName].forEach(cv => {
-            html += `<option value="${cv.maCongViec}">${cv.tenCongViec}</option>`;
+            html += `<option value="${cv.maCongViec}">${(cv.maHangMucList || []).join(',')} — ${cv.tenCongViec}</option>`;
         });
         html += '</optgroup>';
     });
@@ -111,8 +92,11 @@ function selectNtdCongViec(maCongViec) {
     ntdState.congViec = maCongViec ? congViec.find(c => c.maCongViec === maCongViec) : null;
     const meta = document.getElementById('ntdCongViecMeta');
     if (ntdState.congViec) {
-        const hm = findHangMuc(ntdState.congViec.maHangMuc);
-        meta.innerHTML = `<span>Hạng mục: <b>${hm ? hm.maHangMuc + ' — ' + hm.tenHangMuc : ntdState.congViec.maHangMuc}</b></span>`;
+        const hmLabel = (ntdState.congViec.maHangMucList || []).map(id => {
+            const hm = findHangMuc(id);
+            return hm ? `${hm.maHangMuc} — ${hm.tenHangMuc}` : id;
+        }).join('; ');
+        meta.innerHTML = `<span>Hạng mục: <b>${hmLabel || '--'}</b></span>`;
         gsRun('getNhatKyGanNhat', maCongViec, 5)
             .then(json => renderNtdRecent(JSON.parse(json)))
             .catch(() => renderNtdRecent([]));
@@ -183,35 +167,6 @@ function updateNtdProgress() {
     }
 }
 
-function renderNtdPhotoGrid() {
-    const grid = document.getElementById('ntdPhotoGrid');
-    const addTile = document.getElementById('ntdPhotoAdd');
-    grid.querySelectorAll('.ntd-photo-thumb').forEach(el => el.remove());
-    ntdState.photos.forEach((p, idx) => {
-        const thumb = document.createElement('div');
-        thumb.className = 'ntd-photo-thumb';
-        thumb.innerHTML = `<img src="${p.dataUrl}" alt="Ảnh ${idx + 1}"><button type="button" class="ntd-photo-remove" data-idx="${idx}">×</button>`;
-        grid.insertBefore(thumb, addTile);
-    });
-    addTile.style.display = ntdState.photos.length >= NTD_MAX_PHOTOS ? 'none' : 'flex';
-    grid.querySelectorAll('.ntd-photo-remove').forEach(btn => {
-        btn.addEventListener('click', () => {
-            ntdState.photos.splice(parseInt(btn.dataset.idx, 10), 1);
-            renderNtdPhotoGrid();
-        });
-    });
-}
-
-function handleNtdPhotoFiles(fileList) {
-    const files = Array.from(fileList).slice(0, NTD_MAX_PHOTOS - ntdState.photos.length);
-    files.forEach(file => {
-        resizeImageFile(file, 1280, 0.72).then(dataUrl => {
-            ntdState.photos.push({ name: file.name, dataUrl });
-            renderNtdPhotoGrid();
-        });
-    });
-}
-
 function submitNtd() {
     if (!ntdState.congViec) return;
     const maCongViec = ntdState.congViec.maCongViec;
@@ -222,8 +177,7 @@ function submitNtd() {
     btn.disabled = true;
     document.getElementById('ntdHint').textContent = 'Đang gửi...';
 
-    Promise.all(ntdState.photos.map((p, idx) => gsRun('uploadAnhHienTruong', myUserId, myPassword, p.dataUrl, `${maCongViec}_${Date.now()}_${idx}.jpg`)))
-        .then(urls => gsRun('themNhatKyTienDo', myUserId, myPassword, maCongViec, ngay, phanTram, ghiChu, urls))
+    gsRun('themNhatKyTienDo', myUserId, myPassword, maCongViec, ngay, phanTram, ghiChu, [])
         .then(() => {
             showCustomAlert('Đã gửi báo cáo tiến độ.', 'success');
             reloadData(); // chạy nền, không chờ mới báo thành công

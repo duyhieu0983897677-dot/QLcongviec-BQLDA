@@ -36,7 +36,6 @@ function openHangMucModal(maHangMuc) {
 
     document.getElementById('hangMucModalTitle').innerText = node ? 'Sửa Hạng mục' : 'Thêm Hạng mục';
     document.getElementById('hmMaHangMuc').value = node ? node.maHangMuc : '';
-    document.getElementById('hmMaHangMuc').disabled = !!node; // không cho đổi mã khi sửa (tránh mồ côi tham chiếu)
     document.getElementById('hmTen').value = node ? node.tenHangMuc : '';
     document.getElementById('hmCapDo').value = node ? String(node.capDo) : '1';
     fillParentSelect(document.getElementById('hmParentId'), node ? node.parentId : '', maHangMuc || null);
@@ -46,19 +45,21 @@ function openHangMucModal(maHangMuc) {
 
 function closeHangMucModal() {
     document.getElementById('hangMucModal').classList.remove('active');
-    document.getElementById('hmMaHangMuc').disabled = false;
 }
 
+// Cho phép đổi Mã hạng mục — backend (adminSaveHangMuc) tự cập nhật dây chuyền mọi Gói thầu/
+// Công việc/Hạng mục con đang tham chiếu mã cũ, tránh mồ côi tham chiếu.
 function saveHangMucModal() {
     const maHangMuc = document.getElementById('hmMaHangMuc').value.trim();
     const tenHangMuc = document.getElementById('hmTen').value.trim();
-    const isEdit = !!document.getElementById('hmEditId').value;
+    const oldMaHangMuc = document.getElementById('hmEditId').value;
     if (!maHangMuc) { showCustomAlert('Vui lòng nhập Mã Hạng mục!', 'error'); return; }
     if (!tenHangMuc) { showCustomAlert('Vui lòng nhập Tên Hạng mục!', 'error'); return; }
-    if (!isEdit && findHangMuc(maHangMuc)) { showCustomAlert('Mã Hạng mục này đã tồn tại!', 'error'); return; }
+    if (maHangMuc !== oldMaHangMuc && findHangMuc(maHangMuc)) { showCustomAlert('Mã Hạng mục này đã tồn tại!', 'error'); return; }
 
     const node = {
         maHangMuc,
+        oldMaHangMuc,
         tenHangMuc,
         capDo: parseInt(document.getElementById('hmCapDo').value, 10),
         parentId: document.getElementById('hmParentId').value
@@ -155,25 +156,29 @@ function fillCvGoiThauSelect(selectedId) {
     if (selectedId) sel.value = selectedId;
 }
 
-// Hạng mục chọn được giới hạn theo đúng danh sách đã gộp trong Gói thầu đang chọn.
-function fillCvHangMucSelect(maGoiThau, selectedId) {
-    const sel = document.getElementById('cvHangMuc');
+// Hạng mục chọn được giới hạn theo đúng danh sách đã gộp trong Gói thầu đang chọn — chọn được
+// 1 hoặc nhiều (checkbox), chỉ hiện Mã hạng mục cho gọn (đủ để lọc/báo cáo sau này).
+function fillCvHangMucCheckboxes(maGoiThau, selectedIds) {
+    const container = document.getElementById('cvHangMucIds');
+    const sel = new Set(selectedIds || []);
     if (!maGoiThau) {
-        sel.innerHTML = '<option value="">-- Chọn Gói thầu trước --</option>';
-        sel.disabled = true;
+        container.innerHTML = '<span style="color:gray;">-- Chọn Gói thầu trước --</span>';
         return;
     }
     const g = goiThau.find(x => x.maGoiThau === maGoiThau);
     const list = g ? hangMuc.filter(h => g.maHangMucList.includes(h.maHangMuc)) : [];
-    sel.disabled = false;
-    let html = '<option value="">-- Chọn Hạng mục --</option>';
-    list.forEach(h => html += `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`);
-    sel.innerHTML = html || '<option value="">-- Gói thầu này chưa gộp Hạng mục nào --</option>';
-    if (selectedId) sel.value = selectedId;
+    if (list.length === 0) {
+        container.innerHTML = '<span style="color:gray;">-- Gói thầu này chưa gộp Hạng mục nào --</span>';
+        return;
+    }
+    container.innerHTML = list.map(h => `
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
+            <input type="checkbox" class="cv-hm-cb" value="${h.maHangMuc}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${h.maHangMuc}
+        </label>`).join('');
 }
 
 function onCvGoiThauChange() {
-    fillCvHangMucSelect(document.getElementById('cvGoiThau').value, '');
+    fillCvHangMucCheckboxes(document.getElementById('cvGoiThau').value, []);
 }
 
 function openCongViecModal(maCongViec) {
@@ -183,7 +188,7 @@ function openCongViecModal(maCongViec) {
     document.getElementById('cvEditId').value = maCongViec || '';
     document.getElementById('congViecModalTitle').innerText = cv ? 'Sửa công việc' : 'Thêm công việc';
     fillCvGoiThauSelect(cv ? cv.maGoiThau : '');
-    fillCvHangMucSelect(cv ? cv.maGoiThau : '', cv ? cv.maHangMuc : '');
+    fillCvHangMucCheckboxes(cv ? cv.maGoiThau : '', cv ? cv.maHangMucList : []);
     document.getElementById('cvTen').value = cv ? cv.tenCongViec : '';
     document.getElementById('cvBatDau').value = cv ? formatVN(cv.ngayBatDauKH) : '';
     document.getElementById('cvKetThuc').value = cv ? formatVN(cv.ngayKetThucKH) : '';
@@ -209,17 +214,17 @@ function closeCongViecModal() {
 function saveCongViecModal() {
     const maCongViec = document.getElementById('cvEditId').value;
     const maGoiThau = document.getElementById('cvGoiThau').value;
-    const maHangMuc = document.getElementById('cvHangMuc').value;
+    const maHangMucList = Array.from(document.querySelectorAll('.cv-hm-cb:checked')).map(cb => cb.value);
     const tenCongViec = document.getElementById('cvTen').value.trim();
     if (!maGoiThau) { showCustomAlert('Vui lòng chọn Gói thầu!', 'error'); return; }
-    if (!maHangMuc) { showCustomAlert('Vui lòng chọn Hạng mục!', 'error'); return; }
+    if (maHangMucList.length === 0) { showCustomAlert('Vui lòng chọn ít nhất 1 Hạng mục!', 'error'); return; }
     if (!tenCongViec) { showCustomAlert('Vui lòng nhập Tên công việc!', 'error'); return; }
 
     const payload = {
         maCongViec,
         tenCongViec,
         maGoiThau,
-        maHangMuc,
+        maHangMucList,
         ngayBatDauKH: convertDMYtoISO(document.getElementById('cvBatDau').value.trim()) || '',
         ngayKetThucKH: convertDMYtoISO(document.getElementById('cvKetThuc').value.trim()) || ''
     };

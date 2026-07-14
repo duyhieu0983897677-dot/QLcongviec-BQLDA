@@ -48,9 +48,18 @@ function renderBcCharts() {
         options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
     });
 
+    // Hiện đủ mọi nhân sự (Giám sát) trên biểu đồ, kể cả người chưa tạo công việc nào (đếm = 0).
     const countsByUser = {};
+    users.filter(u => u.role !== 'ADMIN').forEach(u => { countsByUser[u.id] = 0; });
     bcAllCongViec.forEach(cv => { countsByUser[cv.nguoiTaoId] = (countsByUser[cv.nguoiTaoId] || 0) + 1; });
-    const entries = Object.entries(countsByUser).sort((a, b) => b[1] - a[1]);
+    const entries = Object.entries(countsByUser).sort((a, b) => b[1] - a[1] || nameOfUser(a[0]).localeCompare(nameOfUser(b[0]), 'vi'));
+
+    // Nhiều nhân sự (>30) thì mỗi thanh chỉ cần bề rộng tối thiểu, phần dư cho cuộn ngang
+    // thay vì bóp hết các thanh vào 1 khung cố định.
+    const barWrap = document.getElementById('bcBarChartWrap');
+    const barInner = document.getElementById('bcBarChartInner');
+    const MIN_PX_PER_BAR = 26;
+    barInner.style.width = Math.max(entries.length * MIN_PX_PER_BAR, barWrap.clientWidth || 0) + 'px';
 
     const barCanvas = document.getElementById('bcBarChart');
     if (bcBarChartInstance) bcBarChartInstance.destroy();
@@ -58,11 +67,16 @@ function renderBcCharts() {
         type: 'bar',
         data: {
             labels: entries.map(([id]) => nameOfUser(id)),
-            datasets: [{ label: 'Số công việc', data: entries.map(([, c]) => c), backgroundColor: '#E85D2C' }]
+            datasets: [{ label: 'Số công việc', data: entries.map(([, c]) => c), backgroundColor: '#E85D2C', barPercentage: 0.6, categoryPercentage: 0.7 }]
         },
         options: {
+            responsive: true,
+            maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } },
+                x: { ticks: { autoSkip: false, maxRotation: 60, minRotation: 45, font: { size: 10 } } }
+            }
         }
     });
 }
@@ -87,28 +101,56 @@ function onBcDetailTypeChange() {
     renderBcDetail();
 }
 
+const BC_DETAIL_COLSPAN = 8;
+const BC_PHAN_ROMAN = { ho_so: 'I', thi_cong: 'II' };
+
+// Ghi chú của lần báo cáo gần nhất CÓ ghi chú (không nhất thiết là log mới nhất).
+function lastNoteOf(cv) {
+    const withNote = (cv.recentLogs || []).find(l => l.ghiChu);
+    return withNote ? { text: withNote.ghiChu, date: withNote.ngayBaoCao } : null;
+}
+
 function renderBcDetail() {
     const type = document.getElementById('bcDetailType').value;
     const val = document.getElementById('bcDetailSelect').value;
     const tbody = document.getElementById('bcDetailBody');
 
     if (!val) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${BC_DETAIL_COLSPAN}" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu.</td></tr>`;
         return;
     }
 
-    const rows = bcAllCongViec.filter(cv => type === 'goithau' ? cv.maGoiThau === val : cv.maHangMuc === val);
+    const rows = bcAllCongViec.filter(cv => type === 'goithau' ? cv.maGoiThau === val : (cv.maHangMucList || []).includes(val));
     if (rows.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có công việc nào.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${BC_DETAIL_COLSPAN}" class="text-center" style="color:gray; padding:15px;">Chưa có công việc nào.</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = rows.map(cv => `
-        <tr>
-            <td>${cv.tenCongViec}</td>
-            <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
-            <td class="text-center">${cv.luyKe || 0}%</td>
-            <td class="text-center"><span class="bc-badge ${cv.trangThaiMau}">${TRANGTHAI_LABEL[cv.trangThaiMau] || '--'}</span></td>
-        </tr>`).join('');
+    let html = '';
+    ['ho_so', 'thi_cong'].forEach(phan => {
+        const group = rows.filter(cv => cv.phanLoai === phan);
+        if (group.length === 0) return;
+        html += `<tr class="bc-group-row"><td colspan="${BC_DETAIL_COLSPAN}">${PHAN_LOAI_LABEL[phan] || phan}</td></tr>`;
+        group.forEach((cv, idx) => {
+            const note = lastNoteOf(cv);
+            const showNote = note && (cv.trangThaiMau === 'late' || cv.trangThaiMau === 'bad');
+            const pct = Math.min(cv.luyKe || 0, 100);
+            html += `
+            <tr>
+                <td class="text-center">${BC_PHAN_ROMAN[phan]}.${idx + 1}</td>
+                <td class="text-center">${(cv.maHangMucList || []).join(', ') || '--'}</td>
+                <td>${cv.tenCongViec}</td>
+                <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
+                <td class="text-center">${formatVN(cv.ngayBatDauKH)}</td>
+                <td class="text-center">${formatVN(cv.ngayKetThucKH)}</td>
+                <td class="bc-bar-cell">
+                    <div class="bc-bar-track"><div class="bc-bar-fill status-${cv.trangThaiMau}" style="width:${pct}%;"></div></div>
+                    <span class="bc-bar-pct">${cv.luyKe || 0}%</span>
+                </td>
+                <td class="bc-detail-note">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
+            </tr>`;
+        });
+    });
+    tbody.innerHTML = html;
 }
 </script>

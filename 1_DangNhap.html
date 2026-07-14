@@ -22,11 +22,15 @@ let myUserId = "";
 let myPassword = "";
 let myUserName = "";
 let mySupervisorId = "";
+let myChucDanh = "";
 let currentRole = "VIEW";
 
+// LƯU Ý: phải giữ lại class "js-lock-btn" trong mỗi lần gán lại className, nếu không lần gọi
+// TIẾP THEO sẽ không còn tìm thấy nút qua querySelectorAll('.js-lock-btn') nữa (nút bị "đứng hình"
+// mãi mãi ở trạng thái vừa gán, kể cả khi đăng xuất).
 function setLockBtnState(className, innerHTML) {
     document.querySelectorAll('.js-lock-btn').forEach(btn => {
-        btn.className = className;
+        btn.className = 'js-lock-btn ' + className;
         btn.innerHTML = innerHTML;
     });
 }
@@ -47,13 +51,13 @@ function toggleAdmin() {
         document.getElementById('passwordModal').classList.add('active');
         setTimeout(() => document.getElementById('adminUsernameInput').focus(), 100);
     } else {
-        myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = "";
+        myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = ""; myChucDanh = "";
         currentRole = "VIEW";
 
         body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
-        switchTab('home');
+        switchTab('dashboard');
     }
 }
 
@@ -83,6 +87,7 @@ function confirmPassword() {
             currentRole = res.role;
             myUserName = res.name;
             mySupervisorId = res.supervisorId;
+            myChucDanh = res.chucDanh || '';
 
             document.body.className = '';
 
@@ -102,7 +107,7 @@ function confirmPassword() {
             closePasswordModal();
             userInput.value = ''; passInput.value = '';
 
-            switchTab(currentRole === 'ADMIN' ? 'dashboard' : 'viecuatoi');
+            switchTab(currentRole === 'ADMIN' ? 'dashboard' : 'danhsach');
             showCustomAlert(`Đăng nhập thành công! Xin chào ${myUserName}.`, "success");
         })
         .withFailureHandler(function(error) {
@@ -161,7 +166,7 @@ function handleBackendError(error) {
     showCustomAlert("Lỗi: " + errorMsg, "error");
 
     if (String(errorMsg).includes("Xác thực thất bại") || String(errorMsg).includes("Tài khoản không tồn tại") || String(errorMsg).includes("Sai Tên đăng nhập")) {
-        myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = "";
+        myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = ""; myChucDanh = "";
         currentRole = "VIEW";
         document.body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');

@@ -28,15 +28,20 @@ function canEditCongViec(cv) {
 
 function renderCongViecRow(cv) {
     const status = cv.trangThaiMau;
-    const hm = findHangMuc(cv.maHangMuc);
-    const meta = hm ? `${hm.maHangMuc} — ${hm.tenHangMuc}` : cv.maHangMuc;
+    const meta = (cv.maHangMucList || []).map(id => {
+        const hm = findHangMuc(id);
+        return hm ? `${hm.maHangMuc} — ${hm.tenHangMuc}` : id;
+    }).join('; ');
     const editable = canEditCongViec(cv);
+    const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
+    const mau = mauChucDanh(chucDanh);
     return `<tr class="task-row">
         <td class="task-name-cell" style="padding-left:48px;">
             <span class="t-name">${cv.tenCongViec}</span>
             <span class="t-target">${meta}</span>
         </td>
         <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
+        <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
         <td>
             <div class="gantt-bar-wrap">
                 <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, cv.luyKe || 0)}%;"></div></div>
@@ -45,8 +50,10 @@ function renderCongViecRow(cv) {
         </td>
         <td class="text-center"><span class="bc-badge ${status}">${TRANGTHAI_LABEL[status] || '--'}</span></td>
         <td class="text-center">
-            ${editable ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')"><i class="fa-solid fa-trash"></i></button>` : ''}
+            ${editable ? `<div class="action-cell">
+                <button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')"><i class="fa-solid fa-trash"></i></button>
+            </div>` : ''}
         </td>
     </tr>`;
 }
@@ -79,8 +86,8 @@ function renderDanhSach() {
         if (fGS && cv.nguoiTaoId !== fGS) return false;
         if (fStatus && cv.trangThaiMau !== fStatus) return false;
         if (fSearch) {
-            const hm = findHangMuc(cv.maHangMuc);
-            const hay = `${cv.tenCongViec} ${cv.maHangMuc} ${hm ? hm.tenHangMuc : ''}`.toLowerCase();
+            const hmNames = (cv.maHangMucList || []).map(id => { const hm = findHangMuc(id); return hm ? hm.tenHangMuc : ''; }).join(' ');
+            const hay = `${cv.tenCongViec} ${(cv.maHangMucList || []).join(' ')} ${hmNames}`.toLowerCase();
             if (!hay.includes(fSearch)) return false;
         }
         return true;
@@ -96,7 +103,7 @@ function renderDanhSach() {
         const gtKey = 'gt:' + g.maGoiThau;
         const gtOpen = !collapsedGroups.has(gtKey);
         html += `<tr class="task-group-row" onclick="toggleTaskGroup('${gtKey}')">
-            <td colspan="5"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.tenGoiThau}</td>
+            <td colspan="6"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.tenGoiThau}</td>
         </tr>`;
         if (!gtOpen) return;
 
@@ -106,14 +113,14 @@ function renderDanhSach() {
             const subKey = gtKey + ':' + phan;
             const subOpen = !collapsedGroups.has(subKey);
             html += `<tr class="task-group-row" onclick="toggleTaskGroup('${subKey}')" style="background:#F2F0E9;">
-                <td colspan="5" style="padding-left:28px;"><i class="fa-solid ${subOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${PHAN_LOAI_LABEL[phan]}</td>
+                <td colspan="6" style="padding-left:28px;"><i class="fa-solid ${subOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${PHAN_LOAI_LABEL[phan]}</td>
             </tr>`;
             if (!subOpen) return;
             subItems.forEach(cv => { html += renderCongViecRow(cv); });
         });
     });
 
-    document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="5" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
+    document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="6" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
 
     renderHangMucRefList();
     renderGoiThauList();
@@ -124,19 +131,25 @@ function renderHangMucRefList() {
     if (!body) return;
     if (currentRole !== 'ADMIN') { body.innerHTML = ''; return; }
     if (hangMuc.length === 0) {
-        body.innerHTML = '<tr><td colspan="2" class="text-center" style="color:gray; padding:15px;">Chưa có Hạng mục nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có Hạng mục nào.</td></tr>';
         return;
     }
 
     const childrenByParent = {};
     hangMuc.forEach(h => { const key = h.parentId || ''; (childrenByParent[key] = childrenByParent[key] || []).push(h); });
 
+    let stt = 0;
     function renderNode(node, depth) {
+        stt++;
         let rows = `<tr>
-            <td style="padding-left:${12 + depth * 18}px;">${node.maHangMuc} — ${node.tenHangMuc}</td>
+            <td class="text-center">${stt}</td>
+            <td>${node.maHangMuc}</td>
+            <td style="padding-left:${depth * 18}px;">${node.tenHangMuc}</td>
             <td class="text-center">
-                <button class="btn btn-sm" style="background:var(--primary);" onclick="openHangMucModal('${node.maHangMuc}')"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteHangMuc('${node.maHangMuc}')"><i class="fa-solid fa-trash"></i></button>
+                <div class="action-cell">
+                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openHangMucModal('${node.maHangMuc}')"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteHangMuc('${node.maHangMuc}')"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </td>
         </tr>`;
         (childrenByParent[node.maHangMuc] || []).forEach(child => { rows += renderNode(child, depth + 1); });
@@ -162,8 +175,10 @@ function renderGoiThauList() {
             <td>${g.tenGoiThau}</td>
             <td>${names || '--'}</td>
             <td class="text-center">
-                <button class="btn btn-sm" style="background:var(--primary);" onclick="openGoiThauModal('${g.maGoiThau}')"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteGoiThau('${g.maGoiThau}')"><i class="fa-solid fa-trash"></i></button>
+                <div class="action-cell">
+                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openGoiThauModal('${g.maGoiThau}')"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteGoiThau('${g.maGoiThau}')"><i class="fa-solid fa-trash"></i></button>
+                </div>
             </td>
         </tr>`;
     }).join('');

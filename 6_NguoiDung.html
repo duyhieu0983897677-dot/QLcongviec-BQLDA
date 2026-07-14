@@ -39,8 +39,10 @@ function renderNguoiDung() {
         <td class="text-center">${PHAN_LOAI_LABEL[u.phanMacDinh] || '-- Chưa gán --'}</td>
         <td class="text-center">${congViecCountByUser[u.id] || 0}</td>
         <td class="text-center">
-            <button class="btn btn-sm" style="background:var(--primary);" onclick="openUserModal('${u.id}')"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')"><i class="fa-solid fa-trash"></i></button>
+            <div class="action-cell">
+                <button class="btn btn-sm" style="background:var(--primary);" onclick="openUserModal('${u.id}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')"><i class="fa-solid fa-trash"></i></button>
+            </div>
         </td>
     </tr>`).join('');
 }

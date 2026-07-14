@@ -9,10 +9,16 @@ const HANGMUC_HEADERS_ = ['maHangMuc', 'tenHangMuc', 'capDo', 'parentId', 'activ
 const GOITHAU_HEADERS_ = ['maGoiThau', 'tenGoiThau', 'maHangMucList'];
 // CongViec: đơn vị công việc thật do Admin/Giám sát tự tạo — đây mới là nơi Nhật ký tiến độ trỏ vào.
 // phanLoai ('ho_so'/'thi_cong') tự gán = phanMacDinh của người tạo tại thời điểm tạo, không sửa tay.
-const CONGVIEC_HEADERS_ = ['maCongViec', 'tenCongViec', 'maGoiThau', 'maHangMuc', 'phanLoai',
+const CONGVIEC_HEADERS_ = ['maCongViec', 'tenCongViec', 'maGoiThau', 'maHangMucList', 'phanLoai',
   'nguoiTao_id', 'nguoiTao_ten', 'ngayBatDauKH', 'ngayKetThucKH', 'active'];
 const NHATKY_HEADERS_ = ['logId', 'maCongViec', 'ngayBaoCao', 'phanTramNgay', 'ghiChu',
   'nguoiNhap_id', 'nguoiNhap_ten', 'thoiGianNhap', 'fileDinhKem', 'active'];
+// DiemDanhCuoiTuan: trạng thái điểm danh Thứ 7/CN hiện tại (upsert theo userId+ngay, KHÔNG phải
+// log lịch sử — bỏ tick thì xoá hẳn dòng). PhepThang: sổ phép/tháng, "Cộng phép tháng"/"TỔNG CỘNG"
+// luôn tính lại từ 2 sheet này, không lưu cột riêng (xem getDiemDanhPhep()).
+const DIEMDANH_HEADERS_ = ['userId', 'ngay', 'buoi'];
+const PHEP_HEADERS_ = ['userId', 'thang', 'phepDauThang', 'soNgayNghi', 'chotLuc'];
+const THU_KY_CHUC_DANH_ = 'thư ký bqlda';
 
 // Chạy 1 lần duy nhất sau khi tạo Sheet mới: tạo đủ các tab cần thiết
 // và 1 tài khoản admin mặc định (admin / 123456) để đăng nhập lần đầu.
@@ -52,13 +58,21 @@ function thietLapBanDauSheet() {
     ss.insertSheet('NhatKyTienDo').getRange(1, 1, 1, NHATKY_HEADERS_.length).setValues([NHATKY_HEADERS_]);
   }
 
+  if (!ss.getSheetByName('DiemDanhCuoiTuan')) {
+    ss.insertSheet('DiemDanhCuoiTuan').getRange(1, 1, 1, DIEMDANH_HEADERS_.length).setValues([DIEMDANH_HEADERS_]);
+  }
+
+  if (!ss.getSheetByName('PhepThang')) {
+    ss.insertSheet('PhepThang').getRange(1, 1, 1, PHEP_HEADERS_.length).setValues([PHEP_HEADERS_]);
+  }
+
   ss.getSheets().forEach(sh => {
     if (/^(Sheet1|Trang tính1)$/.test(sh.getName()) && ss.getSheets().length > 3) {
       ss.deleteSheet(sh);
     }
   });
 
-  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo.';
+  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, DiemDanhCuoiTuan, PhepThang.';
 }
 
 // Chạy 1 lần khi cần xóa sạch toàn bộ Hạng mục + Công việc kiểu cũ để làm lại từ đầu.
@@ -92,6 +106,16 @@ function isActiveVal_(v) {
 function formatDateCell_(v) {
   if (!v) return '';
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return String(v).trim();
+}
+
+// Cột "thang" (yyyy-MM) ghi bằng chuỗi nhưng Google Sheets tự nhận diện là ngày tháng và âm thầm
+// đổi thành giá trị Date (thành ngày 1 của tháng đó) — nếu đọc lại bằng String() thường sẽ SAI
+// hoàn toàn (không khớp được "2026-07"), khiến mọi so khớp userId+thang thất bại. Phải test
+// instanceof Date như formatDateCell_ để đọc lại đúng.
+function formatThangCell_(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM');
   return String(v).trim();
 }
 
@@ -153,7 +177,7 @@ function readCongViecRows_(sheet) {
       maCongViec,
       tenCongViec: String(r[1] || '').trim(),
       maGoiThau: String(r[2] || '').trim(),
-      maHangMuc: String(r[3] || '').trim(),
+      maHangMucList: String(r[3] || '').split(',').map(s => s.trim()).filter(Boolean),
       phanLoai: String(r[4] || '').trim(),
       nguoiTaoId: String(r[5] || '').trim(),
       nguoiTaoTen: String(r[6] || '').trim(),
@@ -328,31 +352,77 @@ function adminDeleteSupervisor(adminId, adminPass, targetId) {
 // =======================================================
 
 // node = { maHangMuc, tenHangMuc, capDo, parentId } — chỉ Admin được thêm/sửa/xoá.
+// node: { maHangMuc (mã mới), oldMaHangMuc (mã cũ khi sửa — rỗng khi tạo mới), tenHangMuc, capDo, parentId }
 function adminSaveHangMuc(userId, password, node) {
   const user = login(userId, password);
   if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền quản lý Hạng mục!');
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('HangMuc');
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName('HangMuc');
   if (!sheet) throw new Error('Chưa cấu hình Tab HangMuc trên Google Sheet!');
 
   const maHangMuc = String(node.maHangMuc || '').trim();
+  const oldMaHangMuc = String(node.oldMaHangMuc || '').trim();
   if (!maHangMuc) throw new Error('Vui lòng nhập Mã hạng mục!');
 
   const data = sheet.getDataRange().getValues();
+  const isRename = oldMaHangMuc && oldMaHangMuc !== maHangMuc;
+
+  if (isRename && data.some((r, i) => i > 0 && String(r[0]).trim() === maHangMuc)) {
+    throw new Error(`Mã Hạng mục "${maHangMuc}" đã tồn tại, vui lòng chọn mã khác!`);
+  }
+
+  const keyToFind = oldMaHangMuc || maHangMuc;
   let foundRow = -1;
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === maHangMuc) { foundRow = i + 1; break; }
+    if (String(data[i][0]).trim() === keyToFind) { foundRow = i + 1; break; }
   }
 
   const row = [maHangMuc, node.tenHangMuc || '', parseInt(node.capDo, 10) || 1, node.parentId || '', true];
 
   if (foundRow > 0) {
     sheet.getRange(foundRow, 1, 1, row.length).setValues([row]);
-    logActivity(userId, user.name, 'Sửa Hạng mục', `Sửa ${maHangMuc} - ${node.tenHangMuc}`);
+    logActivity(userId, user.name, 'Sửa Hạng mục', `Sửa ${keyToFind}${isRename ? ' → ' + maHangMuc : ''} - ${node.tenHangMuc}`);
   } else {
     sheet.appendRow(row);
     logActivity(userId, user.name, 'Thêm Hạng mục', `Thêm ${maHangMuc} - ${node.tenHangMuc}`);
   }
+
+  // Đổi mã thì phải cập nhật dây chuyền mọi nơi đang tham chiếu mã cũ, nếu không Hạng mục con/
+  // Gói thầu/Công việc sẽ bị "mồ côi" (trỏ vào 1 mã không còn tồn tại).
+  if (isRename) capNhatMaHangMucThamChieu_(ss, oldMaHangMuc, maHangMuc);
   return 'Success';
+}
+
+function capNhatMaHangMucThamChieu_(ss, oldMa, newMa) {
+  const hmSheet = ss.getSheetByName('HangMuc');
+  if (hmSheet) {
+    const data = hmSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][3]).trim() === oldMa) hmSheet.getRange(i + 1, 4).setValue(newMa);
+    }
+  }
+
+  const gtSheet = ss.getSheetByName('GoiThau');
+  if (gtSheet) {
+    const data = gtSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const list = String(data[i][2] || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (list.includes(oldMa)) {
+        gtSheet.getRange(i + 1, 3).setValue(list.map(id => id === oldMa ? newMa : id).join(','));
+      }
+    }
+  }
+
+  const cvSheet = ss.getSheetByName('CongViec');
+  if (cvSheet) {
+    const data = cvSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const list = String(data[i][3] || '').split(',').map(s => s.trim()).filter(Boolean);
+      if (list.includes(oldMa)) {
+        cvSheet.getRange(i + 1, 4).setValue(list.map(id => id === oldMa ? newMa : id).join(','));
+      }
+    }
+  }
 }
 
 // Soft delete (active=false) — không xoá dòng thật để giữ toàn vẹn tham chiếu với CongViec.
@@ -449,7 +519,8 @@ function sinhMaCongViec_(sheet, now) {
   return prefix + String(maxSTT + 1).padStart(3, '0');
 }
 
-// congViec = { maCongViec (rỗng nếu tạo mới), tenCongViec, maGoiThau, maHangMuc, ngayBatDauKH, ngayKetThucKH }
+// congViec = { maCongViec (rỗng nếu tạo mới), tenCongViec, maGoiThau, maHangMucList (mảng, chọn
+// được 1 hoặc nhiều Hạng mục), ngayBatDauKH, ngayKetThucKH }
 function adminSaveCongViec(userId, password, congViec) {
   const user = login(userId, password);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CongViec');
@@ -457,10 +528,10 @@ function adminSaveCongViec(userId, password, congViec) {
 
   const tenCongViec = String(congViec.tenCongViec || '').trim();
   const maGoiThau = String(congViec.maGoiThau || '').trim();
-  const maHangMuc = String(congViec.maHangMuc || '').trim();
+  const maHangMucJoined = (congViec.maHangMucList || []).map(s => String(s).trim()).filter(Boolean).join(',');
   if (!tenCongViec) throw new Error('Vui lòng nhập Tên công việc!');
   if (!maGoiThau) throw new Error('Vui lòng chọn Gói thầu!');
-  if (!maHangMuc) throw new Error('Vui lòng chọn Hạng mục!');
+  if (!maHangMucJoined) throw new Error('Vui lòng chọn ít nhất 1 Hạng mục!');
 
   const data = sheet.getDataRange().getValues();
   const maCongViec = String(congViec.maCongViec || '').trim();
@@ -472,7 +543,7 @@ function adminSaveCongViec(userId, password, congViec) {
           throw new Error('Bạn không có quyền sửa Công việc này!');
         }
         // Giữ nguyên phanLoai (cột E) và người tạo (cột F/G) — chỉ cho sửa các field mô tả.
-        sheet.getRange(i + 1, 2, 1, 4).setValues([[tenCongViec, maGoiThau, maHangMuc, data[i][4]]]);
+        sheet.getRange(i + 1, 2, 1, 4).setValues([[tenCongViec, maGoiThau, maHangMucJoined, data[i][4]]]);
         sheet.getRange(i + 1, 8, 1, 2).setValues([[congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '']]);
         logActivity(userId, user.name, 'Sửa Công việc', `Sửa ${maCongViec} - ${tenCongViec}`);
         return 'Success';
@@ -490,7 +561,7 @@ function adminSaveCongViec(userId, password, congViec) {
   const now = new Date();
   const newId = sinhMaCongViec_(sheet, now);
   sheet.appendRow([
-    newId, tenCongViec, maGoiThau, maHangMuc, phanMacDinh,
+    newId, tenCongViec, maGoiThau, maHangMucJoined, phanMacDinh,
     user.supervisorId, user.name,
     congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '', true
   ]);
@@ -625,6 +696,282 @@ function uploadAnhHienTruong(userId, password, base64Data, tenFile) {
 }
 
 // =======================================================
+// ĐIỂM DANH CUỐI TUẦN & SỔ PHÉP — chỉ Admin/Thư ký BQLDA sửa được, ai cũng xem được (giống
+// getData() không cần đăng nhập). "Cộng phép tháng"/"TỔNG CỘNG" luôn tính lại từ DiemDanhCuoiTuan +
+// PhepThang mỗi lần đọc, không lưu cột riêng.
+// =======================================================
+
+function chuanHoaChucDanh_(s) {
+  return String(s || '').trim().toLowerCase();
+}
+
+// Lấy sheet theo tên, tự tạo kèm header nếu chưa có — tránh phụ thuộc việc người dùng phải vào
+// Apps Script editor chạy tay thietLapBanDauSheet() sau mỗi lần thêm sheet mới.
+function layHoacTaoSheet_(tenSheet, headers) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(tenSheet);
+  if (!sheet) {
+    sheet = ss.insertSheet(tenSheet);
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  }
+  return sheet;
+}
+
+function assertQuyenDiemDanh_(user) {
+  if (user.role !== 'ADMIN' && chuanHoaChucDanh_(user.chucDanh) !== THU_KY_CHUC_DANH_) {
+    throw new Error('Chỉ Quản trị hoặc Thư ký BQLDA mới có quyền cập nhật Điểm danh/Phép!');
+  }
+}
+
+function readDiemDanhRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, DIEMDANH_HEADERS_.length).getValues();
+  const result = [];
+  values.forEach(r => {
+    const userId = String(r[0] || '').trim();
+    const ngay = formatDateCell_(r[1]);
+    if (!userId || !ngay) return;
+    result.push({ userId, ngay, buoi: Number(r[2]) || 0 });
+  });
+  return result;
+}
+
+function readPhepThangRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, PHEP_HEADERS_.length).getValues();
+  const result = [];
+  values.forEach(r => {
+    const userId = String(r[0] || '').trim();
+    const thang = formatThangCell_(r[1]);
+    if (!userId || !thang) return;
+    result.push({ userId, thang, phepDauThang: Number(r[2]) || 0, soNgayNghi: Number(r[3]) || 0 });
+  });
+  return result;
+}
+
+// Gộp các ngày Thứ 7/CN liền kề trong tháng thành từng nhóm "Tuần" (kể cả nhóm mồ côi chỉ có 1
+// ngày ở đầu/cuối tháng, khi Thứ 7 hoặc CN rơi sang tháng khác).
+function layDanhSachThu7CN_(thang) {
+  const parts = String(thang).split('-');
+  const year = parseInt(parts[0], 10), month1 = parseInt(parts[1], 10);
+  const soNgay = new Date(year, month1, 0).getDate();
+  const ddmm = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+
+  const groups = [];
+  let openGroup = null;
+  for (let day = 1; day <= soNgay; day++) {
+    const d = new Date(year, month1 - 1, day);
+    const dow = d.getDay(); // 0 = Chủ nhật, 6 = Thứ 7
+    if (dow !== 0 && dow !== 6) continue;
+    const iso = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    if (dow === 6) {
+      openGroup = { ngayThu7: iso, ngayCN: null };
+      groups.push(openGroup);
+    } else if (openGroup && !openGroup.ngayCN) {
+      openGroup.ngayCN = iso;
+      openGroup = null;
+    } else {
+      groups.push({ ngayThu7: null, ngayCN: iso });
+      openGroup = null;
+    }
+  }
+
+  return groups.map((g, idx) => ({
+    tuan: idx + 1,
+    ngayThu7: g.ngayThu7,
+    ngayCN: g.ngayCN,
+    nhan: 'Tuần ' + (idx + 1) + ' (' + [g.ngayThu7, g.ngayCN].filter(Boolean).map(ddmm).join('-') + ')'
+  }));
+}
+
+function tongCongPhepThangTuDiemDanh_(allDiemDanh, userId, thang) {
+  return Math.round(allDiemDanh
+    .filter(d => d.userId === userId && d.ngay.slice(0, 7) === thang)
+    .reduce((s, d) => s + d.buoi, 0) * 10) / 10;
+}
+
+// 'yyyy-MM' + số tháng cộng thêm (có thể âm) -> 'yyyy-MM' mới, tự xử lý qua năm.
+function thangCong_(thang, soThang) {
+  const parts = String(thang).split('-');
+  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1 + soThang, 1);
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM');
+}
+
+// Chốt ngầm mỗi khi có người mở tab: với mỗi nhân sự, tạo tuần tự các dòng PhepThang còn thiếu cho
+// tới tháng hiện tại thật (không nhảy cóc nếu app bị bỏ quên nhiều tháng liền), theo công thức:
+// TổngCộng(tháng cũ) = phepDauThang + CộngPhépThángTừĐiểmDanh - soNgayNghi;
+// phepDauThang(tháng mới) = TổngCộng(tháng cũ) + 1 (1 phép baseline/tháng).
+function chotPhepDenThangHienTai_() {
+  const phepSheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
+  const ddSheet = layHoacTaoSheet_('DiemDanhCuoiTuan', DIEMDANH_HEADERS_);
+
+  const thangHienTai = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  const allUsers = listSupervisors();
+  const allPhep = readPhepThangRows_(phepSheet);
+  const allDiemDanh = readDiemDanhRows_(ddSheet);
+
+  const rowsToAppend = [];
+  allUsers.forEach(u => {
+    const phepOfUser = allPhep.filter(p => p.userId === u.id).sort((a, b) => a.thang.localeCompare(b.thang));
+    const lastRow = phepOfUser.length ? phepOfUser[phepOfUser.length - 1] : null;
+
+    if (!lastRow) {
+      // Chưa từng có dòng nào — chỉ bắt đầu từ tháng hiện tại, không truy hồi lùi các tháng trước.
+      rowsToAppend.push([u.id, thangHienTai, 1, 0, new Date()]);
+      return;
+    }
+
+    let thangDangXet = lastRow.thang;
+    let tongCongThangDo = lastRow.phepDauThang
+      + tongCongPhepThangTuDiemDanh_(allDiemDanh, u.id, thangDangXet)
+      - lastRow.soNgayNghi;
+
+    while (thangDangXet < thangHienTai) {
+      thangDangXet = thangCong_(thangDangXet, 1);
+      const phepDauThangMoi = Math.round((tongCongThangDo + 1) * 10) / 10;
+      rowsToAppend.push([u.id, thangDangXet, phepDauThangMoi, 0, new Date()]);
+      tongCongThangDo = phepDauThangMoi + tongCongPhepThangTuDiemDanh_(allDiemDanh, u.id, thangDangXet);
+    }
+  });
+
+  if (rowsToAppend.length) {
+    phepSheet.getRange(phepSheet.getLastRow() + 1, 1, rowsToAppend.length, PHEP_HEADERS_.length).setValues(rowsToAppend);
+  }
+}
+
+// thang: 'yyyy-MM', bỏ trống = tháng hiện tại. KHÔNG cần đăng nhập để xem (giống getData()).
+function getDiemDanhPhep(thang) {
+  const thangXem = String(thang || '').trim() || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+
+  chotPhepDenThangHienTai_();
+
+  const allUsers = listSupervisors();
+  const allPhep = readPhepThangRows_(layHoacTaoSheet_('PhepThang', PHEP_HEADERS_));
+  const allDiemDanh = readDiemDanhRows_(layHoacTaoSheet_('DiemDanhCuoiTuan', DIEMDANH_HEADERS_));
+
+  const rows = allUsers.map(u => {
+    const phepRow = allPhep.find(p => p.userId === u.id && p.thang === thangXem);
+    const phepDauThang = phepRow ? phepRow.phepDauThang : 0;
+    const soNgayNghi = phepRow ? phepRow.soNgayNghi : 0;
+    const congPhepThang = tongCongPhepThangTuDiemDanh_(allDiemDanh, u.id, thangXem);
+    const diemDanh = {};
+    allDiemDanh.filter(d => d.userId === u.id && d.ngay.slice(0, 7) === thangXem)
+      .forEach(d => { diemDanh[d.ngay] = d.buoi; });
+
+    return {
+      userId: u.id,
+      hoTen: u.name,
+      phepDauThang,
+      soNgayNghi,
+      congPhepThang,
+      tongCong: Math.round((phepDauThang + congPhepThang - soNgayNghi) * 10) / 10,
+      diemDanh
+    };
+  });
+
+  return JSON.stringify({ thang: thangXem, tuanList: layDanhSachThu7CN_(thangXem), rows });
+}
+
+function capNhatDiemDanh(userId, password, targetUserId, ngay, buoi) {
+  const user = login(userId, password);
+  assertQuyenDiemDanh_(user);
+
+  const ngayStr = String(ngay || '').trim();
+  const parts = ngayStr.split('-');
+  if (parts.length !== 3) throw new Error('Ngày không hợp lệ!');
+  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  const dow = d.getDay();
+  if (dow !== 0 && dow !== 6) throw new Error('Chỉ điểm danh được Thứ 7 hoặc Chủ nhật!');
+
+  const targetId = String(targetUserId || '').trim();
+  if (!targetId) throw new Error('Thiếu nhân sự cần điểm danh!');
+
+  const sheet = layHoacTaoSheet_('DiemDanhCuoiTuan', DIEMDANH_HEADERS_);
+
+  const data = sheet.getDataRange().getValues();
+  let foundRow = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === targetId && formatDateCell_(data[i][1]) === ngayStr) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+
+  const buoiNum = parseFloat(buoi);
+  if (!buoi || isNaN(buoiNum) || buoiNum <= 0) {
+    if (foundRow > 0) sheet.deleteRow(foundRow);
+  } else {
+    if (buoiNum !== 1 && buoiNum !== 0.5) throw new Error('Buổi điểm danh chỉ nhận giá trị 1 hoặc 0.5!');
+    if (foundRow > 0) sheet.getRange(foundRow, 3).setValue(buoiNum);
+    else sheet.appendRow([targetId, ngayStr, buoiNum]);
+  }
+
+  logActivity(userId, user.name, 'Điểm danh cuối tuần', `${targetId} - ${ngayStr}: ${buoi || 'xoá'}`);
+  return 'Success';
+}
+
+function capNhatSoNgayNghi(userId, password, targetUserId, thang, soNgayNghi) {
+  const user = login(userId, password);
+  assertQuyenDiemDanh_(user);
+
+  const targetId = String(targetUserId || '').trim();
+  const thangStr = String(thang || '').trim();
+  if (!targetId || !thangStr) throw new Error('Thiếu thông tin nhân sự/tháng!');
+
+  const soNgayNghiNum = parseFloat(soNgayNghi);
+  if (isNaN(soNgayNghiNum) || soNgayNghiNum < 0) throw new Error('Số ngày nghỉ không hợp lệ!');
+
+  const sheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === targetId && formatThangCell_(data[i][1]) === thangStr) {
+      sheet.getRange(i + 1, 4).setValue(soNgayNghiNum);
+      logActivity(userId, user.name, 'Sửa Số ngày nghỉ', `${targetId} - ${thangStr}: ${soNgayNghiNum}`);
+      return 'Success';
+    }
+  }
+
+  sheet.appendRow([targetId, thangStr, 0, soNgayNghiNum, new Date()]);
+  logActivity(userId, user.name, 'Sửa Số ngày nghỉ', `${targetId} - ${thangStr}: ${soNgayNghiNum}`);
+  return 'Success';
+}
+
+// Chỉ Admin (không áp dụng cho Thư ký BQLDA) được sửa trực tiếp "Phép + bù" — dùng để nhập số dư
+// phép sẵn có của dự án (đã theo dõi thủ công trên Google Sheet trước khi có tab này), khác với
+// capNhatSoNgayNghi ở trên là việc vận hành hàng ngày.
+function adminCapNhatPhepDauThang(userId, password, targetUserId, thang, phepDauThang) {
+  const user = login(userId, password);
+  if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền điều chỉnh trực tiếp "Phép + bù"!');
+
+  const targetId = String(targetUserId || '').trim();
+  const thangStr = String(thang || '').trim();
+  if (!targetId || !thangStr) throw new Error('Thiếu thông tin nhân sự/tháng!');
+
+  const phepDauThangNum = parseFloat(phepDauThang);
+  if (isNaN(phepDauThangNum)) throw new Error('"Phép + bù" không hợp lệ!');
+
+  const sheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
+
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === targetId && formatThangCell_(data[i][1]) === thangStr) {
+      sheet.getRange(i + 1, 3).setValue(phepDauThangNum);
+      logActivity(userId, user.name, 'Sửa Phép + bù', `${targetId} - ${thangStr}: ${phepDauThangNum}`);
+      return 'Success';
+    }
+  }
+
+  sheet.appendRow([targetId, thangStr, phepDauThangNum, 0, new Date()]);
+  logActivity(userId, user.name, 'Sửa Phép + bù', `${targetId} - ${thangStr}: ${phepDauThangNum}`);
+  return 'Success';
+}
+
+// =======================================================
 // HỆ THỐNG MÃ HÓA & XÁC THỰC USER ĐA TÀI KHOẢN TỪ SHEET
 // =======================================================
 
@@ -667,6 +1014,7 @@ function login(userId, password) {
           role: String(data[i][2]).trim().toUpperCase(),
           name: String(data[i][3]).trim(),
           supervisorId: String(data[i][0]).trim(),
+          chucDanh: String(data[i][4] || '').trim(),
           phanMacDinh: String(data[i][5] || '').trim()
         };
       } else {
