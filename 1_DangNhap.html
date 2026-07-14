@@ -1,0 +1,170 @@
+<script>
+/* ================================================================
+   FILE 1: 1_DangNhap.html
+   ------------------------------------------------------------------
+   PHẠM VI: Đăng nhập, đổi mật khẩu, phân quyền (Quản trị/Giám sát),
+   và hàm lưu toàn bộ dữ liệu lên Google Sheet.
+
+   DANH SÁCH HÀM CHÍNH:
+   - toggleAdmin()          : Mở khóa / khóa quyền chỉnh sửa
+   - confirmPassword()      : Xử lý khi bấm nút Đăng nhập
+   - submitChangePassword() : Xử lý khi bấm nút Đổi mật khẩu
+   - saveData()             : Gửi toàn bộ dữ liệu lên Google Sheet để lưu
+   ================================================================ */
+
+let myUserId = "";
+let myPassword = "";
+let myUserName = "";
+let mySupervisorId = "";
+let currentRole = "VIEW";
+
+function toggleAdmin() {
+    const body = document.body;
+    if (currentRole === "VIEW") {
+        document.getElementById('passwordModal').classList.add('active');
+        setTimeout(() => document.getElementById('adminUsernameInput').focus(), 100);
+    } else {
+        myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = "";
+        currentRole = "VIEW";
+
+        body.className = 'view-only-mode role-view';
+        const btn = document.getElementById('lockBtn');
+        btn.className = 'admin-btn locked';
+        btn.innerHTML = '<i class="fa-solid fa-lock"></i> Đăng nhập';
+
+        document.getElementById('userInfo').style.display = 'none';
+        switchTab('home');
+        updateUI();
+    }
+}
+
+function closePasswordModal() {
+    document.getElementById('passwordModal').classList.remove('active');
+}
+
+function confirmPassword() {
+    const userInput = document.getElementById('adminUsernameInput');
+    const passInput = document.getElementById('adminPasswordInput');
+    let user = userInput.value.trim();
+    let pass = passInput.value.trim();
+
+    if (!user) { showCustomAlert("Vui lòng nhập ID đăng nhập!", "error"); userInput.focus(); return; }
+    if (!pass) { showCustomAlert("Vui lòng nhập mật khẩu!", "error"); passInput.focus(); return; }
+
+    const btnSubmit = passInput.parentElement.nextElementSibling.querySelector('button');
+    const originalText = btnSubmit.innerHTML;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải...';
+    btnSubmit.disabled = true;
+
+    if (typeof google !== 'undefined') {
+        google.script.run
+        .withSuccessHandler(function(res) {
+            myUserId = user;
+            myPassword = pass;
+            currentRole = res.role;
+            myUserName = res.name;
+            mySupervisorId = res.supervisorId;
+
+            document.body.className = '';
+            const lockBtn = document.getElementById('lockBtn');
+
+            if (currentRole === "ADMIN") {
+                document.body.classList.add('role-admin');
+                lockBtn.className = 'admin-btn unlocked-admin';
+                lockBtn.innerHTML = '<i class="fa-solid fa-unlock"></i> Quản trị';
+            } else {
+                document.body.classList.add('role-supervisor');
+                lockBtn.className = 'admin-btn unlocked-staff';
+                lockBtn.innerHTML = '<i class="fa-solid fa-unlock"></i> Giám sát';
+            }
+
+            document.getElementById('userNameDisplay').innerText = myUserName;
+            document.getElementById('userInfo').style.display = 'block';
+
+            btnSubmit.innerHTML = originalText;
+            btnSubmit.disabled = false;
+
+            closePasswordModal();
+            userInput.value = ''; passInput.value = '';
+
+            switchTab(currentRole === 'ADMIN' ? 'dashboard' : 'viecuatoi');
+            updateUI();
+            showCustomAlert(`Đăng nhập thành công! Xin chào ${myUserName}.`, "success");
+        })
+        .withFailureHandler(function(error) {
+            btnSubmit.innerHTML = originalText;
+            btnSubmit.disabled = false;
+            showCustomAlert(error.message || "Lỗi đăng nhập!", "error");
+            passInput.value = ''; passInput.focus();
+        })
+        .login(user, pass);
+    }
+}
+
+function openChangePassModal() {
+    document.getElementById('oldPassInput').value = '';
+    document.getElementById('newPassInput').value = '';
+    document.getElementById('confirmNewPassInput').value = '';
+    document.getElementById('changePassModal').classList.add('active');
+}
+
+function closeChangePassModal() {
+    document.getElementById('changePassModal').classList.remove('active');
+}
+
+function submitChangePassword() {
+    let oldP = document.getElementById('oldPassInput').value.trim();
+    let newP = document.getElementById('newPassInput').value.trim();
+    let cnfP = document.getElementById('confirmNewPassInput').value.trim();
+
+    if (!oldP || !newP || !cnfP) { showCustomAlert("Vui lòng điền đủ thông tin!", "error"); return; }
+    if (newP !== cnfP) { showCustomAlert("Mật khẩu mới không khớp, vui lòng nhập lại!", "error"); return; }
+
+    if (typeof google !== 'undefined') {
+        const btn = document.getElementById('changePassModal').querySelector('button');
+        const origText = btn.innerHTML;
+        btn.innerHTML = 'Đang xử lý...'; btn.disabled = true;
+
+        google.script.run
+        .withSuccessHandler(function() {
+            btn.innerHTML = origText; btn.disabled = false;
+            myPassword = newP;
+            closeChangePassModal();
+            showCustomAlert("Đã đổi mật khẩu thành công!", "success");
+        })
+        .withFailureHandler(function(err) {
+            btn.innerHTML = origText; btn.disabled = false;
+            showCustomAlert(err.message, "error");
+        })
+        .changeUserPassword(myUserId, oldP, newP);
+    }
+}
+
+// --- HÀM LƯU DỮ LIỆU (chỉ tasks) LÊN GOOGLE SHEET ---
+// Lưu ý: users KHÔNG lưu qua đây — danh sách Giám sát được quản lý riêng
+// qua adminSaveSupervisor()/adminDeleteSupervisor() (ghi thẳng vào tab
+// DanhSachUser), xem 6_NguoiDung.html.
+function saveData(actionLogMessage = "Cập nhật dữ liệu hệ thống") {
+    if (currentRole === "VIEW") return;
+    if (typeof google !== 'undefined') {
+        const payload = JSON.stringify({ tasks });
+        google.script.run.withSuccessHandler(function() {
+            console.log("Đã lưu: " + actionLogMessage);
+        }).withFailureHandler(function(error) {
+            let errorMsg = error.message || error || "Lỗi kết nối máy chủ Google.";
+            showCustomAlert("Lỗi: " + errorMsg, "error");
+
+            if (String(errorMsg).includes("Xác thực thất bại")) {
+                myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = "";
+                currentRole = "VIEW";
+                document.body.className = 'view-only-mode role-view';
+
+                const btn = document.getElementById('lockBtn');
+                btn.className = 'admin-btn locked';
+                btn.innerHTML = '<i class="fa-solid fa-lock"></i> Đăng nhập';
+                document.getElementById('userInfo').style.display = 'none';
+            }
+        }).saveData(payload, myUserId, myPassword, actionLogMessage);
+    }
+}
+</script>

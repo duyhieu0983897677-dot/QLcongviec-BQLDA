@@ -1,0 +1,127 @@
+<script>
+/* ================================================================
+   FILE 6: 6_NguoiDung.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Quản lý Giám sát" (chỉ Admin) — thêm/sửa/xóa tài
+   khoản Giám sát, đặt lại mật khẩu.
+
+   LƯU Ý: mật khẩu chỉ được HASH khi người dùng thật đăng nhập lần đầu
+   qua login() ở Code.js (tự nâng cấp) — ở đây khi Admin đặt mật khẩu
+   mới, ta lưu dạng thường, lần đăng nhập đầu tiên của Giám sát sẽ tự
+   động mã hóa lại (xem login() trong Code.js).
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderNguoiDung()  : Vẽ bảng danh sách Giám sát
+   - openUserModal()    : Mở modal thêm/sửa Giám sát
+   - saveUserModal()    : Lưu Giám sát từ Modal
+   - deleteUser()       : Xóa 1 Giám sát
+   ================================================================ */
+
+function renderNguoiDung() {
+    if (currentRole !== 'ADMIN') return;
+    const taskCountByName = {};
+    tasks.forEach(t => {
+        if (t.isHeader || !t.supervisorName) return;
+        taskCountByName[t.supervisorName] = (taskCountByName[t.supervisorName] || 0) + 1;
+    });
+
+    const body = document.getElementById('nguoiDungBody');
+    if (users.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
+        return;
+    }
+    body.innerHTML = users.map(u => `<tr>
+        <td>${u.id}</td>
+        <td>${u.name}</td>
+        <td class="text-center">${u.role === 'ADMIN' ? 'Quản trị' : 'Giám sát'}</td>
+        <td class="text-center">${taskCountByName[u.name] || 0}</td>
+        <td class="text-center">
+            <button class="btn btn-sm" style="background:var(--primary);" onclick="openUserModal('${u.id}')"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')"><i class="fa-solid fa-trash"></i></button>
+        </td>
+    </tr>`).join('');
+}
+
+function openUserModal(userId) {
+    document.getElementById('userEditId').value = userId || '';
+    if (userId) {
+        const u = users.find(x => x.id === userId);
+        if (!u) return;
+        document.getElementById('userModalTitle').innerText = 'Sửa Giám sát';
+        document.getElementById('userLoginId').value = u.id;
+        document.getElementById('userLoginId').disabled = true;
+        document.getElementById('userDisplayName').value = u.name;
+        document.getElementById('userRole').value = u.role;
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userPassHint').innerText = '(để trống nếu không đổi)';
+    } else {
+        document.getElementById('userModalTitle').innerText = 'Thêm Giám sát';
+        document.getElementById('userLoginId').value = '';
+        document.getElementById('userLoginId').disabled = false;
+        document.getElementById('userDisplayName').value = '';
+        document.getElementById('userRole').value = 'SUPERVISOR';
+        document.getElementById('userPassword').value = '';
+        document.getElementById('userPassHint').innerText = '(bắt buộc khi tạo mới)';
+    }
+    document.getElementById('userModal').classList.add('active');
+}
+
+function closeUserModal() {
+    document.getElementById('userModal').classList.remove('active');
+}
+
+function saveUserModal() {
+    const editId = document.getElementById('userEditId').value;
+    const loginId = document.getElementById('userLoginId').value.trim();
+    const name = document.getElementById('userDisplayName').value.trim();
+    const role = document.getElementById('userRole').value;
+    const password = document.getElementById('userPassword').value.trim();
+
+    if (!loginId) { showCustomAlert('Vui lòng nhập Tên đăng nhập!', 'error'); return; }
+    if (!name) { showCustomAlert('Vui lòng nhập Họ tên!', 'error'); return; }
+    if (!editId && !password) { showCustomAlert('Vui lòng đặt mật khẩu ban đầu!', 'error'); return; }
+
+    const oldName = editId ? (users.find(x => x.id === editId) || {}).name : null;
+    const btn = document.getElementById('userModal').querySelector('.btn:not(.btn-danger)');
+    const origText = btn.innerHTML;
+    btn.innerHTML = 'Đang lưu...'; btn.disabled = true;
+
+    if (typeof google === 'undefined') { showCustomAlert('Chức năng này cần chạy trên Google Apps Script thật.', 'error'); btn.innerHTML = origText; btn.disabled = false; return; }
+
+    google.script.run.withSuccessHandler(function() {
+        btn.innerHTML = origText; btn.disabled = false;
+        // Đổi tên hiển thị -> cập nhật lại supervisorName trên các việc đang gán cho người này
+        if (oldName && oldName !== name) {
+            tasks.forEach(t => { if (t.supervisorName === oldName) t.supervisorName = name; });
+            saveData(`Đổi tên Giám sát: ${oldName} -> ${name}`);
+        }
+        closeUserModal();
+        // Tải lại danh sách user mới nhất từ Sheet
+        google.script.run.withSuccessHandler(function(response) {
+            const parsed = JSON.parse(response);
+            users = parsed.users || [];
+            updateUI();
+        }).getData();
+        showCustomAlert('Đã lưu thông tin Giám sát.', 'success');
+    }).withFailureHandler(function(err) {
+        btn.innerHTML = origText; btn.disabled = false;
+        showCustomAlert(err.message || 'Lỗi khi lưu Giám sát!', 'error');
+    }).adminSaveSupervisor(myUserId, myPassword, loginId, name, role, password);
+}
+
+function deleteUser(userId) {
+    const u = users.find(x => x.id === userId);
+    if (!u) return;
+    if (!confirm(`Xác nhận XÓA tài khoản "${u.name}"? (Các công việc đang gán cho người này sẽ KHÔNG bị xóa, chỉ mất người phụ trách)`)) return;
+
+    if (typeof google === 'undefined') { showCustomAlert('Chức năng này cần chạy trên Google Apps Script thật.', 'error'); return; }
+
+    google.script.run.withSuccessHandler(function() {
+        users = users.filter(x => x.id !== userId);
+        updateUI();
+        showCustomAlert('Đã xóa tài khoản.', 'success');
+    }).withFailureHandler(function(err) {
+        showCustomAlert(err.message || 'Lỗi khi xóa Giám sát!', 'error');
+    }).adminDeleteSupervisor(myUserId, myPassword, userId);
+}
+</script>

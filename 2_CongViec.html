@@ -1,0 +1,119 @@
+<script>
+/* ================================================================
+   FILE 2: 2_CongViec.html
+   ------------------------------------------------------------------
+   PHẠM VI: Thêm/Sửa/Xóa 1 đầu việc (dòng Nhóm hoặc dòng Việc) qua Modal.
+   Cập nhật % tiến độ + ghi chú nhanh dùng ở "Việc của tôi" nằm ở
+   4_ViecCuaToi.html (không nằm ở đây vì khác luồng UI).
+
+   DANH SÁCH HÀM CHÍNH:
+   - openTaskModal(taskId)  : Mở modal thêm (không truyền id) / sửa (có id)
+   - saveTaskModal()        : Lưu công việc từ Modal
+   - deleteTask(taskId)     : Xóa 1 đầu việc
+   - fillSupervisorSelect() : Đổ danh sách Giám sát vào 1 thẻ <select>
+   ================================================================ */
+
+function fillSupervisorSelect(selectEl, selectedName) {
+    let html = '<option value="">-- Chưa gán --</option>';
+    users.filter(u => u.role === 'SUPERVISOR' || u.role === 'ADMIN').forEach(u => {
+        html += `<option value="${u.name}">${u.name}</option>`;
+    });
+    selectEl.innerHTML = html;
+    if (selectedName) selectEl.value = selectedName;
+}
+
+function onTaskIsHeaderChange() {
+    const isHeader = document.getElementById('taskIsHeader').value === '1';
+    document.getElementById('taskDetailFields').style.display = isHeader ? 'none' : 'block';
+}
+
+function openTaskModal(taskId) {
+    if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
+    document.getElementById('taskEditId').value = taskId || '';
+    fillSupervisorSelect(document.getElementById('taskSupervisor'), '');
+
+    if (taskId) {
+        const t = tasks.find(x => x.id === taskId);
+        if (!t) return;
+        document.getElementById('taskModalTitle').innerText = 'Sửa công việc';
+        document.getElementById('taskIsHeader').value = t.isHeader ? '1' : '0';
+        document.getElementById('taskName').value = t.name || '';
+        document.getElementById('taskTarget').value = t.target || '';
+        fillSupervisorSelect(document.getElementById('taskSupervisor'), t.supervisorName || '');
+        document.getElementById('taskStartDate').value = formatVN(t.startDate);
+        document.getElementById('taskEndDate').value = formatVN(t.endDate);
+        document.getElementById('taskPercent').value = t.percent || 0;
+        document.getElementById('taskNote').value = t.note || '';
+    } else {
+        document.getElementById('taskModalTitle').innerText = 'Thêm công việc';
+        document.getElementById('taskIsHeader').value = '0';
+        document.getElementById('taskName').value = '';
+        document.getElementById('taskTarget').value = '';
+        document.getElementById('taskStartDate').value = '';
+        document.getElementById('taskEndDate').value = '';
+        document.getElementById('taskPercent').value = 0;
+        document.getElementById('taskNote').value = '';
+    }
+    onTaskIsHeaderChange();
+    document.getElementById('taskModal').classList.add('active');
+
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr !== 'undefined') {
+                ['taskStartDate', 'taskEndDate'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
+                });
+            }
+        } catch (e) { console.warn(e); }
+    }, 100);
+}
+
+function closeTaskModal() {
+    document.getElementById('taskModal').classList.remove('active');
+}
+
+function saveTaskModal() {
+    const id = document.getElementById('taskEditId').value;
+    const isHeader = document.getElementById('taskIsHeader').value === '1';
+    const name = document.getElementById('taskName').value.trim();
+    if (!name) { showCustomAlert('Vui lòng nhập Tên!', 'error'); return; }
+
+    let payload = { isHeader, name };
+    if (!isHeader) {
+        const startISO = convertDMYtoISO(document.getElementById('taskStartDate').value.trim());
+        const endISO = convertDMYtoISO(document.getElementById('taskEndDate').value.trim());
+        payload.target = document.getElementById('taskTarget').value.trim();
+        payload.supervisorName = document.getElementById('taskSupervisor').value;
+        payload.startDate = startISO || '';
+        payload.endDate = endISO || '';
+        payload.percent = Math.max(0, Math.min(100, parseNumberSafely(document.getElementById('taskPercent').value) || 0));
+        payload.note = document.getElementById('taskNote').value.trim();
+    }
+
+    if (id) {
+        const t = tasks.find(x => x.id === parseInt(id));
+        if (!t) return;
+        Object.assign(t, payload);
+        saveData(`Sửa công việc: ${name}`);
+    } else {
+        const newId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
+        tasks.push(Object.assign({ id: newId, groupId: null, duration: '', dailyLogs: [] }, payload));
+        saveData(`Thêm công việc: ${name}`);
+    }
+
+    closeTaskModal();
+    updateUI();
+    showCustomAlert('Đã lưu công việc.', 'success');
+}
+
+function deleteTask(taskId) {
+    if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
+    const t = tasks.find(x => x.id === taskId);
+    if (!t) return;
+    if (!confirm(`Xác nhận XÓA "${t.name}"?`)) return;
+    tasks = tasks.filter(x => x.id !== taskId);
+    saveData(`Xóa công việc: ${t.name}`);
+    updateUI();
+}
+</script>

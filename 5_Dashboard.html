@@ -1,0 +1,60 @@
+<script>
+/* ================================================================
+   FILE 5: 5_Dashboard.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Tổng quan" — KPI tổng, danh sách việc trễ tiến độ,
+   bảng khối lượng việc theo từng Giám sát.
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderDashboard() : Tính toán & vẽ toàn bộ KPI + 2 bảng của tab Tổng quan
+   ================================================================ */
+
+function renderDashboard() {
+    const leafTasks = tasks.filter(t => !t.isHeader);
+    const total = leafTasks.length;
+    let completed = 0, delayed = 0, inProgress = 0;
+    const delayedList = [];
+    const bySupervisor = {};
+
+    leafTasks.forEach(t => {
+        const status = getTaskStatus(t);
+        if (status === 'completed') completed++;
+        else if (status === 'delayed') { delayed++; delayedList.push(t); }
+        else if (status === 'in_progress') inProgress++;
+
+        const sup = t.supervisorName || '-- Chưa gán --';
+        if (!bySupervisor[sup]) bySupervisor[sup] = { total: 0, completed: 0, delayed: 0 };
+        bySupervisor[sup].total++;
+        if (status === 'completed') bySupervisor[sup].completed++;
+        if (status === 'delayed') bySupervisor[sup].delayed++;
+    });
+
+    document.getElementById('kpi-total').innerText = total;
+    document.getElementById('kpi-completed').innerText = completed;
+    document.getElementById('kpi-inprogress').innerText = inProgress;
+    document.getElementById('kpi-delayed').innerText = delayed;
+
+    const delayedBody = document.getElementById('dashDelayedBody');
+    if (delayedList.length === 0) {
+        delayedBody.innerHTML = '<tr><td colspan="4" class="text-center" style="color:var(--success); padding:15px;">Không có việc nào trễ tiến độ.</td></tr>';
+    } else {
+        delayedBody.innerHTML = delayedList
+            .sort((a, b) => (a.endDate || '').localeCompare(b.endDate || ''))
+            .map(t => `<tr>
+                <td>${t.name}</td>
+                <td class="text-center">${t.supervisorName || '--'}</td>
+                <td class="text-center">${formatVN(t.endDate)}</td>
+                <td class="text-center">${t.percent || 0}%</td>
+            </tr>`).join('');
+    }
+
+    const supBody = document.getElementById('dashBySupervisorBody');
+    const supEntries = Object.entries(bySupervisor).sort((a, b) => b[1].total - a[1].total);
+    supBody.innerHTML = supEntries.length ? supEntries.map(([name, s]) => `<tr>
+        <td>${name}</td>
+        <td class="text-center">${s.total}</td>
+        <td class="text-center" style="color:var(--success); font-weight:700;">${s.completed}</td>
+        <td class="text-center" style="color:var(--danger); font-weight:700;">${s.delayed}</td>
+    </tr>`).join('') : '<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu.</td></tr>';
+}
+</script>

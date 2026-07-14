@@ -1,0 +1,98 @@
+<script>
+/* ================================================================
+   FILE 4: 4_ViecCuaToi.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Việc của tôi" — màn hình tối ưu điện thoại để từng
+   Giám sát tự cập nhật % tiến độ + ghi chú hàng ngày cho đúng đầu việc
+   của mình, ngoài công trường.
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderViecCuaToi()      : Vẽ danh sách việc của Giám sát đang xem
+   - updateMyTaskPercent()   : Cập nhật % khi kéo thanh trượt (chỉ đổi hiển thị, chưa lưu)
+   - saveMyTaskUpdate()      : Lưu % + ghi chú + thêm 1 dòng Nhật ký báo cáo ngày
+   ================================================================ */
+
+function updateMyTaskPercent(taskId, val) {
+    document.getElementById('mt-pct-' + taskId).innerText = val + '%';
+}
+
+function saveMyTaskUpdate(taskId) {
+    if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để cập nhật!', 'error'); return; }
+    const t = tasks.find(x => x.id === taskId);
+    if (!t) return;
+
+    const percent = parseInt(document.getElementById('mt-slider-' + taskId).value, 10);
+    const commentText = document.getElementById('mt-comment-' + taskId).value.trim();
+    const noteText = document.getElementById('mt-note-' + taskId).value.trim();
+
+    t.percent = percent;
+    t.note = noteText;
+    if (commentText) {
+        t.dailyLogs = t.dailyLogs || [];
+        t.dailyLogs.push({ date: getTodayDate(), text: commentText, author: myUserName || myUserId });
+        document.getElementById('mt-comment-' + taskId).value = '';
+    }
+
+    saveData(`Cập nhật tiến độ: ${t.name} (${percent}%)`);
+    updateUI();
+    showCustomAlert('Đã lưu cập nhật.', 'success');
+}
+
+function renderViecCuaToi() {
+    const wrap = document.getElementById('viecCuaToiAdminSelectWrap');
+    const select = document.getElementById('viecCuaToiSupervisorSelect');
+    let targetName = '';
+
+    if (currentRole === 'ADMIN') {
+        if (select.options.length <= 1) {
+            let html = '<option value="">-- Chọn Giám sát để xem việc --</option>';
+            users.filter(u => u.role === 'SUPERVISOR').forEach(u => html += `<option value="${u.name}">${u.name}</option>`);
+            select.innerHTML = html;
+        }
+        targetName = select.value;
+    } else {
+        wrap.style.display = 'none';
+        targetName = myUserName;
+    }
+
+    const list = document.getElementById('viecCuaToiList');
+    if (!targetName) {
+        list.innerHTML = '<p style="color:gray; text-align:center; padding:20px;">Chọn Giám sát ở trên để xem danh sách việc.</p>';
+        return;
+    }
+
+    const myTasks = tasks.filter(t => !t.isHeader && t.supervisorName === targetName);
+    if (myTasks.length === 0) {
+        list.innerHTML = '<p style="color:gray; text-align:center; padding:20px;">Chưa có công việc nào được giao.</p>';
+        return;
+    }
+
+    let html = '';
+    myTasks.forEach(t => {
+        const status = getTaskStatus(t);
+        const logs = (t.dailyLogs || []).slice(-3).reverse();
+        html += `<div class="my-task-card">
+            <div class="mt-name">${t.name}</div>
+            <div class="mt-meta">
+                <span class="status-badge ${status}">${STATUS_LABEL[status]}</span>
+                ${t.startDate || t.endDate ? ` &middot; ${formatVN(t.startDate)} - ${formatVN(t.endDate)}` : ''}
+            </div>
+            <div class="mt-slider-row">
+                <input type="range" min="0" max="100" step="5" id="mt-slider-${t.id}" value="${t.percent || 0}" oninput="updateMyTaskPercent(${t.id}, this.value)" ${currentRole === 'VIEW' ? 'disabled' : ''}>
+                <span class="mt-pct-display" id="mt-pct-${t.id}">${t.percent || 0}%</span>
+            </div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <label style="font-size:0.72rem;">Ghi chú vướng mắc</label>
+                <input type="text" id="mt-note-${t.id}" class="form-control" value="${(t.note || '').replace(/"/g, '&quot;')}" ${currentRole === 'VIEW' ? 'disabled' : ''}>
+            </div>
+            <div class="form-group" style="margin-bottom:8px;">
+                <label style="font-size:0.72rem;">Nhận xét báo cáo hôm nay (${formatVN(getTodayDate())})</label>
+                <input type="text" id="mt-comment-${t.id}" class="form-control" placeholder="Ví dụ: đã đổ bê tông xong đợt 1..." ${currentRole === 'VIEW' ? 'disabled' : ''}>
+            </div>
+            ${logs.length ? `<div style="margin-bottom:8px;">${logs.map(l => `<div class="daily-log-item"><div class="dl-date">${formatVN(l.date)} - ${l.author || ''}</div>${l.text}</div>`).join('')}</div>` : ''}
+            <button class="btn btn-sm" style="background:var(--success);" onclick="saveMyTaskUpdate(${t.id})" ${currentRole === 'VIEW' ? 'disabled' : ''}><i class="fa-solid fa-floppy-disk"></i> Lưu cập nhật</button>
+        </div>`;
+    });
+    list.innerHTML = html;
+}
+</script>

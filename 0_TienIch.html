@@ -1,0 +1,159 @@
+<script>
+/* ================================================================
+   FILE 0: 0_TienIch.html
+   ------------------------------------------------------------------
+   PHẠM VI: Nền tảng khởi động ứng dụng + các hàm tiện ích dùng chung
+   (chuyển tab, tải dữ liệu ban đầu, định dạng ngày/số, thông báo popup).
+
+   DANH SÁCH HÀM CHÍNH:
+   - switchTab()      : Chuyển tab đang xem
+   - window.onload    : Tải dữ liệu từ Google Sheet khi mở trang
+   - showCustomAlert() : Hiện thông báo xanh/đỏ
+   - round0(), formatVN(), convertDMYtoISO()... : Hàm tiện ích dùng khắp nơi
+   ================================================================ */
+
+let tasks = [];      // Toàn bộ đầu việc (cả dòng Nhóm lẫn dòng Việc)
+let users = [];       // Danh sách Giám sát / Admin
+let collapsedGroups = new Set();
+
+function switchTab(tabId) {
+    const contents = document.querySelectorAll('.tab-content');
+    contents.forEach(content => content.classList.remove('active'));
+
+    const targetTab = document.getElementById(tabId);
+    if (targetTab) targetTab.classList.add('active');
+
+    const buttons = document.querySelectorAll('.nav-btn');
+    buttons.forEach(btn => {
+        if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${tabId}'`)) {
+            btn.classList.add('active');
+            const parentGroup = btn.closest('.nav-group');
+            if (parentGroup) parentGroup.classList.add('open');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
+    if (tabId === 'dashboard') renderDashboard();
+    if (tabId === 'danhsach') renderDanhSach();
+    if (tabId === 'viecuatoi') renderViecCuaToi();
+    if (tabId === 'nguoidung') renderNguoiDung();
+    window.scrollTo(0, 0);
+}
+
+function toggleNavGroup(headerBtn) {
+    const group = headerBtn.closest('.nav-group');
+    if (group) group.classList.toggle('open');
+}
+
+window.onload = function() {
+    if (window.innerWidth < 768 && document.getElementById('home')) {
+        switchTab('home');
+    }
+
+    if (typeof google !== 'undefined') {
+        google.script.run.withSuccessHandler(function(response) {
+            const parsed = JSON.parse(response);
+            tasks = parsed.tasks || [];
+            users = parsed.users || [];
+            tasks.forEach(t => {
+                if (t.dailyLogs === undefined) t.dailyLogs = [];
+                if (t.percent === undefined) t.percent = 0;
+            });
+            updateUI();
+        }).getData();
+    } else {
+        // Chế độ xem thử (không có backend Google Apps Script) — không load gì cả
+        updateUI();
+    }
+};
+
+function updateUI() {
+    if (document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')) renderDashboard();
+    if (document.getElementById('danhsach') && document.getElementById('danhsach').classList.contains('active')) renderDanhSach();
+    if (document.getElementById('viecuatoi') && document.getElementById('viecuatoi').classList.contains('active')) renderViecCuaToi();
+    if (document.getElementById('nguoidung') && document.getElementById('nguoidung').classList.contains('active')) renderNguoiDung();
+}
+
+// --- HÀM THÔNG BÁO XANH ĐỎ ---
+function showCustomAlert(msg, type = 'error') {
+    const content = document.getElementById('alertModalContent');
+    const icon = document.getElementById('alertIcon');
+    const title = document.getElementById('alertTitle');
+    const btn = document.getElementById('alertBtn');
+
+    if (type === 'success') {
+        content.className = 'modal-content construction-modal modal-success';
+        icon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+        icon.style.color = 'var(--success)';
+        title.innerText = 'THÀNH CÔNG';
+        title.style.color = 'var(--success)';
+        btn.className = 'btn';
+        btn.style.backgroundColor = 'var(--success)';
+    } else {
+        content.className = 'modal-content construction-modal modal-error';
+        icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+        icon.style.color = 'var(--danger)';
+        title.innerText = 'CẢNH BÁO';
+        title.style.color = 'var(--danger)';
+        btn.className = 'btn btn-danger';
+        btn.style.backgroundColor = 'var(--danger)';
+    }
+
+    document.getElementById('alertMessage').innerText = msg;
+    document.getElementById('alertModal').classList.add('active');
+}
+
+function closeAlertModal() {
+    document.getElementById('alertModal').classList.remove('active');
+}
+
+// --- CÁC HÀM FORMAT TIỆN ÍCH ---
+const round0 = (num) => Math.round(num);
+const getTodayDate = () => new Date().toISOString().split('T')[0];
+const formatVN = (dateStr) => {
+    if (!dateStr) return '--';
+    const p = dateStr.split('-');
+    return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : dateStr;
+};
+
+function convertDMYtoISO(str) {
+    if (!str) return null;
+    const parts = String(str).trim().split('/');
+    if (parts.length !== 3) return null;
+    const dd = parts[0].padStart(2, '0'), mm = parts[1].padStart(2, '0'), yyyy = parts[2];
+    const iso = `${yyyy}-${mm}-${dd}`;
+    return isNaN(new Date(iso).getTime()) ? null : iso;
+}
+
+function parseNumberSafely(val) {
+    if (val === undefined || val === null || val === "") return NaN;
+    if (typeof val === 'number') return val;
+    let str = String(val).trim();
+    if (str.includes('.') && str.includes(',')) {
+        str = str.replace(/\./g, '').replace(',', '.');
+    } else if (str.includes(',')) {
+        str = str.replace(',', '.');
+    }
+    return parseFloat(str);
+}
+
+// Tự tính trạng thái 1 đầu việc (không lưu cứng, luôn tính lại từ dữ liệu gốc)
+function getTaskStatus(task) {
+    if (task.isHeader) return null;
+    if (task.percent >= 100) return 'completed';
+    const today = getTodayDate();
+    if (task.endDate && today > task.endDate) return 'delayed';
+    if (!task.startDate && !task.endDate && !task.percent) return 'not_started';
+    return 'in_progress';
+}
+
+const STATUS_LABEL = { completed: 'Hoàn thành', delayed: 'Trễ tiến độ', in_progress: 'Đang thực hiện', not_started: 'Chưa bắt đầu' };
+
+function getSupervisorInitials(name) {
+    if (!name) return '?';
+    const parts = String(name).trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+</script>

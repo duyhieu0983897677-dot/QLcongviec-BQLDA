@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Công Việc - Ban QLDA Bãi Xép</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/vi.js"></script>
+
+    <?!= include('Style'); ?>
+</head>
+<body class="role-view view-only-mode">
+
+    <header class="header">
+        <div class="brand">
+            <div class="sidebar-brand-icon" style="width:38px;height:38px;border-radius:8px;background:var(--accent);color:var(--navy);display:flex;align-items:center;justify-content:center;font-weight:900;">CV</div>
+            <div class="brand-text">
+                <span class="brand-name">BAN QLDA BÃI XÉP</span>
+                <span class="brand-sub">Quản lý công việc</span>
+            </div>
+        </div>
+
+        <div class="header-actions">
+            <div id="userInfo" class="header-user-info">
+                <div class="header-username"><i class="fa-solid fa-user"></i> <span id="userNameDisplay">--</span></div>
+                <div class="header-change-pass" onclick="openChangePassModal()">Đổi mật khẩu</div>
+            </div>
+            <button id="lockBtn" class="admin-btn locked" onclick="toggleAdmin()"><i class="fa-solid fa-lock"></i> Đăng nhập</button>
+        </div>
+    </header>
+
+    <div class="app-layout">
+        <aside class="sidebar-desktop">
+            <div class="sidebar-brand">
+                <div class="brand-icon">CV</div>
+                <div class="brand-text">
+                    <span class="brand-name">BAN QLDA BÃI XÉP</span>
+                    <span class="brand-sub">Quản lý công việc</span>
+                </div>
+            </div>
+            <div class="sidebar-nav">
+                <button class="nav-btn side-nav-btn active" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i> Tổng quan</button>
+                <button class="nav-btn side-nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-list-check"></i> Danh sách công việc</button>
+                <button class="nav-btn side-nav-btn" onclick="switchTab('viecuatoi')"><i class="fa-solid fa-user-clock"></i> Việc của tôi</button>
+                <button class="nav-btn side-nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i> Quản lý Giám sát</button>
+            </div>
+        </aside>
+
+    <main class="container">
+
+        <!-- TRANG CHỦ (chỉ hiện trên điện thoại) -->
+        <section id="home" class="tab-content home-screen">
+            <div class="home-greet">
+                <span>Xin chào 👋</span>
+                <small>Chọn 1 mục để bắt đầu</small>
+            </div>
+            <div class="home-tiles">
+                <button class="nav-btn home-tile" onclick="switchTab('dashboard')" style="--tile-c: var(--primary);">
+                    <i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span>
+                </button>
+                <button class="nav-btn home-tile" onclick="switchTab('danhsach')" style="--tile-c: var(--accent);">
+                    <i class="fa-solid fa-list-check"></i><span>Danh sách</span>
+                </button>
+            </div>
+            <div class="home-tiles">
+                <button class="nav-btn home-tile" onclick="switchTab('viecuatoi')" style="--tile-c: #0d9488;">
+                    <i class="fa-solid fa-user-clock"></i><span>Việc của tôi</span>
+                </button>
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7c3aed;">
+                    <i class="fa-solid fa-users-gear"></i><span>Giám sát</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- TAB: TỔNG QUAN -->
+        <section id="dashboard" class="tab-content active">
+            <div class="dash-header" style="background: linear-gradient(135deg, var(--navy), var(--primary-dark)); color:white; padding:15px 20px; border-radius:8px; margin-bottom:15px;">
+                <div>
+                    <h2 style="font-size:1.1rem;"><i class="fa-solid fa-chart-pie"></i> DASHBOARD TỔNG QUAN</h2>
+                    <p style="font-size:0.8rem; color:#cbd5e1; margin-top:2px;">Theo dõi tiến độ công việc Ban QLDA</p>
+                </div>
+            </div>
+
+            <div class="kpi-row">
+                <div class="kpi-box kpi-blue">
+                    <div class="kpi-icon"><i class="fa-solid fa-list"></i></div>
+                    <div class="kpi-body"><div class="kpi-title">Tổng số việc</div><div class="kpi-value" id="kpi-total">0</div></div>
+                </div>
+                <div class="kpi-box kpi-green">
+                    <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+                    <div class="kpi-body"><div class="kpi-title">Hoàn thành</div><div class="kpi-value" id="kpi-completed">0</div></div>
+                </div>
+                <div class="kpi-box kpi-teal">
+                    <div class="kpi-icon"><i class="fa-solid fa-person-digging"></i></div>
+                    <div class="kpi-body"><div class="kpi-title">Đang thực hiện</div><div class="kpi-value" id="kpi-inprogress">0</div></div>
+                </div>
+                <div class="kpi-box kpi-red">
+                    <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div class="kpi-body"><div class="kpi-title">Trễ tiến độ</div><div class="kpi-value" id="kpi-delayed">0</div></div>
+                </div>
+            </div>
+
+            <div class="grid-1-1-5-col" style="display:grid; grid-template-columns: 1fr; gap:15px;">
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);"></i> Việc trễ tiến độ cần chú ý</div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr><th>Tên việc</th><th>Giám sát</th><th>Kết thúc dự kiến</th><th>% Tiến độ</th></tr></thead>
+                            <tbody id="dashDelayedBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-users"></i> Khối lượng việc theo Giám sát</div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr><th>Giám sát</th><th>Tổng việc</th><th>Hoàn thành</th><th>Trễ tiến độ</th></tr></thead>
+                            <tbody id="dashBySupervisorBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: DANH SÁCH CÔNG VIỆC -->
+        <section id="danhsach" class="tab-content">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Danh sách công việc</div>
+                    <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openTaskModal()"><i class="fa-solid fa-plus"></i> Thêm việc</button>
+                </div>
+                <div class="filter-bar">
+                    <select id="filterSupervisor" onchange="renderDanhSach()">
+                        <option value="">-- Tất cả Giám sát --</option>
+                    </select>
+                    <select id="filterStatus" onchange="renderDanhSach()">
+                        <option value="">-- Tất cả trạng thái --</option>
+                        <option value="not_started">Chưa bắt đầu</option>
+                        <option value="in_progress">Đang thực hiện</option>
+                        <option value="delayed">Trễ tiến độ</option>
+                        <option value="completed">Hoàn thành</option>
+                    </select>
+                    <input type="text" id="filterSearch" placeholder="Tìm việc..." oninput="renderDanhSach()" style="flex:1; min-width:180px;">
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th style="text-align:left;">Tên việc</th><th>Giám sát</th><th>Tiến độ</th><th>Trạng thái</th><th class="admin-only">Hành động</th></tr>
+                        </thead>
+                        <tbody id="danhSachBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: VIỆC CỦA TÔI -->
+        <section id="viecuatoi" class="tab-content">
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-user-clock"></i> Việc của tôi</div>
+                <div id="viecCuaToiAdminSelectWrap" class="admin-only" style="margin-bottom:12px;">
+                    <select id="viecCuaToiSupervisorSelect" class="form-control" onchange="renderViecCuaToi()">
+                        <option value="">-- Chọn Giám sát để xem việc --</option>
+                    </select>
+                </div>
+                <div id="viecCuaToiList"></div>
+            </div>
+        </section>
+
+        <!-- TAB: QUẢN LÝ GIÁM SÁT (Admin) -->
+        <section id="nguoidung" class="tab-content">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-users-gear"></i> Quản lý Giám sát</div>
+                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openUserModal()"><i class="fa-solid fa-plus"></i> Thêm Giám sát</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead><tr><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Số việc đang phụ trách</th><th>Hành động</th></tr></thead>
+                        <tbody id="nguoiDungBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+    </div>
+
+    <!-- Thanh điều hướng mobile -->
+    <nav class="nav-mobile">
+        <button class="nav-btn active" onclick="switchTab('home')"><i class="fa-solid fa-house"></i><span>Trang chủ</span></button>
+        <button class="nav-btn" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span></button>
+        <button class="nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-list-check"></i><span>Danh sách</span></button>
+        <button class="nav-btn" onclick="switchTab('viecuatoi')"><i class="fa-solid fa-user-clock"></i><span>Việc của tôi</span></button>
+        <button class="nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i><span>Giám sát</span></button>
+    </nav>
+
+    <!-- MODAL: THÊM/SỬA CÔNG VIỆC -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content" style="max-width:520px;">
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="taskModalTitle">Thêm công việc</span></h3>
+            <input type="hidden" id="taskEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Loại dòng</label>
+                <select id="taskIsHeader" class="form-control" onchange="onTaskIsHeaderChange()">
+                    <option value="0">Công việc (có tiến độ)</option>
+                    <option value="1">Nhóm/Hạng mục (chỉ là nhãn phân đoạn)</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Tên</label>
+                <input type="text" id="taskName" class="form-control" placeholder="Tên nhóm hoặc tên công việc...">
+            </div>
+            <div id="taskDetailFields">
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>Mục tiêu giao việc của cấp trên</label>
+                    <input type="text" id="taskTarget" class="form-control">
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>Giám sát phụ trách</label>
+                    <select id="taskSupervisor" class="form-control"></select>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                    <div class="form-group"><label>Bắt đầu</label><input type="text" id="taskStartDate" class="form-control" placeholder="dd/mm/yyyy"></div>
+                    <div class="form-group"><label>Kết thúc</label><input type="text" id="taskEndDate" class="form-control" placeholder="dd/mm/yyyy"></div>
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>% Tiến độ thực tế</label>
+                    <input type="number" id="taskPercent" class="form-control" min="0" max="100">
+                </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>Ghi chú vướng mắc</label>
+                    <textarea id="taskNote" class="form-control" rows="2"></textarea>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn" style="background:var(--success);" onclick="saveTaskModal()">Lưu</button>
+                <button class="btn btn-danger" onclick="closeTaskModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: THÊM/SỬA GIÁM SÁT -->
+    <div id="userModal" class="modal">
+        <div class="modal-content" style="max-width:450px;">
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-user-gear"></i> <span id="userModalTitle">Thêm Giám sát</span></h3>
+            <input type="hidden" id="userEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Tên đăng nhập (ID) — không dấu, không trùng</label>
+                <input type="text" id="userLoginId" class="form-control" placeholder="vd: mr.lam">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Họ tên hiển thị</label>
+                <input type="text" id="userDisplayName" class="form-control" placeholder="vd: Mr. Lam">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Vai trò</label>
+                <select id="userRole" class="form-control">
+                    <option value="SUPERVISOR">Giám sát</option>
+                    <option value="ADMIN">Quản trị (Ban QLDA)</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Mật khẩu <span id="userPassHint" style="font-weight:400; color:var(--text-muted);">(để trống nếu không đổi)</span></label>
+                <input type="text" id="userPassword" class="form-control" placeholder="Mật khẩu ban đầu...">
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn" style="background:var(--success);" onclick="saveUserModal()">Lưu</button>
+                <button class="btn btn-danger" onclick="closeUserModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ĐĂNG NHẬP -->
+    <div id="passwordModal" class="modal" style="z-index: 9998;">
+        <div class="modal-content construction-modal modal-error" style="max-width: 400px; text-align: center; padding-top: 2rem;">
+            <div style="font-size: 3.5rem; color: var(--accent); margin-bottom: 10px;"><i class="fa-solid fa-helmet-safety"></i></div>
+            <h3 style="margin-bottom: 10px; color: var(--primary-dark); font-size: 1.3rem;">KHU VỰC ĐĂNG NHẬP</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">Nhập ID và Mật khẩu để bắt đầu.</p>
+
+            <div class="form-group" style="margin-bottom: 15px;">
+                <input type="text" id="adminUsernameInput" class="form-control" placeholder="Tên đăng nhập (ID)..." style="text-align: center; font-size: 1.1rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <input type="password" id="adminPasswordInput" class="form-control" placeholder="Mật khẩu..." style="text-align: center; font-size: 1.1rem; letter-spacing: 3px;" onkeydown="if(event.key === 'Enter') confirmPassword();">
+            </div>
+
+            <div style="display:flex; gap: 10px; margin-top: 20px;">
+                <button class="btn" onclick="confirmPassword()" style="background-color: var(--success); flex: 1;"><i class="fa-solid fa-unlock"></i> Đăng nhập</button>
+                <button class="btn btn-danger" onclick="closePasswordModal()" style="flex: 1;"><i class="fa-solid fa-xmark"></i> Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL ĐỔI MẬT KHẨU CÁ NHÂN -->
+    <div id="changePassModal" class="modal" style="z-index: 9999;">
+        <div class="modal-content" style="max-width: 400px; text-align: center; padding: 2rem;">
+            <h3 style="margin-bottom: 20px; color: var(--primary-dark); font-size: 1.2rem;"><i class="fa-solid fa-key"></i> ĐỔI MẬT KHẨU</h3>
+            <div class="form-group"><input type="password" id="oldPassInput" class="form-control" placeholder="Mật khẩu HIỆN TẠI..." style="text-align: center; margin-bottom:10px;"></div>
+            <div class="form-group"><input type="password" id="newPassInput" class="form-control" placeholder="Mật khẩu MỚI..." style="text-align: center; margin-bottom:10px;"></div>
+            <div class="form-group"><input type="password" id="confirmNewPassInput" class="form-control" placeholder="Nhập lại mật khẩu MỚI..." style="text-align: center; margin-bottom:20px;"></div>
+            <div style="display:flex; gap: 10px;">
+                <button class="btn" onclick="submitChangePassword()" style="background-color: var(--success); flex: 1;">Xác nhận</button>
+                <button class="btn btn-danger" onclick="closeChangePassModal()" style="flex: 1;">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CẢNH BÁO / THÔNG BÁO -->
+    <div id="alertModal" class="modal" style="z-index: 99999;">
+        <div id="alertModalContent" class="modal-content construction-modal modal-error" style="max-width: 400px; text-align: center; padding-top: 2rem;">
+            <div id="alertIcon" style="font-size: 3.5rem; margin-bottom: 10px;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h3 id="alertTitle" style="margin-bottom: 10px; font-size: 1.3rem;">CẢNH BÁO</h3>
+            <p id="alertMessage" style="color: var(--text-muted); margin-bottom: 20px;"></p>
+            <button id="alertBtn" class="btn btn-danger" onclick="closeAlertModal()">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- ==================== JAVASCRIPT ==================== -->
+    <?!= include('0_TienIch'); ?>
+    <?!= include('1_DangNhap'); ?>
+    <?!= include('2_CongViec'); ?>
+    <?!= include('3_DanhSach'); ?>
+    <?!= include('4_ViecCuaToi'); ?>
+    <?!= include('5_Dashboard'); ?>
+    <?!= include('6_NguoiDung'); ?>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "scriptId": "DIEN_SCRIPT_ID_VAO_DAY_SAU_KHI_TAO_APPS_SCRIPT",
+  "rootDir": "",
+  "scriptExtensions": [
+    ".js",
+    ".gs"
+  ],
+  "htmlExtensions": [
+    ".html"
+  ],
+  "jsonExtensions": [
+    ".json"
+  ],
+  "filePushOrder": [],
+  "skipSubdirectories": false
+}

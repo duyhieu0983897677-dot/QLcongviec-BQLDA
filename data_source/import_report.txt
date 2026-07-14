@@ -1,0 +1,55 @@
+Tổng số dòng đã import: 1829
+  - Dòng Nhóm (header): 522
+  - Dòng Việc (task): 1307
+
+Số ngày không parse được (giữ nguyên text gốc): 8
+  - Dòng CSV 50 [Bắt đầu] "06/05/2026,
+13/05/2026" (việc: Kiểm tra hồ sơ phát sinh do thay đổi thiết kế và t)
+  - Dòng CSV 50 [Kết thúc] "06/05/2026,
+13/05/2026" (việc: Kiểm tra hồ sơ phát sinh do thay đổi thiết kế và t)
+  - Dòng CSV 597 [Kết thúc] "08/062026" (việc: Nghiệm thu ván khuôn cốt thép móng)
+  - Dòng CSV 608 [Bắt đầu] "29/06/20269" (việc: Nghiệm thu độ chặc K đất nền lớp 1, lấp đất cổ món)
+  - Dòng CSV 1536 [Bắt đầu] "'08-06-2026" (việc: Thi công hoàn thiện bể bơi)
+  - Dòng CSV 1834 [Kết thúc] "theo tiến độ cây xanh" (việc: Hợp đồng dừa số 1006, ký ngày 10/06/2026 mua 400 c)
+  - Dòng CSV 1842 [Kết thúc] "theo tiến độ cây xanh" (việc: Hợp đồng dừa số 2205 ký ngày 25/05/2026 mua 300 câ)
+  - Dòng CSV 1846 [Kết thúc] "theo tiến độ cây xanh" (việc: Hợp đồng dừa số 2505, ký ngày 25/5/2026 là 150 cây)
+
+
+Danh sách tên Giám sát xuất hiện trong sheet (37 biến thể) — cần soát gộp tên trùng:
+  - "Trọng Hiếu" (24 việc)
+  - "QS" (14 việc)
+  - "H.Vân" (10 việc)
+  - "Mr. Sỹ" (10 việc)
+  - "Mr. Trọng" (9 việc)
+  - "QA/QC-Hồng" (7 việc)
+  - "Pur" (7 việc)
+  - "H.Vân - QC" (7 việc)
+  - "Mr. Lam" (5 việc)
+  - "Mr. Hồng" (5 việc)
+  - "H. Vân" (5 việc)
+  - "Hồng" (5 việc)
+  - "Duy Hiếu" (5 việc)
+  - "Mr. Hiếu" (4 việc)
+  - "Mr. Tiến" (4 việc)
+  - "Mr. Long - Toàn" (3 việc)
+  - "Mr. Duy Hiếu" (3 việc)
+  - "Nguyễn Văn Long" (2 việc)
+  - "Mr Mãnh" (2 việc)
+  - "Mr. Lê Nam" (2 việc)
+  - "Mr. Long - Toan" (1 việc)
+  - "longsaovietpy@gmail.com" (1 việc)
+  - "Chính" (1 việc)
+  - "Mr.Tây" (1 việc)
+  - "Ái Vân" (1 việc)
+  - "Mr. Mãnh" (1 việc)
+  - "Mr. MÃNH" (1 việc)
+  - "Mr. Lê Nam - Văn Tiến" (1 việc)
+  - "Chính - QAQC (HM8)" (1 việc)
+  - "Chính - QAQC (HM9)" (1 việc)
+  - "Duy Hiếu + Trọng Hiếu" (1 việc)
+  - "BỘ PHẬN KỸ THUẬT DA" (1 việc)
+  - "Trần Thế Mãnh" (1 việc)
+  - "BỘ PHẬN CÂY XANH" (1 việc)
+  - "Ngô Thị Đông Phương" (1 việc)
+  - "BỘ PHẬN THỦ KHO" (1 việc)
+  - "BỘ PHẬN NHÂN SỰ" (1 việc)

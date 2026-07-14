@@ -1,0 +1,96 @@
+<script>
+/* ================================================================
+   FILE 3: 3_DanhSach.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Danh sách công việc" — bảng cây Nhóm/Hạng mục -> Việc,
+   lọc theo Giám sát/trạng thái, tìm kiếm, thu gọn/mở rộng từng nhóm.
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderDanhSach()  : Vẽ lại toàn bộ bảng (gọi lại mỗi khi đổi bộ lọc/dữ liệu)
+   - toggleTaskGroup()  : Thu gọn / mở rộng 1 nhóm
+   ================================================================ */
+
+function toggleTaskGroup(groupId) {
+    if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId);
+    else collapsedGroups.add(groupId);
+    renderDanhSach();
+}
+
+function renderDanhSach() {
+    const supSelect = document.getElementById('filterSupervisor');
+    if (supSelect.options.length <= 1) {
+        let html = '<option value="">-- Tất cả Giám sát --</option>';
+        const names = [...new Set(tasks.filter(t => !t.isHeader && t.supervisorName).map(t => t.supervisorName))].sort();
+        names.forEach(n => html += `<option value="${n}">${n}</option>`);
+        supSelect.innerHTML = html;
+    }
+
+    const fSup = supSelect.value;
+    const fStatus = document.getElementById('filterStatus').value;
+    const fSearch = document.getElementById('filterSearch').value.trim().toLowerCase();
+    const hasFilter = !!(fSup || fStatus || fSearch);
+
+    // Xác định trước danh sách Việc nào khớp bộ lọc, để biết Nhóm nào nên hiện/ẩn
+    const matchedTaskIds = new Set();
+    tasks.forEach(t => {
+        if (t.isHeader) return;
+        if (fSup && t.supervisorName !== fSup) return;
+        if (fStatus && getTaskStatus(t) !== fStatus) return;
+        if (fSearch && !(t.name || '').toLowerCase().includes(fSearch)) return;
+        matchedTaskIds.add(t.id);
+    });
+
+    let html = '';
+    let currentGroupOpen = true;
+    let currentGroupId = null;
+    let groupHasVisibleChild = false;
+    let pendingGroupRow = '';
+
+    function flushGroup() {
+        if (pendingGroupRow && (groupHasVisibleChild || !hasFilter)) html += pendingGroupRow;
+        pendingGroupRow = '';
+        groupHasVisibleChild = false;
+    }
+
+    tasks.forEach(t => {
+        if (t.isHeader) {
+            flushGroup();
+            currentGroupId = t.id;
+            currentGroupOpen = !collapsedGroups.has(t.id);
+            const chevClass = currentGroupOpen ? 'fa-chevron-down' : 'fa-chevron-right';
+            pendingGroupRow = `<tr class="task-group-row" onclick="toggleTaskGroup(${t.id})">
+                <td colspan="5"><i class="fa-solid ${chevClass}" style="margin-right:8px; color:var(--accent);"></i>${t.name}</td>
+            </tr>`;
+            return;
+        }
+
+        if (!matchedTaskIds.has(t.id)) return;
+        if (currentGroupId !== null) groupHasVisibleChild = true;
+        if (!currentGroupOpen && !hasFilter) return; // nhóm đang thu gọn và không có bộ lọc -> ẩn con
+
+        const status = getTaskStatus(t);
+        const initials = getSupervisorInitials(t.supervisorName);
+        html += `<tr class="task-row">
+            <td class="task-name-cell">
+                <span class="t-name">${t.name}</span>
+                ${t.target ? `<span class="t-target">${t.target}</span>` : ''}
+            </td>
+            <td class="text-center"><span class="supervisor-chip"><span class="avatar">${initials}</span> ${t.supervisorName || '--'}</span></td>
+            <td>
+                <div class="gantt-bar-wrap">
+                    <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, t.percent || 0)}%;"></div></div>
+                    <span class="gantt-pct">${t.percent || 0}%</span>
+                </div>
+            </td>
+            <td class="text-center"><span class="status-badge ${status}">${STATUS_LABEL[status]}</span></td>
+            <td class="text-center admin-only">
+                <button class="btn btn-sm" style="background:var(--primary);" onclick="openTaskModal(${t.id})"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    });
+    flushGroup();
+
+    document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="5" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
+}
+</script>
