@@ -3,6 +3,37 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// Chạy 1 lần duy nhất sau khi tạo Sheet mới: tạo đủ 3 tab Data/DanhSachUser/NhatKy
+// và 1 tài khoản admin mặc định (admin / 123456) để đăng nhập lần đầu.
+function thietLapBanDauSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  if (!ss.getSheetByName('Data')) {
+    ss.insertSheet('Data').getRange('A1').setValue('Dữ liệu hệ thống');
+  }
+
+  if (!ss.getSheetByName('DanhSachUser')) {
+    const sh = ss.insertSheet('DanhSachUser');
+    sh.getRange(1, 1, 2, 4).setValues([
+      ['ID', 'MatKhau', 'VaiTro', 'HoTen'],
+      ['admin', '123456', 'ADMIN', 'Ban QLDA']
+    ]);
+  }
+
+  if (!ss.getSheetByName('NhatKy')) {
+    ss.insertSheet('NhatKy').getRange(1, 1, 1, 4)
+      .setValues([['Thời gian', 'Người dùng', 'Hành động', 'Chi tiết']]);
+  }
+
+  ss.getSheets().forEach(sh => {
+    if (/^(Sheet1|Trang tính1)$/.test(sh.getName()) && ss.getSheets().length > 3) {
+      ss.deleteSheet(sh);
+    }
+  });
+
+  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy.';
+}
+
 function doGet() {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
