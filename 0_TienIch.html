@@ -3,18 +3,27 @@
    FILE 0: 0_TienIch.html
    ------------------------------------------------------------------
    PHẠM VI: Nền tảng khởi động ứng dụng + các hàm tiện ích dùng chung
-   (chuyển tab, tải dữ liệu ban đầu, định dạng ngày/số, thông báo popup).
+   (chuyển tab, tải dữ liệu, định dạng ngày/số, thông báo popup, gọi
+   backend dạng Promise).
 
    DANH SÁCH HÀM CHÍNH:
    - switchTab()      : Chuyển tab đang xem
-   - window.onload    : Tải dữ liệu từ Google Sheet khi mở trang
+   - window.onload    : Tải dữ liệu (Hạng mục/Gói thầu/User) từ Google Sheet khi mở trang
+   - reloadData()      : Tải lại dữ liệu sau khi ghi Nhật ký / sửa Hạng mục / Gói thầu
+   - gsRun()           : Bọc google.script.run thành Promise, dùng để chain nhiều lệnh backend
    - showCustomAlert() : Hiện thông báo xanh/đỏ
    - round0(), formatVN(), convertDMYtoISO()... : Hàm tiện ích dùng khắp nơi
    ================================================================ */
 
-let tasks = [];      // Toàn bộ đầu việc (cả dòng Nhóm lẫn dòng Việc)
-let users = [];       // Danh sách Giám sát / Admin
+let hangMuc = [];    // Cây mã/tên Hạng mục tham chiếu (capDo 1/2/3) — chỉ để lọc, không nhận %
+let goiThau = [];    // Danh sách Gói thầu, mỗi Gói thầu gộp nhiều Hạng mục
+let congViec = [];   // Công việc do Admin/Giám sát tự tạo — ĐÂY là đơn vị nhận Nhật ký tiến độ,
+                      // đã có sẵn luyKe/phanTramKeHoach/chenhLech/trangThaiMau tính từ NhatKyTienDo
+let users = [];      // Danh sách Giám sát / Admin
 let collapsedGroups = new Set();
+
+const TRANGTHAI_LABEL = { ok: 'Đúng tiến độ', late: 'Trễ nhẹ', bad: 'Trễ nghiêm trọng', done: 'Hoàn thành' };
+const PHAN_LOAI_LABEL = { ho_so: 'I. Phần hồ sơ', thi_cong: 'II. Phần triển khai thi công' };
 
 function switchTab(tabId) {
     const contents = document.querySelectorAll('.tab-content');
@@ -34,10 +43,10 @@ function switchTab(tabId) {
         }
     });
 
-    if (tabId === 'dashboard') renderDashboard();
-    if (tabId === 'danhsach') renderDanhSach();
-    if (tabId === 'viecuatoi') renderViecCuaToi();
-    if (tabId === 'nguoidung') renderNguoiDung();
+    if (tabId === 'dashboard') safeRender_('renderDashboard', 'Tổng quan');
+    if (tabId === 'danhsach') safeRender_('renderDanhSach', 'Danh sách');
+    if (tabId === 'viecuatoi') safeRender_('renderViecCuaToi', 'Nhật ký tiến độ');
+    if (tabId === 'nguoidung') safeRender_('renderNguoiDung', 'Quản lý Giám sát');
     window.scrollTo(0, 0);
 }
 
@@ -46,41 +55,84 @@ function toggleNavGroup(headerBtn) {
     if (group) group.classList.toggle('open');
 }
 
+// Bọc google.script.run thành Promise để chain nhiều lệnh (vd: upload ảnh xong rồi mới gửi log).
+function gsRun(fnName, ...args) {
+    return new Promise((resolve, reject) => {
+        if (typeof google === 'undefined') { reject(new Error('Không có kết nối Google Apps Script (đang xem thử ngoài trình duyệt).')); return; }
+        google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(err => reject(err instanceof Error ? err : new Error((err && err.message) || String(err))))
+            [fnName](...args);
+    });
+}
+
+function applyLoadedData(response) {
+    const parsed = JSON.parse(response);
+    hangMuc = parsed.hangMuc || [];
+    goiThau = parsed.goiThau || [];
+    congViec = parsed.congViec || [];
+    users = parsed.users || [];
+    updateUI();
+}
+
 window.onload = function() {
     if (window.innerWidth < 768 && document.getElementById('home')) {
         switchTab('home');
     }
 
     if (typeof google !== 'undefined') {
-        google.script.run.withSuccessHandler(function(response) {
-            const parsed = JSON.parse(response);
-            tasks = parsed.tasks || [];
-            users = parsed.users || [];
-            tasks.forEach(t => {
-                if (t.dailyLogs === undefined) t.dailyLogs = [];
-                if (t.percent === undefined) t.percent = 0;
-            });
-            updateUI();
-        }).getData();
+        google.script.run.withSuccessHandler(applyLoadedData).getData();
     } else {
         // Chế độ xem thử (không có backend Google Apps Script) — không load gì cả
         updateUI();
     }
 };
 
+// Gọi lại sau khi ghi Nhật ký tiến độ / sửa Hạng mục / Gói thầu — server luôn là nguồn sự thật
+// (lũy kế % được server tính lại từ NhatKyTienDo), không tự suy đoán ở client.
+function reloadData() {
+    return gsRun('getData').then(applyLoadedData);
+}
+
+// Nhận TÊN CHUỖI của hàm (không nhận thẳng tham chiếu hàm) và tra qua window[...] —
+// vì nếu truyền thẳng `renderDashboard` mà hàm đó chưa tồn tại, việc "tra" tên xảy ra
+// NGAY TẠI chỗ gọi (trước khi vào được safeRender_), khiến try/catch bên trong vô dụng.
+// Nếu hàm chưa sẵn sàng, tự thử lại vài lần (phòng trường hợp môi trường tải script
+// chậm/không đồng bộ) trước khi báo lỗi hẳn cho người dùng.
+function safeRender_(fnName, label, attempt) {
+    attempt = attempt || 0;
+    const fn = window[fnName];
+    if (typeof fn !== 'function') {
+        if (attempt < 10) { setTimeout(() => safeRender_(fnName, label, attempt + 1), 150); return; }
+        console.error('Không tìm thấy hàm ' + fnName + ' sau nhiều lần thử.');
+        showCustomAlert('Không tải được giao diện "' + label + '" (thiếu hàm ' + fnName + '). Vui lòng tải lại trang (F5). Nếu vẫn lỗi, báo Quản trị.', 'error');
+        return;
+    }
+    try { fn(); } catch (e) {
+        console.error('Lỗi khi vẽ lại ' + label + ':', e);
+        showCustomAlert('Đã lưu dữ liệu, nhưng vẽ lại giao diện "' + label + '" bị lỗi: ' + e.message + '. Vui lòng tải lại trang (F5).', 'error');
+    }
+}
+
 function updateUI() {
-    if (document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')) renderDashboard();
-    if (document.getElementById('danhsach') && document.getElementById('danhsach').classList.contains('active')) renderDanhSach();
-    if (document.getElementById('viecuatoi') && document.getElementById('viecuatoi').classList.contains('active')) renderViecCuaToi();
-    if (document.getElementById('nguoidung') && document.getElementById('nguoidung').classList.contains('active')) renderNguoiDung();
+    if (document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')) safeRender_('renderDashboard', 'Tổng quan');
+    if (document.getElementById('danhsach') && document.getElementById('danhsach').classList.contains('active')) safeRender_('renderDanhSach', 'Danh sách');
+    if (document.getElementById('viecuatoi') && document.getElementById('viecuatoi').classList.contains('active')) safeRender_('renderViecCuaToi', 'Nhật ký tiến độ');
+    if (document.getElementById('nguoidung') && document.getElementById('nguoidung').classList.contains('active')) safeRender_('renderNguoiDung', 'Quản lý Giám sát');
 }
 
 // --- HÀM THÔNG BÁO XANH ĐỎ ---
+// Thành công: tự tắt sau ~1.6s (vẫn bấm OK tắt sớm được).
+// Lỗi: giữ nguyên, bắt buộc bấm OK mới tắt (cần đọc kỹ nội dung lỗi).
+let alertAutoCloseTimer_ = null;
+
 function showCustomAlert(msg, type = 'error') {
     const content = document.getElementById('alertModalContent');
     const icon = document.getElementById('alertIcon');
     const title = document.getElementById('alertTitle');
     const btn = document.getElementById('alertBtn');
+
+    if (alertAutoCloseTimer_) { clearTimeout(alertAutoCloseTimer_); alertAutoCloseTimer_ = null; }
 
     if (type === 'success') {
         content.className = 'modal-content construction-modal modal-success';
@@ -90,6 +142,7 @@ function showCustomAlert(msg, type = 'error') {
         title.style.color = 'var(--success)';
         btn.className = 'btn';
         btn.style.backgroundColor = 'var(--success)';
+        alertAutoCloseTimer_ = setTimeout(closeAlertModal, 1600);
     } else {
         content.className = 'modal-content construction-modal modal-error';
         icon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
@@ -100,11 +153,13 @@ function showCustomAlert(msg, type = 'error') {
         btn.style.backgroundColor = 'var(--danger)';
     }
 
+    btn.innerText = 'OK';
     document.getElementById('alertMessage').innerText = msg;
     document.getElementById('alertModal').classList.add('active');
 }
 
 function closeAlertModal() {
+    if (alertAutoCloseTimer_) { clearTimeout(alertAutoCloseTimer_); alertAutoCloseTimer_ = null; }
     document.getElementById('alertModal').classList.remove('active');
 }
 
@@ -138,22 +193,19 @@ function parseNumberSafely(val) {
     return parseFloat(str);
 }
 
-// Tự tính trạng thái 1 đầu việc (không lưu cứng, luôn tính lại từ dữ liệu gốc)
-function getTaskStatus(task) {
-    if (task.isHeader) return null;
-    if (task.percent >= 100) return 'completed';
-    const today = getTodayDate();
-    if (task.endDate && today > task.endDate) return 'delayed';
-    if (!task.startDate && !task.endDate && !task.percent) return 'not_started';
-    return 'in_progress';
+// --- HÀM TIỆN ÍCH CÂY HẠNG MỤC (dùng chung nhiều nơi) ---
+function findHangMuc(maHangMuc) {
+    return hangMuc.find(h => h.maHangMuc === maHangMuc);
 }
 
-const STATUS_LABEL = { completed: 'Hoàn thành', delayed: 'Trễ tiến độ', in_progress: 'Đang thực hiện', not_started: 'Chưa bắt đầu' };
+function getGoiThauName(maGoiThau) {
+    if (!maGoiThau) return '';
+    const g = goiThau.find(x => x.maGoiThau === maGoiThau);
+    return g ? g.tenGoiThau : '';
+}
 
-function getSupervisorInitials(name) {
-    if (!name) return '?';
-    const parts = String(name).trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+function nameOfUser(id) {
+    const u = users.find(x => x.id === id);
+    return u ? u.name : (id || '--');
 }
 </script>

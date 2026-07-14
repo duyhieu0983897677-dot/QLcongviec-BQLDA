@@ -2,113 +2,236 @@
 /* ================================================================
    FILE 4: 4_ViecCuaToi.html
    ------------------------------------------------------------------
-   PHẠM VI: Tab "Việc của tôi" — màn hình tối ưu điện thoại để từng
-   Giám sát tự cập nhật % tiến độ + ghi chú hàng ngày cho đúng đầu việc
-   của mình, ngoài công trường.
+   PHẠM VI: Tab "Nhật ký tiến độ" (id tab vẫn là #viecuatoi để khỏi
+   sửa switchTab/nav) — 1 form đơn giản dùng chung cho cả điện thoại
+   lẫn máy tính: chọn 1 Công việc (do chính mình tạo, hoặc mọi Công
+   việc nếu là Admin), nhập % hoàn thành trong ngày, ghi vào
+   NhatKyTienDo qua themNhatKyTienDo (backend tự validate tổng % <=
+   100 và khoá LockService chống ghi đè). Nút "+ Thêm công việc" mở
+   modal Công việc (2_CongViec.html) vì phải tự tạo Công việc trước
+   khi log % được.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderViecCuaToi()      : Vẽ danh sách việc của Giám sát đang xem
-   - openMyTaskModal()       : Giám sát tự thêm 1 việc mới, tự động vào đúng Hạng mục phụ trách
-   - updateMyTaskPercent()   : Cập nhật % khi kéo thanh trượt (chỉ đổi hiển thị, chưa lưu)
-   - saveMyTaskUpdate()      : Lưu % + ghi chú + thêm 1 dòng Nhật ký báo cáo ngày
+   - renderViecCuaToi()      : Điểm vào, dựng lại form mỗi lần vào tab
+   - myReportableCongViec()  : Công việc mà user hiện tại được phép log %
+   - resizeImageFile()       : Nén/resize ảnh bằng canvas trước khi gửi lên Drive
    ================================================================ */
 
-// Giám sát tự thêm việc của mình: khoá cứng người phụ trách = chính họ,
-// và chỉ được chọn trong số Hạng mục mà Admin đã gán cho họ (users[].assignedGroupIds).
-function openMyTaskModal() {
-    if (currentRole !== 'SUPERVISOR') { showCustomAlert('Chỉ Giám sát mới tự thêm được việc của mình!', 'error'); return; }
-    const me = users.find(u => u.id === mySupervisorId);
-    const allowedGroupIds = (me && me.assignedGroupIds) || [];
-    if (allowedGroupIds.length === 0) {
-        showCustomAlert('Bạn chưa được Admin gán Hạng mục phụ trách. Vui lòng liên hệ Quản trị trước khi tự thêm việc.', 'error');
-        return;
-    }
-    openTaskModal(null, { lockSupervisor: myUserName, allowedGroupIds });
+const NTD_MAX_PHOTOS = 4;
+let ntdState = { congViec: null, photos: [] };
+
+function myReportableCongViec() {
+    return currentRole === 'ADMIN'
+        ? congViec
+        : congViec.filter(cv => cv.nguoiTaoId === mySupervisorId);
 }
 
-function updateMyTaskPercent(taskId, val) {
-    document.getElementById('mt-pct-' + taskId).innerText = val + '%';
+// Nhóm theo "Tên gói thầu · Phần" — đúng cấu trúc cố định I.Phần hồ sơ / II.Phần triển khai thi công.
+function groupCongViecByGoiThauPhan(list) {
+    const groups = {};
+    list.forEach(cv => {
+        const g = goiThau.find(x => x.maGoiThau === cv.maGoiThau);
+        const label = `${g ? g.tenGoiThau : cv.maGoiThau} · ${PHAN_LOAI_LABEL[cv.phanLoai] || ''}`;
+        (groups[label] = groups[label] || []).push(cv);
+    });
+    return groups;
 }
 
-function saveMyTaskUpdate(taskId) {
-    if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để cập nhật!', 'error'); return; }
-    const t = tasks.find(x => x.id === taskId);
-    if (!t) return;
-
-    const percent = parseInt(document.getElementById('mt-slider-' + taskId).value, 10);
-    const commentText = document.getElementById('mt-comment-' + taskId).value.trim();
-    const noteText = document.getElementById('mt-note-' + taskId).value.trim();
-
-    t.percent = percent;
-    t.note = noteText;
-    if (commentText) {
-        t.dailyLogs = t.dailyLogs || [];
-        t.dailyLogs.push({ date: getTodayDate(), text: commentText, author: myUserName || myUserId });
-        document.getElementById('mt-comment-' + taskId).value = '';
-    }
-
-    saveData(`Cập nhật tiến độ: ${t.name} (${percent}%)`);
-    updateUI();
-    showCustomAlert('Đã lưu cập nhật.', 'success');
+function resizeImageFile(file, maxDim, quality) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const img = new Image();
+            img.onload = () => {
+                let width = img.width, height = img.height;
+                if (width > maxDim || height > maxDim) {
+                    const ratio = Math.min(maxDim / width, maxDim / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = width; canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.onerror = reject;
+            img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
 }
 
 function renderViecCuaToi() {
-    document.getElementById('btnAddMyTask').style.display = currentRole === 'SUPERVISOR' ? 'flex' : 'none';
+    document.getElementById('ntdUserLabel').textContent = myUserName || myUserId || '--';
 
-    const wrap = document.getElementById('viecCuaToiAdminSelectWrap');
-    const select = document.getElementById('viecCuaToiSupervisorSelect');
-    let targetName = '';
+    ntdState = { congViec: null, photos: [] };
+    document.getElementById('ntdNgay').value = formatVN(getTodayDate());
+    fillNtdCongViecOptions();
+    document.getElementById('ntdPct').value = '';
+    document.getElementById('ntdGhiChu').value = '';
+    renderNtdPhotoGrid();
+    selectNtdCongViec('');
 
-    if (currentRole === 'ADMIN') {
-        if (select.options.length <= 1) {
-            let html = '<option value="">-- Chọn Giám sát để xem việc --</option>';
-            users.filter(u => u.role === 'SUPERVISOR').forEach(u => html += `<option value="${u.name}">${u.name}</option>`);
-            select.innerHTML = html;
-        }
-        targetName = select.value;
-    } else {
-        wrap.style.display = 'none';
-        targetName = myUserName;
-    }
+    document.getElementById('ntdCongViec').onchange = e => selectNtdCongViec(e.target.value);
+    document.getElementById('ntdPct').oninput = updateNtdProgress;
+    document.getElementById('ntdPhotoInput').onchange = e => handleNtdPhotoFiles(e.target.files);
+    document.getElementById('ntdSubmit').onclick = submitNtd;
 
-    const list = document.getElementById('viecCuaToiList');
-    if (!targetName) {
-        list.innerHTML = '<p style="color:gray; text-align:center; padding:20px;">Chọn Giám sát ở trên để xem danh sách việc.</p>';
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr !== 'undefined') {
+                const el = document.getElementById('ntdNgay');
+                if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, defaultDate: new Date(), onChange: updateNtdProgress });
+            }
+        } catch (e) { console.warn(e); }
+    }, 100);
+}
+
+function fillNtdCongViecOptions() {
+    const sel = document.getElementById('ntdCongViec');
+    const groups = groupCongViecByGoiThauPhan(myReportableCongViec());
+    const groupNames = Object.keys(groups);
+    if (groupNames.length === 0) {
+        sel.innerHTML = '<option value="">— Chưa có công việc, bấm "Thêm công việc" —</option>';
         return;
     }
-
-    const myTasks = tasks.filter(t => !t.isHeader && t.supervisorName === targetName);
-    if (myTasks.length === 0) {
-        list.innerHTML = '<p style="color:gray; text-align:center; padding:20px;">Chưa có công việc nào được giao.</p>';
-        return;
-    }
-
-    let html = '';
-    myTasks.forEach(t => {
-        const status = getTaskStatus(t);
-        const logs = (t.dailyLogs || []).slice(-3).reverse();
-        html += `<div class="my-task-card">
-            <div class="mt-name">${t.name}</div>
-            <div class="mt-meta">
-                <span class="status-badge ${status}">${STATUS_LABEL[status]}</span>
-                ${t.startDate || t.endDate ? ` &middot; ${formatVN(t.startDate)} - ${formatVN(t.endDate)}` : ''}
-            </div>
-            <div class="mt-slider-row">
-                <input type="range" min="0" max="100" step="5" id="mt-slider-${t.id}" value="${t.percent || 0}" oninput="updateMyTaskPercent(${t.id}, this.value)" ${currentRole === 'VIEW' ? 'disabled' : ''}>
-                <span class="mt-pct-display" id="mt-pct-${t.id}">${t.percent || 0}%</span>
-            </div>
-            <div class="form-group" style="margin-bottom:8px;">
-                <label style="font-size:0.72rem;">Ghi chú vướng mắc</label>
-                <input type="text" id="mt-note-${t.id}" class="form-control" value="${(t.note || '').replace(/"/g, '&quot;')}" ${currentRole === 'VIEW' ? 'disabled' : ''}>
-            </div>
-            <div class="form-group" style="margin-bottom:8px;">
-                <label style="font-size:0.72rem;">Nhận xét báo cáo hôm nay (${formatVN(getTodayDate())})</label>
-                <input type="text" id="mt-comment-${t.id}" class="form-control" placeholder="Ví dụ: đã đổ bê tông xong đợt 1..." ${currentRole === 'VIEW' ? 'disabled' : ''}>
-            </div>
-            ${logs.length ? `<div style="margin-bottom:8px;">${logs.map(l => `<div class="daily-log-item"><div class="dl-date">${formatVN(l.date)} - ${l.author || ''}</div>${l.text}</div>`).join('')}</div>` : ''}
-            <button class="btn btn-sm" style="background:var(--success);" onclick="saveMyTaskUpdate(${t.id})" ${currentRole === 'VIEW' ? 'disabled' : ''}><i class="fa-solid fa-floppy-disk"></i> Lưu cập nhật</button>
-        </div>`;
+    let html = '<option value="">— Chọn công việc —</option>';
+    groupNames.sort().forEach(groupName => {
+        html += `<optgroup label="${groupName}">`;
+        groups[groupName].forEach(cv => {
+            html += `<option value="${cv.maCongViec}">${cv.tenCongViec}</option>`;
+        });
+        html += '</optgroup>';
     });
-    list.innerHTML = html;
+    sel.innerHTML = html;
+}
+
+function selectNtdCongViec(maCongViec) {
+    ntdState.congViec = maCongViec ? congViec.find(c => c.maCongViec === maCongViec) : null;
+    const meta = document.getElementById('ntdCongViecMeta');
+    if (ntdState.congViec) {
+        const hm = findHangMuc(ntdState.congViec.maHangMuc);
+        meta.innerHTML = `<span>Hạng mục: <b>${hm ? hm.maHangMuc + ' — ' + hm.tenHangMuc : ntdState.congViec.maHangMuc}</b></span>`;
+        gsRun('getNhatKyGanNhat', maCongViec, 5)
+            .then(json => renderNtdRecent(JSON.parse(json)))
+            .catch(() => renderNtdRecent([]));
+    } else {
+        meta.innerHTML = '';
+        renderNtdRecent([]);
+    }
+    updateNtdProgress();
+}
+
+function renderNtdRecent(logs) {
+    const box = document.getElementById('ntdRecent');
+    if (!logs || !logs.length) {
+        box.innerHTML = '<div style="color:var(--ink-soft);padding:6px 0;">Chưa có dữ liệu</div>';
+        return;
+    }
+    box.innerHTML = logs.map(l => `
+        <div class="ntd-recent-item">
+            <span class="ndays">${formatVN(l.ngayBaoCao)} · ${l.nguoiNhapTen}</span>
+            <span class="npct">+${l.phanTramNgay}%</span>
+        </div>`).join('');
+}
+
+function updateNtdProgress() {
+    const current = ntdState.congViec ? (ntdState.congViec.luyKe || 0) : 0;
+    const addRaw = parseFloat(document.getElementById('ntdPct').value);
+    const add = isNaN(addRaw) ? 0 : addRaw;
+    const projected = current + add;
+
+    document.getElementById('ntdFillCurrent').style.width = Math.min(current, 100) + '%';
+    document.getElementById('ntdCurrentLabel').textContent = `Đã đạt: ${current}%`;
+    document.getElementById('ntdProjectedLabel').textContent = `Sau khi nhập: ${Math.min(projected, 999).toFixed(1).replace(/\.0$/, '')}%`;
+
+    const fillAdd = document.getElementById('ntdFillAdd');
+    const feedback = document.getElementById('ntdFeedback');
+    const submitBtn = document.getElementById('ntdSubmit');
+    const hint = document.getElementById('ntdHint');
+
+    if (!ntdState.congViec) {
+        fillAdd.style.width = '0%';
+        feedback.className = 'ntd-feedback';
+        submitBtn.disabled = true;
+        hint.textContent = 'Chọn công việc để bắt đầu';
+        return;
+    }
+
+    if (projected > 100) {
+        fillAdd.style.left = Math.min(current, 100) + '%';
+        fillAdd.style.width = Math.max(0, 100 - current) + '%';
+        fillAdd.style.background = 'var(--danger)';
+        feedback.className = 'ntd-feedback show warn';
+        const conLai = Math.max(0, Math.round((100 - current) * 10) / 10);
+        feedback.textContent = `Vượt quá 100%. Công việc đã đạt ${current}%, chỉ còn tối đa ${conLai}% để nhập.`;
+        submitBtn.disabled = true;
+        hint.textContent = 'Điều chỉnh % trước khi gửi';
+    } else {
+        fillAdd.style.left = current + '%';
+        fillAdd.style.width = add + '%';
+        fillAdd.style.background = 'var(--primary)';
+        if (add > 0) {
+            feedback.className = 'ntd-feedback show ok';
+            feedback.textContent = `Hợp lệ — sẽ ghi thêm ${add}% cho ngày ${document.getElementById('ntdNgay').value}.`;
+        } else {
+            feedback.className = 'ntd-feedback';
+        }
+        submitBtn.disabled = !(add > 0);
+        hint.textContent = add > 0 ? 'Sẵn sàng gửi' : 'Nhập % hoàn thành trong ngày';
+    }
+}
+
+function renderNtdPhotoGrid() {
+    const grid = document.getElementById('ntdPhotoGrid');
+    const addTile = document.getElementById('ntdPhotoAdd');
+    grid.querySelectorAll('.ntd-photo-thumb').forEach(el => el.remove());
+    ntdState.photos.forEach((p, idx) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'ntd-photo-thumb';
+        thumb.innerHTML = `<img src="${p.dataUrl}" alt="Ảnh ${idx + 1}"><button type="button" class="ntd-photo-remove" data-idx="${idx}">×</button>`;
+        grid.insertBefore(thumb, addTile);
+    });
+    addTile.style.display = ntdState.photos.length >= NTD_MAX_PHOTOS ? 'none' : 'flex';
+    grid.querySelectorAll('.ntd-photo-remove').forEach(btn => {
+        btn.addEventListener('click', () => {
+            ntdState.photos.splice(parseInt(btn.dataset.idx, 10), 1);
+            renderNtdPhotoGrid();
+        });
+    });
+}
+
+function handleNtdPhotoFiles(fileList) {
+    const files = Array.from(fileList).slice(0, NTD_MAX_PHOTOS - ntdState.photos.length);
+    files.forEach(file => {
+        resizeImageFile(file, 1280, 0.72).then(dataUrl => {
+            ntdState.photos.push({ name: file.name, dataUrl });
+            renderNtdPhotoGrid();
+        });
+    });
+}
+
+function submitNtd() {
+    if (!ntdState.congViec) return;
+    const maCongViec = ntdState.congViec.maCongViec;
+    const ngay = convertDMYtoISO(document.getElementById('ntdNgay').value.trim());
+    const phanTram = parseFloat(document.getElementById('ntdPct').value);
+    const ghiChu = document.getElementById('ntdGhiChu').value.trim();
+    const btn = document.getElementById('ntdSubmit');
+    btn.disabled = true;
+    document.getElementById('ntdHint').textContent = 'Đang gửi...';
+
+    Promise.all(ntdState.photos.map((p, idx) => gsRun('uploadAnhHienTruong', myUserId, myPassword, p.dataUrl, `${maCongViec}_${Date.now()}_${idx}.jpg`)))
+        .then(urls => gsRun('themNhatKyTienDo', myUserId, myPassword, maCongViec, ngay, phanTram, ghiChu, urls))
+        .then(() => {
+            showCustomAlert('Đã gửi báo cáo tiến độ.', 'success');
+            reloadData(); // chạy nền, không chờ mới báo thành công
+        })
+        .catch(err => {
+            handleBackendError(err);
+            btn.disabled = false;
+            document.getElementById('ntdHint').textContent = 'Sẵn sàng gửi';
+        });
 }
 </script>

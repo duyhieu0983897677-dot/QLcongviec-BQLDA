@@ -2,14 +2,20 @@
 /* ================================================================
    FILE 1: 1_DangNhap.html
    ------------------------------------------------------------------
-   PHẠM VI: Đăng nhập, đổi mật khẩu, phân quyền (Quản trị/Giám sát),
-   và hàm lưu toàn bộ dữ liệu lên Google Sheet.
+   PHẠM VI: Đăng nhập, đổi mật khẩu, phân quyền (Quản trị/Giám sát).
+   Việc ghi dữ liệu (Hạng mục/Gói thầu/Nhật ký tiến độ) nay gọi thẳng
+   các hàm backend tương ứng (adminSaveHangMuc, themNhatKyTienDo...)
+   qua gsRun() ở 0_TienIch.html — không còn dùng saveData() chung.
+
+   Khối đăng nhập xuất hiện ở 2 nơi trong trang (header mobile +
+   sidebar desktop) nên dùng chung 1 lớp `.js-lock-btn`/`.js-user-info`
+   thay vì id duy nhất — setLockBtnState()/setUserInfoState() cập nhật
+   TẤT CẢ bản sao cùng lúc.
 
    DANH SÁCH HÀM CHÍNH:
    - toggleAdmin()          : Mở khóa / khóa quyền chỉnh sửa
    - confirmPassword()      : Xử lý khi bấm nút Đăng nhập
    - submitChangePassword() : Xử lý khi bấm nút Đổi mật khẩu
-   - saveData()             : Gửi toàn bộ dữ liệu lên Google Sheet để lưu
    ================================================================ */
 
 let myUserId = "";
@@ -17,6 +23,23 @@ let myPassword = "";
 let myUserName = "";
 let mySupervisorId = "";
 let currentRole = "VIEW";
+
+function setLockBtnState(className, innerHTML) {
+    document.querySelectorAll('.js-lock-btn').forEach(btn => {
+        btn.className = className;
+        btn.innerHTML = innerHTML;
+    });
+}
+
+function setUserInfoState(visible, name) {
+    document.querySelectorAll('.js-user-info').forEach(el => {
+        el.style.display = visible ? 'block' : 'none';
+        if (name !== undefined) {
+            const nameEl = el.querySelector('.js-user-name');
+            if (nameEl) nameEl.innerText = name;
+        }
+    });
+}
 
 function toggleAdmin() {
     const body = document.body;
@@ -28,13 +51,9 @@ function toggleAdmin() {
         currentRole = "VIEW";
 
         body.className = 'view-only-mode role-view';
-        const btn = document.getElementById('lockBtn');
-        btn.className = 'admin-btn locked';
-        btn.innerHTML = '<i class="fa-solid fa-lock"></i> Đăng nhập';
-
-        document.getElementById('userInfo').style.display = 'none';
+        setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
+        setUserInfoState(false);
         switchTab('home');
-        updateUI();
     }
 }
 
@@ -66,20 +85,16 @@ function confirmPassword() {
             mySupervisorId = res.supervisorId;
 
             document.body.className = '';
-            const lockBtn = document.getElementById('lockBtn');
 
             if (currentRole === "ADMIN") {
                 document.body.classList.add('role-admin');
-                lockBtn.className = 'admin-btn unlocked-admin';
-                lockBtn.innerHTML = '<i class="fa-solid fa-unlock"></i> Quản trị';
+                setLockBtnState('admin-btn unlocked-admin', '<i class="fa-solid fa-unlock"></i> Quản trị');
             } else {
                 document.body.classList.add('role-supervisor');
-                lockBtn.className = 'admin-btn unlocked-staff';
-                lockBtn.innerHTML = '<i class="fa-solid fa-unlock"></i> Giám sát';
+                setLockBtnState('admin-btn unlocked-staff', '<i class="fa-solid fa-unlock"></i> Giám sát');
             }
 
-            document.getElementById('userNameDisplay').innerText = myUserName;
-            document.getElementById('userInfo').style.display = 'block';
+            setUserInfoState(true, myUserName);
 
             btnSubmit.innerHTML = originalText;
             btnSubmit.disabled = false;
@@ -88,7 +103,6 @@ function confirmPassword() {
             userInput.value = ''; passInput.value = '';
 
             switchTab(currentRole === 'ADMIN' ? 'dashboard' : 'viecuatoi');
-            updateUI();
             showCustomAlert(`Đăng nhập thành công! Xin chào ${myUserName}.`, "success");
         })
         .withFailureHandler(function(error) {
@@ -140,31 +154,18 @@ function submitChangePassword() {
     }
 }
 
-// --- HÀM LƯU DỮ LIỆU (chỉ tasks) LÊN GOOGLE SHEET ---
-// Lưu ý: users KHÔNG lưu qua đây — danh sách Giám sát được quản lý riêng
-// qua adminSaveSupervisor()/adminDeleteSupervisor() (ghi thẳng vào tab
-// DanhSachUser), xem 6_NguoiDung.html.
-function saveData(actionLogMessage = "Cập nhật dữ liệu hệ thống") {
-    if (currentRole === "VIEW") return;
-    if (typeof google !== 'undefined') {
-        const payload = JSON.stringify({ tasks });
-        google.script.run.withSuccessHandler(function() {
-            console.log("Đã lưu: " + actionLogMessage);
-        }).withFailureHandler(function(error) {
-            let errorMsg = error.message || error || "Lỗi kết nối máy chủ Google.";
-            showCustomAlert("Lỗi: " + errorMsg, "error");
+// Xử lý lỗi dùng chung cho các lệnh backend mới (adminSaveHangMuc, themNhatKyTienDo...):
+// hiện thông báo đỏ, và nếu là lỗi hết phiên đăng nhập thì tự đăng xuất.
+function handleBackendError(error) {
+    const errorMsg = (error && error.message) || String(error) || "Lỗi kết nối máy chủ Google.";
+    showCustomAlert("Lỗi: " + errorMsg, "error");
 
-            if (String(errorMsg).includes("Xác thực thất bại")) {
-                myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = "";
-                currentRole = "VIEW";
-                document.body.className = 'view-only-mode role-view';
-
-                const btn = document.getElementById('lockBtn');
-                btn.className = 'admin-btn locked';
-                btn.innerHTML = '<i class="fa-solid fa-lock"></i> Đăng nhập';
-                document.getElementById('userInfo').style.display = 'none';
-            }
-        }).saveData(payload, myUserId, myPassword, actionLogMessage);
+    if (String(errorMsg).includes("Xác thực thất bại") || String(errorMsg).includes("Tài khoản không tồn tại") || String(errorMsg).includes("Sai Tên đăng nhập")) {
+        myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = "";
+        currentRole = "VIEW";
+        document.body.className = 'view-only-mode role-view';
+        setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
+        setUserInfoState(false);
     }
 }
 </script>

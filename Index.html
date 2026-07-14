@@ -25,11 +25,11 @@
         </div>
 
         <div class="header-actions">
-            <div id="userInfo" class="header-user-info">
-                <div class="header-username"><i class="fa-solid fa-user"></i> <span id="userNameDisplay">--</span></div>
+            <div class="js-user-info header-user-info">
+                <div class="header-username"><i class="fa-solid fa-user"></i> <span class="js-user-name">--</span></div>
                 <div class="header-change-pass" onclick="openChangePassModal()">Đổi mật khẩu</div>
             </div>
-            <button id="lockBtn" class="admin-btn locked" onclick="toggleAdmin()"><i class="fa-solid fa-lock"></i> Đăng nhập</button>
+            <button class="js-lock-btn admin-btn locked" onclick="toggleAdmin()"><i class="fa-solid fa-lock"></i> Đăng nhập</button>
         </div>
     </header>
 
@@ -42,10 +42,17 @@
                     <span class="brand-sub">Quản lý công việc</span>
                 </div>
             </div>
+            <div class="sidebar-login">
+                <div class="js-user-info header-user-info">
+                    <div class="header-username"><i class="fa-solid fa-user"></i> <span class="js-user-name">--</span></div>
+                    <div class="header-change-pass" onclick="openChangePassModal()">Đổi mật khẩu</div>
+                </div>
+                <button class="js-lock-btn admin-btn locked" onclick="toggleAdmin()"><i class="fa-solid fa-lock"></i> Đăng nhập</button>
+            </div>
             <div class="sidebar-nav">
                 <button class="nav-btn side-nav-btn active" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i> Tổng quan</button>
-                <button class="nav-btn side-nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-list-check"></i> Danh sách công việc</button>
-                <button class="nav-btn side-nav-btn" onclick="switchTab('viecuatoi')"><i class="fa-solid fa-user-clock"></i> Việc của tôi</button>
+                <button class="nav-btn side-nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-sitemap"></i> Cây Hạng mục</button>
+                <button class="nav-btn side-nav-btn" onclick="switchTab('viecuatoi')"><i class="fa-solid fa-clipboard-list"></i> Nhật ký tiến độ</button>
                 <button class="nav-btn side-nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i> Quản lý Giám sát</button>
             </div>
         </aside>
@@ -63,12 +70,12 @@
                     <i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span>
                 </button>
                 <button class="nav-btn home-tile" onclick="switchTab('danhsach')" style="--tile-c: var(--accent);">
-                    <i class="fa-solid fa-list-check"></i><span>Danh sách</span>
+                    <i class="fa-solid fa-sitemap"></i><span>Hạng mục</span>
                 </button>
             </div>
             <div class="home-tiles">
                 <button class="nav-btn home-tile" onclick="switchTab('viecuatoi')" style="--tile-c: #0d9488;">
-                    <i class="fa-solid fa-user-clock"></i><span>Việc của tôi</span>
+                    <i class="fa-solid fa-clipboard-list"></i><span>Nhật ký</span>
                 </button>
                 <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7c3aed;">
                     <i class="fa-solid fa-users-gear"></i><span>Giám sát</span>
@@ -76,118 +83,178 @@
             </div>
         </section>
 
-        <!-- TAB: TỔNG QUAN -->
+        <!-- TAB: TỔNG QUAN — Báo cáo tổng (KPI) + Báo cáo chi tiết (theo Gói thầu/Hạng mục) -->
         <section id="dashboard" class="tab-content active">
-            <div class="dash-header" style="background: linear-gradient(135deg, var(--navy), var(--primary-dark)); color:white; padding:15px 20px; border-radius:8px; margin-bottom:15px;">
+            <div class="dash-header" style="background: linear-gradient(135deg, var(--navy), var(--primary-dark)); color:white; padding:15px 20px; border-radius:8px; margin-bottom:15px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <div>
-                    <h2 style="font-size:1.1rem;"><i class="fa-solid fa-chart-pie"></i> DASHBOARD TỔNG QUAN</h2>
-                    <p style="font-size:0.8rem; color:#cbd5e1; margin-top:2px;">Theo dõi tiến độ công việc Ban QLDA</p>
+                    <h2 style="font-size:1.1rem;"><i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG — <span id="bc-kpi-total">0</span> công việc</h2>
+                    <p style="font-size:0.8rem; color:#cbd5e1; margin-top:2px;">Tự động tổng hợp từ Nhật ký tiến độ · Cập nhật lúc <span id="bcUpdatedAt">--</span></p>
                 </div>
+                <button class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="renderDashboard()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
             </div>
 
-            <div class="kpi-row">
-                <div class="kpi-box kpi-blue">
-                    <div class="kpi-icon"><i class="fa-solid fa-list"></i></div>
-                    <div class="kpi-body"><div class="kpi-title">Tổng số việc</div><div class="kpi-value" id="kpi-total">0</div></div>
-                </div>
-                <div class="kpi-box kpi-green">
-                    <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
-                    <div class="kpi-body"><div class="kpi-title">Hoàn thành</div><div class="kpi-value" id="kpi-completed">0</div></div>
-                </div>
-                <div class="kpi-box kpi-teal">
-                    <div class="kpi-icon"><i class="fa-solid fa-person-digging"></i></div>
-                    <div class="kpi-body"><div class="kpi-title">Đang thực hiện</div><div class="kpi-value" id="kpi-inprogress">0</div></div>
-                </div>
-                <div class="kpi-box kpi-red">
-                    <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                    <div class="kpi-body"><div class="kpi-title">Trễ tiến độ</div><div class="kpi-value" id="kpi-delayed">0</div></div>
-                </div>
-            </div>
-
-            <div class="grid-1-1-5-col" style="display:grid; grid-template-columns: 1fr; gap:15px;">
-                <div class="card">
-                    <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--danger);"></i> Việc trễ tiến độ cần chú ý</div>
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead><tr><th>Tên việc</th><th>Giám sát</th><th>Kết thúc dự kiến</th><th>% Tiến độ</th></tr></thead>
-                            <tbody id="dashDelayedBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-title"><i class="fa-solid fa-users"></i> Khối lượng việc theo Giám sát</div>
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead><tr><th>Giám sát</th><th>Tổng việc</th><th>Hoàn thành</th><th>Trễ tiến độ</th></tr></thead>
-                            <tbody id="dashBySupervisorBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="card-title"><i class="fa-solid fa-layer-group"></i> Báo cáo theo Hạng mục</div>
-                    <div class="form-group" style="max-width:420px; margin-bottom:15px;">
-                        <select id="dashGroupSelect" class="form-control" onchange="renderDashboardGroupDetail()">
-                            <option value="">-- Chọn Hạng mục --</option>
-                        </select>
-                    </div>
-                    <div style="max-width:320px; margin:0 auto 15px;">
-                        <canvas id="dashGroupPieChart" style="display:none;"></canvas>
-                    </div>
-                    <p id="dashGroupEmptyMsg" style="color:gray; text-align:center; padding:10px;">Chọn 1 Hạng mục ở trên để xem báo cáo.</p>
-                    <div class="table-responsive">
-                        <table class="data-table">
-                            <thead><tr><th style="text-align:left;">Tên việc</th><th>Nhân sự phụ trách</th><th>Tiến độ</th><th>Tình trạng</th><th>Ghi chú</th></tr></thead>
-                            <tbody id="dashGroupTaskBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- TAB: DANH SÁCH CÔNG VIỆC -->
-        <section id="danhsach" class="tab-content">
             <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Danh sách công việc</div>
-                    <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openTaskModal()"><i class="fa-solid fa-plus"></i> Thêm việc</button>
+                <div class="bc-charts-grid">
+                    <div>
+                        <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Tỷ lệ trạng thái công việc</div>
+                        <div style="max-width:300px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
+                    </div>
+                    <div>
+                        <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Số công việc theo Người phụ trách</div>
+                        <canvas id="bcBarChart"></canvas>
+                    </div>
                 </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Báo cáo chi tiết</div>
                 <div class="filter-bar">
-                    <select id="filterSupervisor" onchange="renderDanhSach()">
-                        <option value="">-- Tất cả Giám sát --</option>
+                    <select id="bcDetailType" onchange="onBcDetailTypeChange()">
+                        <option value="goithau">Xem theo Gói thầu</option>
+                        <option value="hangmuc">Xem theo Hạng mục</option>
                     </select>
-                    <select id="filterStatus" onchange="renderDanhSach()">
-                        <option value="">-- Tất cả trạng thái --</option>
-                        <option value="not_started">Chưa bắt đầu</option>
-                        <option value="in_progress">Đang thực hiện</option>
-                        <option value="delayed">Trễ tiến độ</option>
-                        <option value="completed">Hoàn thành</option>
-                    </select>
-                    <input type="text" id="filterSearch" placeholder="Tìm việc..." oninput="renderDanhSach()" style="flex:1; min-width:180px;">
+                    <select id="bcDetailSelect" onchange="renderBcDetail()" style="flex:1; min-width:200px;"></select>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead>
-                            <tr><th style="text-align:left;">Tên việc</th><th>Giám sát</th><th>Tiến độ</th><th>Trạng thái</th><th class="admin-only">Hành động</th></tr>
-                        </thead>
-                        <tbody id="danhSachBody"></tbody>
+                        <thead><tr><th style="text-align:left;">Tên công việc</th><th>Người phụ trách</th><th>Tiến độ</th><th>Trạng thái</th></tr></thead>
+                        <tbody id="bcDetailBody"></tbody>
                     </table>
                 </div>
             </div>
         </section>
 
-        <!-- TAB: VIỆC CỦA TÔI -->
-        <section id="viecuatoi" class="tab-content">
+        <!-- TAB: DANH SÁCH (Công việc, nhóm theo Gói thầu -> I.Phần hồ sơ/II.Phần triển khai thi công) -->
+        <section id="danhsach" class="tab-content">
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-user-clock"></i> Việc của tôi</div>
-                    <button id="btnAddMyTask" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openMyTaskModal()"><i class="fa-solid fa-plus"></i> Thêm việc</button>
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Danh sách Công việc</div>
                 </div>
-                <div id="viecCuaToiAdminSelectWrap" class="admin-only" style="margin-bottom:12px;">
-                    <select id="viecCuaToiSupervisorSelect" class="form-control" onchange="renderViecCuaToi()">
-                        <option value="">-- Chọn Giám sát để xem việc --</option>
+                <div class="filter-bar">
+                    <select id="filterGoiThau" onchange="renderDanhSach()">
+                        <option value="">-- Tất cả Gói thầu --</option>
                     </select>
+                    <select id="filterPhanLoai" onchange="renderDanhSach()">
+                        <option value="">-- Tất cả Phần --</option>
+                        <option value="ho_so">I. Phần hồ sơ</option>
+                        <option value="thi_cong">II. Phần triển khai thi công</option>
+                    </select>
+                    <select id="filterGS" onchange="renderDanhSach()">
+                        <option value="">-- Tất cả người phụ trách --</option>
+                    </select>
+                    <select id="filterTrangThaiMau" onchange="renderDanhSach()">
+                        <option value="">-- Tất cả trạng thái --</option>
+                        <option value="ok">Đúng tiến độ</option>
+                        <option value="late">Trễ nhẹ</option>
+                        <option value="bad">Trễ nghiêm trọng</option>
+                        <option value="done">Hoàn thành</option>
+                    </select>
+                    <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục..." oninput="renderDanhSach()" style="flex:1; min-width:180px;">
                 </div>
-                <div id="viecCuaToiList"></div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th style="text-align:left;">Tên công việc</th><th>Người phụ trách</th><th>Tiến độ</th><th>Trạng thái</th><th>Hành động</th></tr>
+                        </thead>
+                        <tbody id="danhSachBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card admin-only">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-sitemap"></i> Quản lý Hạng mục <span style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">(mã tham chiếu để lọc, không nhập %)</span></div>
+                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openHangMucModal()"><i class="fa-solid fa-plus"></i> Thêm Hạng mục</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead><tr><th style="text-align:left;">Mã / Tên Hạng mục</th><th>Hành động</th></tr></thead>
+                        <tbody id="hangMucRefBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card admin-only">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-layer-group"></i> Gói thầu</div>
+                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openGoiThauModal()"><i class="fa-solid fa-plus"></i> Thêm Gói thầu</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead><tr><th style="text-align:left;">Tên gói thầu</th><th>Hạng mục gộp</th><th>Hành động</th></tr></thead>
+                        <tbody id="goiThauBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB: VIỆC CỦA TÔI (Nhật ký tiến độ: bản mobile wizard + bản desktop nhập hàng loạt) -->
+        <section id="viecuatoi" class="tab-content">
+            <div class="ntd-wrap">
+                <div class="ntd-header" style="display:flex; justify-content:space-between; align-items:flex-end; gap:10px;">
+                    <div>
+                        <p class="ntd-eyebrow">Nhật ký tiến độ</p>
+                        <h1 class="ntd-title">Báo cáo tiến độ ngày</h1>
+                        <p class="ntd-sub">Đăng nhập: <b id="ntdUserLabel">--</b></p>
+                    </div>
+                    <button class="btn btn-sm" style="background:var(--accent); width:auto; flex-shrink:0;" onclick="openCongViecModal()"><i class="fa-solid fa-plus"></i> Thêm công việc</button>
+                </div>
+
+                <div class="ntd-card">
+                    <div class="ntd-field">
+                        <label class="ntd-label">Công việc</label>
+                        <select class="ntd-input" id="ntdCongViec"></select>
+                        <div class="ntd-hangmuc-meta" id="ntdCongViecMeta"></div>
+                    </div>
+                    <div class="ntd-field">
+                        <label class="ntd-label">Ngày báo cáo</label>
+                        <input class="ntd-input" id="ntdNgay" type="text" placeholder="dd/mm/yyyy" readonly>
+                    </div>
+                    <div class="ntd-field">
+                        <label class="ntd-label">% Tiến độ lũy kế hiện tại</label>
+                        <div class="ntd-progress-track">
+                            <div class="ntd-progress-fill" id="ntdFillCurrent"></div>
+                            <div class="ntd-progress-add" id="ntdFillAdd"></div>
+                        </div>
+                        <div class="ntd-progress-labels">
+                            <span id="ntdCurrentLabel">Đã đạt: 0%</span>
+                            <span id="ntdProjectedLabel">Sau khi nhập: 0%</span>
+                        </div>
+                    </div>
+                    <div class="ntd-field">
+                        <label class="ntd-label">% Hoàn thành trong ngày</label>
+                        <div class="ntd-pct-input-row">
+                            <input class="ntd-input" id="ntdPct" type="number" inputmode="decimal" min="0" step="0.5" placeholder="0">
+                            <span class="ntd-pct-suffix">%</span>
+                        </div>
+                        <div class="ntd-feedback" id="ntdFeedback"></div>
+                    </div>
+                    <div class="ntd-field">
+                        <label class="ntd-label">Ảnh hiện trường (không bắt buộc)</label>
+                        <div class="ntd-photo-grid" id="ntdPhotoGrid">
+                            <label class="ntd-photo-add" id="ntdPhotoAdd">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                                Chụp / chọn
+                                <input type="file" id="ntdPhotoInput" accept="image/*" capture="environment" multiple hidden>
+                            </label>
+                        </div>
+                        <p class="ntd-photo-hint">Tối đa 4 ảnh. Ảnh sẽ lưu vào Drive dự án, gắn link vào dòng nhật ký.</p>
+                    </div>
+                    <div class="ntd-field">
+                        <label class="ntd-label">Ghi chú / vướng mắc (nếu có)</label>
+                        <textarea class="ntd-input" id="ntdGhiChu" placeholder="VD: chậm do triều cường, thiếu vật tư..."></textarea>
+                    </div>
+                </div>
+
+                <div class="ntd-card">
+                    <label class="ntd-label" style="margin-bottom:10px;">5 lần nhập gần nhất — công việc này</label>
+                    <div class="ntd-recent" id="ntdRecent"></div>
+                </div>
+
+                <div class="ntd-submit-bar">
+                    <button class="ntd-submit-btn" id="ntdSubmit">Gửi báo cáo</button>
+                    <p class="ntd-submit-hint" id="ntdHint">Chọn công việc để bắt đầu</p>
+                </div>
             </div>
         </section>
 
@@ -200,7 +267,7 @@
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Hạng mục phụ trách</th><th>Số việc đang phụ trách</th><th>Hành động</th></tr></thead>
+                        <thead><tr><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Chức danh</th><th>Phần mặc định</th><th>Số Công việc đã tạo</th><th>Hành động</th></tr></thead>
                         <tbody id="nguoiDungBody"></tbody>
                     </table>
                 </div>
@@ -213,56 +280,88 @@
     <nav class="nav-mobile">
         <button class="nav-btn active" onclick="switchTab('home')"><i class="fa-solid fa-house"></i><span>Trang chủ</span></button>
         <button class="nav-btn" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span></button>
-        <button class="nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-list-check"></i><span>Danh sách</span></button>
-        <button class="nav-btn" onclick="switchTab('viecuatoi')"><i class="fa-solid fa-user-clock"></i><span>Việc của tôi</span></button>
+        <button class="nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-sitemap"></i><span>Hạng mục</span></button>
+        <button class="nav-btn" onclick="switchTab('viecuatoi')"><i class="fa-solid fa-clipboard-list"></i><span>Nhật ký</span></button>
         <button class="nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i><span>Giám sát</span></button>
     </nav>
 
-    <!-- MODAL: THÊM/SỬA CÔNG VIỆC -->
-    <div id="taskModal" class="modal">
-        <div class="modal-content" style="max-width:520px;">
-            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="taskModalTitle">Thêm công việc</span></h3>
-            <input type="hidden" id="taskEditId">
-            <div class="form-group" id="taskIsHeaderField" style="margin-bottom:10px;">
-                <label>Loại dòng</label>
-                <select id="taskIsHeader" class="form-control" onchange="onTaskIsHeaderChange()">
-                    <option value="0">Công việc (có tiến độ)</option>
-                    <option value="1">Nhóm/Hạng mục (chỉ là nhãn phân đoạn)</option>
+    <!-- MODAL: THÊM/SỬA HẠNG MỤC (mã/tên tham chiếu, cây cha-con — chỉ Admin) -->
+    <div id="hangMucModal" class="modal">
+        <div class="modal-content" style="max-width:480px;">
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-sitemap"></i> <span id="hangMucModalTitle">Thêm Hạng mục</span></h3>
+            <input type="hidden" id="hmEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Mã Hạng mục</label>
+                <input type="text" id="hmMaHangMuc" class="form-control" placeholder="VD: 90, 90.1, II...">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Tên Hạng mục</label>
+                <input type="text" id="hmTen" class="form-control">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Cấp độ</label>
+                <select id="hmCapDo" class="form-control">
+                    <option value="1">1 — Nhóm lớn</option>
+                    <option value="2">2 — Đầu mục</option>
+                    <option value="3">3 — Chi tiết</option>
                 </select>
             </div>
             <div class="form-group" style="margin-bottom:10px;">
-                <label>Tên</label>
-                <input type="text" id="taskName" class="form-control" placeholder="Tên nhóm hoặc tên công việc...">
-            </div>
-            <div id="taskDetailFields">
-                <div class="form-group" id="taskGroupField" style="margin-bottom:10px;">
-                    <label>Hạng mục</label>
-                    <select id="taskGroup" class="form-control"></select>
-                </div>
-                <div class="form-group" style="margin-bottom:10px;">
-                    <label>Mục tiêu giao việc của cấp trên</label>
-                    <input type="text" id="taskTarget" class="form-control">
-                </div>
-                <div class="form-group" id="taskSupervisorField" style="margin-bottom:10px;">
-                    <label>Giám sát phụ trách</label>
-                    <select id="taskSupervisor" class="form-control"></select>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
-                    <div class="form-group"><label>Bắt đầu</label><input type="text" id="taskStartDate" class="form-control" placeholder="dd/mm/yyyy"></div>
-                    <div class="form-group"><label>Kết thúc</label><input type="text" id="taskEndDate" class="form-control" placeholder="dd/mm/yyyy"></div>
-                </div>
-                <div class="form-group" style="margin-bottom:10px;">
-                    <label>% Tiến độ thực tế</label>
-                    <input type="number" id="taskPercent" class="form-control" min="0" max="100">
-                </div>
-                <div class="form-group" style="margin-bottom:10px;">
-                    <label>Ghi chú vướng mắc</label>
-                    <textarea id="taskNote" class="form-control" rows="2"></textarea>
-                </div>
+                <label>Hạng mục cha <span style="font-weight:400; color:var(--text-muted);">(để trống nếu là gốc)</span></label>
+                <select id="hmParentId" class="form-control"></select>
             </div>
             <div style="display:flex; gap:10px; margin-top:10px;">
-                <button class="btn" style="background:var(--success);" onclick="saveTaskModal()">Lưu</button>
-                <button class="btn btn-danger" onclick="closeTaskModal()">Hủy</button>
+                <button class="btn" style="background:var(--success);" onclick="saveHangMucModal()">Lưu</button>
+                <button class="btn btn-danger" onclick="closeHangMucModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: THÊM/SỬA GÓI THẦU -->
+    <div id="goiThauModal" class="modal">
+        <div class="modal-content" style="max-width:450px;">
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-layer-group"></i> <span id="goiThauModalTitle">Thêm Gói thầu</span></h3>
+            <input type="hidden" id="gtEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Tên gói thầu</label>
+                <input type="text" id="gtTen" class="form-control" placeholder="VD: Gói thầu kết cấu & hoàn thiện thô HM 2,3,4...">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Các Hạng mục thuộc gói thầu này</label>
+                <div id="gtHangMucIds" style="max-height:200px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:8px;"></div>
+            </div>
+            <p style="font-size:0.78rem; color:var(--text-muted);">Mỗi Gói thầu tự động có 2 phần cố định: <b>I. Phần hồ sơ</b> và <b>II. Phần triển khai thi công</b> — Công việc do nhân sự tự tạo sẽ tự rơi vào đúng phần theo Chức danh của người tạo.</p>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn" style="background:var(--success);" onclick="saveGoiThauModal()">Lưu</button>
+                <button class="btn btn-danger" onclick="closeGoiThauModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: THÊM/SỬA CÔNG VIỆC (nhân sự tự tạo: Gói thầu -> Hạng mục -> Tên -> Ngày) -->
+    <div id="congViecModal" class="modal">
+        <div class="modal-content" style="max-width:480px;">
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="congViecModalTitle">Thêm công việc</span></h3>
+            <input type="hidden" id="cvEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Gói thầu</label>
+                <select id="cvGoiThau" class="form-control" onchange="onCvGoiThauChange()"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Hạng mục <span style="font-weight:400; color:var(--text-muted);">(mã để lọc/báo cáo sau này)</span></label>
+                <select id="cvHangMuc" class="form-control"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Tên công việc</label>
+                <input type="text" id="cvTen" class="form-control" placeholder="Người phụ trách tự đặt tên...">
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+                <div class="form-group"><label>Bắt đầu</label><input type="text" id="cvBatDau" class="form-control" placeholder="dd/mm/yyyy"></div>
+                <div class="form-group"><label>Kết thúc</label><input type="text" id="cvKetThuc" class="form-control" placeholder="dd/mm/yyyy"></div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn" style="background:var(--success);" onclick="saveCongViecModal()">Lưu</button>
+                <button class="btn btn-danger" onclick="closeCongViecModal()">Hủy</button>
             </div>
         </div>
     </div>
@@ -288,12 +387,20 @@
                 </select>
             </div>
             <div class="form-group" style="margin-bottom:10px;">
-                <label>Mật khẩu <span id="userPassHint" style="font-weight:400; color:var(--text-muted);">(để trống nếu không đổi)</span></label>
-                <input type="text" id="userPassword" class="form-control" placeholder="Mật khẩu ban đầu...">
+                <label>Chức danh <span style="font-weight:400; color:var(--text-muted);">(vd: QS, QAQC, Giám sát hiện trường...)</span></label>
+                <input type="text" id="userChucDanh" class="form-control" placeholder="vd: Giám sát hiện trường">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
-                <label>Hạng mục phụ trách <span style="font-weight:400; color:var(--text-muted);">(giữ Ctrl để chọn nhiều)</span></label>
-                <select id="userGroups" class="form-control" multiple size="5"></select>
+                <label>Phần mặc định <span style="font-weight:400; color:var(--text-muted);">(Công việc do người này tự tạo sẽ tự rơi vào phần này)</span></label>
+                <select id="userPhanMacDinh" class="form-control">
+                    <option value="">-- Chưa gán --</option>
+                    <option value="ho_so">I. Phần hồ sơ (vd: QS, QAQC)</option>
+                    <option value="thi_cong">II. Phần triển khai thi công (vd: Giám sát hiện trường)</option>
+                </select>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Mật khẩu <span id="userPassHint" style="font-weight:400; color:var(--text-muted);">(để trống nếu không đổi)</span></label>
+                <input type="text" id="userPassword" class="form-control" placeholder="Mật khẩu ban đầu...">
             </div>
             <div style="display:flex; gap:10px; margin-top:10px;">
                 <button class="btn" style="background:var(--success);" onclick="saveUserModal()">Lưu</button>

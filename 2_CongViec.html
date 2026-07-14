@@ -2,111 +2,198 @@
 /* ================================================================
    FILE 2: 2_CongViec.html
    ------------------------------------------------------------------
-   PHẠM VI: Thêm/Sửa/Xóa 1 đầu việc (dòng Nhóm hoặc dòng Việc) qua Modal.
-   Cập nhật % tiến độ + ghi chú nhanh dùng ở "Việc của tôi" nằm ở
-   4_ViecCuaToi.html (không nằm ở đây vì khác luồng UI).
+   PHẠM VI: 3 modal quản lý dữ liệu:
+   - Hạng mục (mã/tên tham chiếu, cây cha-con capDo 1/2/3) — CHỈ Admin.
+   - Gói thầu (nhãn gộp nhiều Hạng mục ở BẤT KỲ cấp nào) — CHỈ Admin.
+   - Công việc (đơn vị thật nhận Nhật ký tiến độ) — Admin hoặc Giám sát
+     tự tạo cho chính mình: chọn Gói thầu → Hạng mục (lọc theo Gói thầu
+     đã chọn) → Tên công việc → Ngày bắt đầu/kết thúc. Phần (I. Phần hồ
+     sơ / II. Phần triển khai thi công) KHÔNG chọn tay — backend tự suy
+     ra từ `phanMacDinh` của người tạo (xem adminSaveCongViec ở Code.js).
 
    DANH SÁCH HÀM CHÍNH:
-   - openTaskModal(taskId, restrict) : Mở modal thêm (không truyền id) / sửa (có id).
-     `restrict` (tuỳ chọn) dùng khi Giám sát tự thêm việc của mình từ tab
-     "Việc của tôi": khoá cứng Giám sát phụ trách = chính họ, và giới hạn
-     Hạng mục được chọn chỉ trong số Hạng mục họ được Admin gán phụ trách.
-   - saveTaskModal()        : Lưu công việc từ Modal
-   - deleteTask(taskId)     : Xóa 1 đầu việc
-   - fillSupervisorSelect() : Đổ danh sách Giám sát vào 1 thẻ <select>
-   - fillGroupSelect()      : Đổ danh sách Hạng mục vào 1 thẻ <select>
+   - openHangMucModal / saveHangMucModal / deleteHangMuc
+   - openGoiThauModal / saveGoiThauModal / deleteGoiThau
+   - openCongViecModal / saveCongViecModal / deleteCongViec
    ================================================================ */
 
-let taskModalRestrict = null;
+// ---------- HẠNG MỤC (chỉ Admin) ----------
 
-function fillSupervisorSelect(selectEl, selectedName) {
-    let html = '<option value="">-- Chưa gán --</option>';
-    users.filter(u => u.role === 'SUPERVISOR' || u.role === 'ADMIN').forEach(u => {
-        html += `<option value="${u.name}">${u.name}</option>`;
+function fillParentSelect(selectEl, selectedId, excludeId) {
+    let html = '<option value="">-- Không có (là gốc) --</option>';
+    hangMuc.filter(h => h.maHangMuc !== excludeId).forEach(h => {
+        html += `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`;
     });
     selectEl.innerHTML = html;
-    if (selectedName) selectEl.value = selectedName;
+    if (selectedId) selectEl.value = selectedId;
 }
 
-// allowedGroupIds (tuỳ chọn): nếu truyền vào, chỉ liệt kê các Hạng mục có id nằm trong danh sách này.
-function fillGroupSelect(selectEl, selectedId, allowedGroupIds) {
-    let headers = tasks.filter(t => t.isHeader);
-    if (allowedGroupIds) headers = headers.filter(h => allowedGroupIds.includes(h.id));
+function openHangMucModal(maHangMuc) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Hạng mục!', 'error'); return; }
+
+    document.getElementById('hmEditId').value = maHangMuc || '';
+    const node = maHangMuc ? findHangMuc(maHangMuc) : null;
+
+    document.getElementById('hangMucModalTitle').innerText = node ? 'Sửa Hạng mục' : 'Thêm Hạng mục';
+    document.getElementById('hmMaHangMuc').value = node ? node.maHangMuc : '';
+    document.getElementById('hmMaHangMuc').disabled = !!node; // không cho đổi mã khi sửa (tránh mồ côi tham chiếu)
+    document.getElementById('hmTen').value = node ? node.tenHangMuc : '';
+    document.getElementById('hmCapDo').value = node ? String(node.capDo) : '1';
+    fillParentSelect(document.getElementById('hmParentId'), node ? node.parentId : '', maHangMuc || null);
+
+    document.getElementById('hangMucModal').classList.add('active');
+}
+
+function closeHangMucModal() {
+    document.getElementById('hangMucModal').classList.remove('active');
+    document.getElementById('hmMaHangMuc').disabled = false;
+}
+
+function saveHangMucModal() {
+    const maHangMuc = document.getElementById('hmMaHangMuc').value.trim();
+    const tenHangMuc = document.getElementById('hmTen').value.trim();
+    const isEdit = !!document.getElementById('hmEditId').value;
+    if (!maHangMuc) { showCustomAlert('Vui lòng nhập Mã Hạng mục!', 'error'); return; }
+    if (!tenHangMuc) { showCustomAlert('Vui lòng nhập Tên Hạng mục!', 'error'); return; }
+    if (!isEdit && findHangMuc(maHangMuc)) { showCustomAlert('Mã Hạng mục này đã tồn tại!', 'error'); return; }
+
+    const node = {
+        maHangMuc,
+        tenHangMuc,
+        capDo: parseInt(document.getElementById('hmCapDo').value, 10),
+        parentId: document.getElementById('hmParentId').value
+    };
+
+    gsRun('adminSaveHangMuc', myUserId, myPassword, node)
+        .then(() => {
+            closeHangMucModal();
+            showCustomAlert('Đã lưu Hạng mục.', 'success');
+            reloadData(); // chạy nền, không chờ mới báo thành công
+        })
+        .catch(handleBackendError);
+}
+
+function deleteHangMuc(maHangMuc) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Hạng mục!', 'error'); return; }
+    const node = findHangMuc(maHangMuc);
+    if (!node) return;
+    if (!confirm(`Xác nhận XÓA "${node.tenHangMuc}"?`)) return;
+
+    gsRun('adminDeleteHangMuc', myUserId, myPassword, maHangMuc)
+        .then(() => {
+            showCustomAlert('Đã xoá Hạng mục.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+// ---------- GÓI THẦU (chỉ Admin) ----------
+
+function fillGoiThauGroupCheckboxes(selectedIds) {
+    const container = document.getElementById('gtHangMucIds');
+    const sel = new Set(selectedIds || []);
+    if (hangMuc.length === 0) {
+        container.innerHTML = '<span style="color:gray;">Chưa có Hạng mục nào, vui lòng tạo Hạng mục trước.</span>';
+        return;
+    }
+    container.innerHTML = hangMuc.map(h => `
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
+            <input type="checkbox" class="gt-hm-cb" value="${h.maHangMuc}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${h.maHangMuc} — ${h.tenHangMuc}
+        </label>`).join('');
+}
+
+function openGoiThauModal(maGoiThau) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Gói thầu!', 'error'); return; }
+    const g = maGoiThau ? goiThau.find(x => x.maGoiThau === maGoiThau) : null;
+
+    document.getElementById('gtEditId').value = maGoiThau || '';
+    document.getElementById('goiThauModalTitle').innerText = g ? 'Sửa Gói thầu' : 'Thêm Gói thầu';
+    document.getElementById('gtTen').value = g ? g.tenGoiThau : '';
+    fillGoiThauGroupCheckboxes(g ? g.maHangMucList : []);
+
+    document.getElementById('goiThauModal').classList.add('active');
+}
+
+function closeGoiThauModal() {
+    document.getElementById('goiThauModal').classList.remove('active');
+}
+
+function saveGoiThauModal() {
+    const maGoiThau = document.getElementById('gtEditId').value;
+    const tenGoiThau = document.getElementById('gtTen').value.trim();
+    if (!tenGoiThau) { showCustomAlert('Vui lòng nhập Tên gói thầu!', 'error'); return; }
+    const maHangMucList = Array.from(document.querySelectorAll('.gt-hm-cb:checked')).map(cb => cb.value);
+
+    gsRun('adminSaveGoiThau', myUserId, myPassword, { maGoiThau, tenGoiThau, maHangMucList })
+        .then(() => {
+            closeGoiThauModal();
+            showCustomAlert('Đã lưu Gói thầu.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+function deleteGoiThau(maGoiThau) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Gói thầu!', 'error'); return; }
+    if (!confirm('Xác nhận XÓA Gói thầu này?')) return;
+
+    gsRun('adminDeleteGoiThau', myUserId, myPassword, maGoiThau)
+        .then(() => {
+            showCustomAlert('Đã xoá Gói thầu.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+// ---------- CÔNG VIỆC (Admin hoặc Giám sát tự tạo cho mình) ----------
+
+function fillCvGoiThauSelect(selectedId) {
+    const sel = document.getElementById('cvGoiThau');
+    let html = '<option value="">-- Chọn Gói thầu --</option>';
+    goiThau.forEach(g => html += `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`);
+    sel.innerHTML = html;
+    if (selectedId) sel.value = selectedId;
+}
+
+// Hạng mục chọn được giới hạn theo đúng danh sách đã gộp trong Gói thầu đang chọn.
+function fillCvHangMucSelect(maGoiThau, selectedId) {
+    const sel = document.getElementById('cvHangMuc');
+    if (!maGoiThau) {
+        sel.innerHTML = '<option value="">-- Chọn Gói thầu trước --</option>';
+        sel.disabled = true;
+        return;
+    }
+    const g = goiThau.find(x => x.maGoiThau === maGoiThau);
+    const list = g ? hangMuc.filter(h => g.maHangMucList.includes(h.maHangMuc)) : [];
+    sel.disabled = false;
     let html = '<option value="">-- Chọn Hạng mục --</option>';
-    headers.forEach(h => html += `<option value="${h.id}">${h.name}</option>`);
-    selectEl.innerHTML = html;
-    if (selectedId !== undefined && selectedId !== null) selectEl.value = String(selectedId);
+    list.forEach(h => html += `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`);
+    sel.innerHTML = html || '<option value="">-- Gói thầu này chưa gộp Hạng mục nào --</option>';
+    if (selectedId) sel.value = selectedId;
 }
 
-function onTaskIsHeaderChange() {
-    const isHeader = document.getElementById('taskIsHeader').value === '1';
-    document.getElementById('taskDetailFields').style.display = isHeader ? 'none' : 'block';
-    document.getElementById('taskGroupField').style.display = isHeader ? 'none' : 'block';
+function onCvGoiThauChange() {
+    fillCvHangMucSelect(document.getElementById('cvGoiThau').value, '');
 }
 
-// restrict = { lockSupervisor: 'Tên Giám sát', allowedGroupIds: [id, id, ...] }
-function openTaskModal(taskId, restrict) {
+function openCongViecModal(maCongViec) {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
-    taskModalRestrict = restrict || null;
+    const cv = maCongViec ? congViec.find(x => x.maCongViec === maCongViec) : null;
 
-    document.getElementById('taskEditId').value = taskId || '';
+    document.getElementById('cvEditId').value = maCongViec || '';
+    document.getElementById('congViecModalTitle').innerText = cv ? 'Sửa công việc' : 'Thêm công việc';
+    fillCvGoiThauSelect(cv ? cv.maGoiThau : '');
+    fillCvHangMucSelect(cv ? cv.maGoiThau : '', cv ? cv.maHangMuc : '');
+    document.getElementById('cvTen').value = cv ? cv.tenCongViec : '';
+    document.getElementById('cvBatDau').value = cv ? formatVN(cv.ngayBatDauKH) : '';
+    document.getElementById('cvKetThuc').value = cv ? formatVN(cv.ngayKetThucKH) : '';
 
-    const isHeaderField = document.getElementById('taskIsHeader');
-    const supervisorField = document.getElementById('taskSupervisor');
-    const groupField = document.getElementById('taskGroup');
-
-    isHeaderField.disabled = false;
-    supervisorField.disabled = false;
-    document.getElementById('taskIsHeaderField').style.display = 'block';
-    document.getElementById('taskSupervisorField').style.display = 'block';
-
-    fillSupervisorSelect(supervisorField, '');
-    fillGroupSelect(groupField, '', taskModalRestrict ? taskModalRestrict.allowedGroupIds : null);
-
-    if (taskId) {
-        const t = tasks.find(x => x.id === taskId);
-        if (!t) return;
-        document.getElementById('taskModalTitle').innerText = 'Sửa công việc';
-        isHeaderField.value = t.isHeader ? '1' : '0';
-        document.getElementById('taskName').value = t.name || '';
-        document.getElementById('taskTarget').value = t.target || '';
-        fillSupervisorSelect(supervisorField, t.supervisorName || '');
-        fillGroupSelect(groupField, t.groupId, taskModalRestrict ? taskModalRestrict.allowedGroupIds : null);
-        document.getElementById('taskStartDate').value = formatVN(t.startDate);
-        document.getElementById('taskEndDate').value = formatVN(t.endDate);
-        document.getElementById('taskPercent').value = t.percent || 0;
-        document.getElementById('taskNote').value = t.note || '';
-    } else {
-        document.getElementById('taskModalTitle').innerText = 'Thêm công việc';
-        isHeaderField.value = '0';
-        document.getElementById('taskName').value = '';
-        document.getElementById('taskTarget').value = '';
-        document.getElementById('taskStartDate').value = '';
-        document.getElementById('taskEndDate').value = '';
-        document.getElementById('taskPercent').value = 0;
-        document.getElementById('taskNote').value = '';
-    }
-
-    if (taskModalRestrict) {
-        // Nhân sự tự thêm việc: luôn là 1 dòng Việc, gán đúng chính họ, không được đổi Loại dòng / Giám sát.
-        isHeaderField.value = '0';
-        isHeaderField.disabled = true;
-        document.getElementById('taskIsHeaderField').style.display = 'none';
-        fillSupervisorSelect(supervisorField, taskModalRestrict.lockSupervisor);
-        supervisorField.disabled = true;
-        document.getElementById('taskSupervisorField').style.display = 'none';
-        if (taskModalRestrict.allowedGroupIds && taskModalRestrict.allowedGroupIds.length === 1) {
-            groupField.value = String(taskModalRestrict.allowedGroupIds[0]);
-        }
-    }
-
-    onTaskIsHeaderChange();
-    document.getElementById('taskModal').classList.add('active');
+    document.getElementById('congViecModal').classList.add('active');
 
     setTimeout(() => {
         try {
             if (typeof flatpickr !== 'undefined') {
-                ['taskStartDate', 'taskEndDate'].forEach(id => {
+                ['cvBatDau', 'cvKetThuc'].forEach(id => {
                     const el = document.getElementById(id);
                     if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
                 });
@@ -115,58 +202,48 @@ function openTaskModal(taskId, restrict) {
     }, 100);
 }
 
-function closeTaskModal() {
-    document.getElementById('taskModal').classList.remove('active');
-    taskModalRestrict = null;
+function closeCongViecModal() {
+    document.getElementById('congViecModal').classList.remove('active');
 }
 
-function saveTaskModal() {
-    const id = document.getElementById('taskEditId').value;
-    const isHeader = document.getElementById('taskIsHeader').value === '1';
-    const name = document.getElementById('taskName').value.trim();
-    if (!name) { showCustomAlert('Vui lòng nhập Tên!', 'error'); return; }
+function saveCongViecModal() {
+    const maCongViec = document.getElementById('cvEditId').value;
+    const maGoiThau = document.getElementById('cvGoiThau').value;
+    const maHangMuc = document.getElementById('cvHangMuc').value;
+    const tenCongViec = document.getElementById('cvTen').value.trim();
+    if (!maGoiThau) { showCustomAlert('Vui lòng chọn Gói thầu!', 'error'); return; }
+    if (!maHangMuc) { showCustomAlert('Vui lòng chọn Hạng mục!', 'error'); return; }
+    if (!tenCongViec) { showCustomAlert('Vui lòng nhập Tên công việc!', 'error'); return; }
 
-    let payload = { isHeader, name };
-    if (!isHeader) {
-        const groupIdRaw = document.getElementById('taskGroup').value;
-        if (!groupIdRaw) { showCustomAlert('Vui lòng chọn Hạng mục!', 'error'); return; }
+    const payload = {
+        maCongViec,
+        tenCongViec,
+        maGoiThau,
+        maHangMuc,
+        ngayBatDauKH: convertDMYtoISO(document.getElementById('cvBatDau').value.trim()) || '',
+        ngayKetThucKH: convertDMYtoISO(document.getElementById('cvKetThuc').value.trim()) || ''
+    };
 
-        const startISO = convertDMYtoISO(document.getElementById('taskStartDate').value.trim());
-        const endISO = convertDMYtoISO(document.getElementById('taskEndDate').value.trim());
-        payload.groupId = parseInt(groupIdRaw, 10);
-        payload.target = document.getElementById('taskTarget').value.trim();
-        payload.supervisorName = document.getElementById('taskSupervisor').value;
-        payload.startDate = startISO || '';
-        payload.endDate = endISO || '';
-        payload.percent = Math.max(0, Math.min(100, parseNumberSafely(document.getElementById('taskPercent').value) || 0));
-        payload.note = document.getElementById('taskNote').value.trim();
-    } else {
-        payload.groupId = null;
-    }
-
-    if (id) {
-        const t = tasks.find(x => x.id === parseInt(id));
-        if (!t) return;
-        Object.assign(t, payload);
-        saveData(`Sửa công việc: ${name}`);
-    } else {
-        const newId = tasks.length ? Math.max(...tasks.map(t => t.id)) + 1 : 1;
-        tasks.push(Object.assign({ id: newId, duration: '', dailyLogs: [] }, payload));
-        saveData(`Thêm công việc: ${name}`);
-    }
-
-    closeTaskModal();
-    updateUI();
-    showCustomAlert('Đã lưu công việc.', 'success');
+    gsRun('adminSaveCongViec', myUserId, myPassword, payload)
+        .then(() => {
+            closeCongViecModal();
+            showCustomAlert('Đã lưu công việc.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
 }
 
-function deleteTask(taskId) {
+function deleteCongViec(maCongViec) {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
-    const t = tasks.find(x => x.id === taskId);
-    if (!t) return;
-    if (!confirm(`Xác nhận XÓA "${t.name}"?`)) return;
-    tasks = tasks.filter(x => x.id !== taskId);
-    saveData(`Xóa công việc: ${t.name}`);
-    updateUI();
+    const cv = congViec.find(x => x.maCongViec === maCongViec);
+    if (!cv) return;
+    if (!confirm(`Xác nhận XÓA "${cv.tenCongViec}"? (Nhật ký đã nhập vẫn được giữ lại)`)) return;
+
+    gsRun('adminDeleteCongViec', myUserId, myPassword, maCongViec)
+        .then(() => {
+            showCustomAlert('Đã xoá công việc.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
 }
 </script>

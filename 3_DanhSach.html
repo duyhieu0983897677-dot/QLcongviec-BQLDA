@@ -2,106 +2,170 @@
 /* ================================================================
    FILE 3: 3_DanhSach.html
    ------------------------------------------------------------------
-   PHẠM VI: Tab "Danh sách công việc" — bảng cây Nhóm/Hạng mục -> Việc,
-   lọc theo Giám sát/trạng thái, tìm kiếm, thu gọn/mở rộng từng nhóm.
+   PHẠM VI: Tab "Danh sách" — liệt kê CÔNG VIỆC (đơn vị nhận Nhật ký
+   tiến độ), nhóm theo Gói thầu → (I. Phần hồ sơ / II. Phần triển khai
+   thi công) → dòng Công việc kèm lũy kế/trạng thái. Lọc theo Gói
+   thầu/Phần/người phụ trách/trạng thái/tìm kiếm.
 
-   Nhóm được xác định qua t.groupId (không còn dựa vào thứ tự trong mảng
-   tasks[]), để việc do Nhân sự tự thêm (luôn được push vào cuối mảng)
-   vẫn hiện đúng dưới Hạng mục của nó. Việc nào có groupId không khớp
-   Hạng mục nào (dữ liệu lỗi/cũ) sẽ rơi vào nhóm "Chưa phân loại".
+   Bên dưới còn 2 khối admin-only để quản lý dữ liệu tham chiếu:
+   cây Hạng mục (mã/tên) và danh sách Gói thầu.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderDanhSach()  : Vẽ lại toàn bộ bảng (gọi lại mỗi khi đổi bộ lọc/dữ liệu)
-   - toggleTaskGroup()  : Thu gọn / mở rộng 1 nhóm
+   - renderDanhSach()      : Vẽ bảng Công việc theo bộ lọc hiện tại
+   - renderHangMucRefList(): Vẽ bảng quản lý Hạng mục (admin-only)
+   - renderGoiThauList()   : Vẽ bảng quản lý Gói thầu (admin-only)
    ================================================================ */
 
-const UNGROUPED_KEY = '__ungrouped__';
-
-function toggleTaskGroup(groupId) {
-    if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId);
-    else collapsedGroups.add(groupId);
+function toggleTaskGroup(key) {
+    if (collapsedGroups.has(key)) collapsedGroups.delete(key);
+    else collapsedGroups.add(key);
     renderDanhSach();
 }
 
-function renderTaskRow(t) {
-    const status = getTaskStatus(t);
-    const initials = getSupervisorInitials(t.supervisorName);
+function canEditCongViec(cv) {
+    return currentRole === 'ADMIN' || cv.nguoiTaoId === mySupervisorId;
+}
+
+function renderCongViecRow(cv) {
+    const status = cv.trangThaiMau;
+    const hm = findHangMuc(cv.maHangMuc);
+    const meta = hm ? `${hm.maHangMuc} — ${hm.tenHangMuc}` : cv.maHangMuc;
+    const editable = canEditCongViec(cv);
     return `<tr class="task-row">
-        <td class="task-name-cell">
-            <span class="t-name">${t.name}</span>
-            ${t.target ? `<span class="t-target">${t.target}</span>` : ''}
+        <td class="task-name-cell" style="padding-left:48px;">
+            <span class="t-name">${cv.tenCongViec}</span>
+            <span class="t-target">${meta}</span>
         </td>
-        <td class="text-center"><span class="supervisor-chip"><span class="avatar">${initials}</span> ${t.supervisorName || '--'}</span></td>
+        <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
         <td>
             <div class="gantt-bar-wrap">
-                <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, t.percent || 0)}%;"></div></div>
-                <span class="gantt-pct">${t.percent || 0}%</span>
+                <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, cv.luyKe || 0)}%;"></div></div>
+                <span class="gantt-pct">${cv.luyKe || 0}%</span>
             </div>
         </td>
-        <td class="text-center"><span class="status-badge ${status}">${STATUS_LABEL[status]}</span></td>
-        <td class="text-center admin-only">
-            <button class="btn btn-sm" style="background:var(--primary);" onclick="openTaskModal(${t.id})"><i class="fa-solid fa-pen"></i></button>
-            <button class="btn btn-sm btn-danger" onclick="deleteTask(${t.id})"><i class="fa-solid fa-trash"></i></button>
+        <td class="text-center"><span class="bc-badge ${status}">${TRANGTHAI_LABEL[status] || '--'}</span></td>
+        <td class="text-center">
+            ${editable ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')"><i class="fa-solid fa-trash"></i></button>` : ''}
         </td>
     </tr>`;
 }
 
 function renderDanhSach() {
-    const supSelect = document.getElementById('filterSupervisor');
-    if (supSelect.options.length <= 1) {
-        let html = '<option value="">-- Tất cả Giám sát --</option>';
-        const names = [...new Set(tasks.filter(t => !t.isHeader && t.supervisorName).map(t => t.supervisorName))].sort();
-        names.forEach(n => html += `<option value="${n}">${n}</option>`);
-        supSelect.innerHTML = html;
+    const gtSelect = document.getElementById('filterGoiThau');
+    if (gtSelect.options.length <= 1) {
+        let html = '<option value="">-- Tất cả Gói thầu --</option>';
+        goiThau.forEach(g => html += `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`);
+        gtSelect.innerHTML = html;
+    }
+    const gsSelect = document.getElementById('filterGS');
+    if (gsSelect.options.length <= 1) {
+        let html = '<option value="">-- Tất cả người phụ trách --</option>';
+        const ids = [...new Set(congViec.map(c => c.nguoiTaoId).filter(Boolean))];
+        ids.sort((a, b) => nameOfUser(a).localeCompare(nameOfUser(b)));
+        ids.forEach(id => html += `<option value="${id}">${nameOfUser(id)}</option>`);
+        gsSelect.innerHTML = html;
     }
 
-    const fSup = supSelect.value;
-    const fStatus = document.getElementById('filterStatus').value;
+    const fGT = gtSelect.value;
+    const fPhan = document.getElementById('filterPhanLoai').value;
+    const fGS = gsSelect.value;
+    const fStatus = document.getElementById('filterTrangThaiMau').value;
     const fSearch = document.getElementById('filterSearch').value.trim().toLowerCase();
-    const hasFilter = !!(fSup || fStatus || fSearch);
 
-    function matchesFilter(t) {
-        if (fSup && t.supervisorName !== fSup) return false;
-        if (fStatus && getTaskStatus(t) !== fStatus) return false;
-        if (fSearch && !(t.name || '').toLowerCase().includes(fSearch)) return false;
+    function matches(cv) {
+        if (fGT && cv.maGoiThau !== fGT) return false;
+        if (fPhan && cv.phanLoai !== fPhan) return false;
+        if (fGS && cv.nguoiTaoId !== fGS) return false;
+        if (fStatus && cv.trangThaiMau !== fStatus) return false;
+        if (fSearch) {
+            const hm = findHangMuc(cv.maHangMuc);
+            const hay = `${cv.tenCongViec} ${cv.maHangMuc} ${hm ? hm.tenHangMuc : ''}`.toLowerCase();
+            if (!hay.includes(fSearch)) return false;
+        }
         return true;
     }
 
-    const headers = tasks.filter(t => t.isHeader);
-    const headerIds = new Set(headers.map(h => h.id));
-    const childrenByGroup = {};
-    headers.forEach(h => childrenByGroup[h.id] = []);
-    const ungrouped = [];
+    const filtered = congViec.filter(matches);
 
-    tasks.forEach(t => {
-        if (t.isHeader) return;
-        if (t.groupId !== null && t.groupId !== undefined && headerIds.has(t.groupId)) {
-            childrenByGroup[t.groupId].push(t);
-        } else {
-            ungrouped.push(t);
-        }
+    let html = '';
+    goiThau.forEach(g => {
+        const items = filtered.filter(c => c.maGoiThau === g.maGoiThau);
+        if (items.length === 0) return;
+
+        const gtKey = 'gt:' + g.maGoiThau;
+        const gtOpen = !collapsedGroups.has(gtKey);
+        html += `<tr class="task-group-row" onclick="toggleTaskGroup('${gtKey}')">
+            <td colspan="5"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.tenGoiThau}</td>
+        </tr>`;
+        if (!gtOpen) return;
+
+        ['ho_so', 'thi_cong'].forEach(phan => {
+            const subItems = items.filter(c => c.phanLoai === phan);
+            if (subItems.length === 0) return;
+            const subKey = gtKey + ':' + phan;
+            const subOpen = !collapsedGroups.has(subKey);
+            html += `<tr class="task-group-row" onclick="toggleTaskGroup('${subKey}')" style="background:#F2F0E9;">
+                <td colspan="5" style="padding-left:28px;"><i class="fa-solid ${subOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${PHAN_LOAI_LABEL[phan]}</td>
+            </tr>`;
+            if (!subOpen) return;
+            subItems.forEach(cv => { html += renderCongViecRow(cv); });
+        });
     });
 
-    function renderGroup(groupKey, groupLabel, children) {
-        const visibleChildren = children.filter(matchesFilter);
-        if (hasFilter && visibleChildren.length === 0) return '';
+    document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="5" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
 
-        const isOpen = !collapsedGroups.has(groupKey);
-        const chevClass = isOpen ? 'fa-chevron-down' : 'fa-chevron-right';
-        let rows = `<tr class="task-group-row" onclick="toggleTaskGroup('${groupKey}')">
-            <td colspan="5"><i class="fa-solid ${chevClass}" style="margin-right:8px; color:var(--accent);"></i>${groupLabel}</td>
+    renderHangMucRefList();
+    renderGoiThauList();
+}
+
+function renderHangMucRefList() {
+    const body = document.getElementById('hangMucRefBody');
+    if (!body) return;
+    if (currentRole !== 'ADMIN') { body.innerHTML = ''; return; }
+    if (hangMuc.length === 0) {
+        body.innerHTML = '<tr><td colspan="2" class="text-center" style="color:gray; padding:15px;">Chưa có Hạng mục nào.</td></tr>';
+        return;
+    }
+
+    const childrenByParent = {};
+    hangMuc.forEach(h => { const key = h.parentId || ''; (childrenByParent[key] = childrenByParent[key] || []).push(h); });
+
+    function renderNode(node, depth) {
+        let rows = `<tr>
+            <td style="padding-left:${12 + depth * 18}px;">${node.maHangMuc} — ${node.tenHangMuc}</td>
+            <td class="text-center">
+                <button class="btn btn-sm" style="background:var(--primary);" onclick="openHangMucModal('${node.maHangMuc}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteHangMuc('${node.maHangMuc}')"><i class="fa-solid fa-trash"></i></button>
+            </td>
         </tr>`;
-
-        if (isOpen || hasFilter) {
-            (hasFilter ? visibleChildren : children).forEach(t => { rows += renderTaskRow(t); });
-        }
+        (childrenByParent[node.maHangMuc] || []).forEach(child => { rows += renderNode(child, depth + 1); });
         return rows;
     }
 
     let html = '';
-    headers.forEach(h => { html += renderGroup(h.id, h.name, childrenByGroup[h.id]); });
-    if (ungrouped.length) html += renderGroup(UNGROUPED_KEY, '-- Chưa phân loại Hạng mục --', ungrouped);
+    (childrenByParent[''] || []).forEach(root => { html += renderNode(root, 0); });
+    body.innerHTML = html;
+}
 
-    document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="5" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
+function renderGoiThauList() {
+    const body = document.getElementById('goiThauBody');
+    if (!body) return;
+    if (currentRole !== 'ADMIN') { body.innerHTML = ''; return; }
+    if (goiThau.length === 0) {
+        body.innerHTML = '<tr><td colspan="3" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>';
+        return;
+    }
+    body.innerHTML = goiThau.map(g => {
+        const names = g.maHangMucList.map(id => { const h = findHangMuc(id); return h ? h.maHangMuc : id; }).join(', ');
+        return `<tr>
+            <td>${g.tenGoiThau}</td>
+            <td>${names || '--'}</td>
+            <td class="text-center">
+                <button class="btn btn-sm" style="background:var(--primary);" onclick="openGoiThauModal('${g.maGoiThau}')"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteGoiThau('${g.maGoiThau}')"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
 }
 </script>
