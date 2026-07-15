@@ -2,149 +2,18 @@
 /* ================================================================
    FILE 2: 2_CongViec.html
    ------------------------------------------------------------------
-   PHẠM VI: 3 modal quản lý dữ liệu:
-   - Hạng mục (mã/tên tham chiếu, cây cha-con capDo 1/2/3) — CHỈ Admin.
-   - Gói thầu (nhãn gộp nhiều Hạng mục ở BẤT KỲ cấp nào) — CHỈ Admin.
-   - Công việc (đơn vị thật nhận Nhật ký tiến độ) — Admin hoặc Giám sát
-     tự tạo cho chính mình: chọn Gói thầu → Hạng mục (lọc theo Gói thầu
-     đã chọn) → Tên công việc → Ngày bắt đầu/kết thúc. Phần (I. Phần hồ
-     sơ / II. Phần triển khai thi công) KHÔNG chọn tay — backend tự suy
-     ra từ `phanMacDinh` của người tạo (xem adminSaveCongViec ở Code.js).
+   PHẠM VI: Modal SỬA 1 Công việc đã có (đơn vị thật nhận Nhật ký tiến
+   độ) — bấm nút Sửa trên 1 dòng trong tab "Công việc cá nhân"
+   (4_ViecCuaToi.html). Việc TẠO MỚI (1 hoặc nhiều Công việc cùng lúc)
+   nằm ở modal riêng "themCongViecHangLoatModal" (cũng ở
+   4_ViecCuaToi.html), KHÔNG dùng modal này nữa.
+
+   Modal Hạng mục/Gói thầu (quản lý dữ liệu tham chiếu, chỉ Admin) đã
+   chuyển sang 3_DanhSach.html cùng tab "Gói thầu/Hạng mục".
 
    DANH SÁCH HÀM CHÍNH:
-   - openHangMucModal / saveHangMucModal / deleteHangMuc
-   - openGoiThauModal / saveGoiThauModal / deleteGoiThau
    - openCongViecModal / saveCongViecModal / deleteCongViec
    ================================================================ */
-
-// ---------- HẠNG MỤC (chỉ Admin) ----------
-
-function fillParentSelect(selectEl, selectedId, excludeId) {
-    let html = '<option value="">-- Không có (là gốc) --</option>';
-    hangMuc.filter(h => h.maHangMuc !== excludeId).forEach(h => {
-        html += `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`;
-    });
-    selectEl.innerHTML = html;
-    if (selectedId) selectEl.value = selectedId;
-}
-
-function openHangMucModal(maHangMuc) {
-    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Hạng mục!', 'error'); return; }
-
-    document.getElementById('hmEditId').value = maHangMuc || '';
-    const node = maHangMuc ? findHangMuc(maHangMuc) : null;
-
-    document.getElementById('hangMucModalTitle').innerText = node ? 'Sửa Hạng mục' : 'Thêm Hạng mục';
-    document.getElementById('hmMaHangMuc').value = node ? node.maHangMuc : '';
-    document.getElementById('hmTen').value = node ? node.tenHangMuc : '';
-    document.getElementById('hmCapDo').value = node ? String(node.capDo) : '1';
-    fillParentSelect(document.getElementById('hmParentId'), node ? node.parentId : '', maHangMuc || null);
-
-    document.getElementById('hangMucModal').classList.add('active');
-}
-
-function closeHangMucModal() {
-    document.getElementById('hangMucModal').classList.remove('active');
-}
-
-// Cho phép đổi Mã hạng mục — backend (adminSaveHangMuc) tự cập nhật dây chuyền mọi Gói thầu/
-// Công việc/Hạng mục con đang tham chiếu mã cũ, tránh mồ côi tham chiếu.
-function saveHangMucModal() {
-    const maHangMuc = document.getElementById('hmMaHangMuc').value.trim();
-    const tenHangMuc = document.getElementById('hmTen').value.trim();
-    const oldMaHangMuc = document.getElementById('hmEditId').value;
-    if (!maHangMuc) { showCustomAlert('Vui lòng nhập Mã Hạng mục!', 'error'); return; }
-    if (!tenHangMuc) { showCustomAlert('Vui lòng nhập Tên Hạng mục!', 'error'); return; }
-    if (maHangMuc !== oldMaHangMuc && findHangMuc(maHangMuc)) { showCustomAlert('Mã Hạng mục này đã tồn tại!', 'error'); return; }
-
-    const node = {
-        maHangMuc,
-        oldMaHangMuc,
-        tenHangMuc,
-        capDo: parseInt(document.getElementById('hmCapDo').value, 10),
-        parentId: document.getElementById('hmParentId').value
-    };
-
-    gsRun('adminSaveHangMuc', myUserId, myPassword, node)
-        .then(() => {
-            closeHangMucModal();
-            showCustomAlert('Đã lưu Hạng mục.', 'success');
-            reloadData(); // chạy nền, không chờ mới báo thành công
-        })
-        .catch(handleBackendError);
-}
-
-function deleteHangMuc(maHangMuc) {
-    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Hạng mục!', 'error'); return; }
-    const node = findHangMuc(maHangMuc);
-    if (!node) return;
-    if (!confirm(`Xác nhận XÓA "${node.tenHangMuc}"?`)) return;
-
-    gsRun('adminDeleteHangMuc', myUserId, myPassword, maHangMuc)
-        .then(() => {
-            showCustomAlert('Đã xoá Hạng mục.', 'success');
-            reloadData();
-        })
-        .catch(handleBackendError);
-}
-
-// ---------- GÓI THẦU (chỉ Admin) ----------
-
-function fillGoiThauGroupCheckboxes(selectedIds) {
-    const container = document.getElementById('gtHangMucIds');
-    const sel = new Set(selectedIds || []);
-    if (hangMuc.length === 0) {
-        container.innerHTML = '<span style="color:gray;">Chưa có Hạng mục nào, vui lòng tạo Hạng mục trước.</span>';
-        return;
-    }
-    container.innerHTML = hangMuc.map(h => `
-        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
-            <input type="checkbox" class="gt-hm-cb" value="${h.maHangMuc}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${h.maHangMuc} — ${h.tenHangMuc}
-        </label>`).join('');
-}
-
-function openGoiThauModal(maGoiThau) {
-    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Gói thầu!', 'error'); return; }
-    const g = maGoiThau ? goiThau.find(x => x.maGoiThau === maGoiThau) : null;
-
-    document.getElementById('gtEditId').value = maGoiThau || '';
-    document.getElementById('goiThauModalTitle').innerText = g ? 'Sửa Gói thầu' : 'Thêm Gói thầu';
-    document.getElementById('gtTen').value = g ? g.tenGoiThau : '';
-    fillGoiThauGroupCheckboxes(g ? g.maHangMucList : []);
-
-    document.getElementById('goiThauModal').classList.add('active');
-}
-
-function closeGoiThauModal() {
-    document.getElementById('goiThauModal').classList.remove('active');
-}
-
-function saveGoiThauModal() {
-    const maGoiThau = document.getElementById('gtEditId').value;
-    const tenGoiThau = document.getElementById('gtTen').value.trim();
-    if (!tenGoiThau) { showCustomAlert('Vui lòng nhập Tên gói thầu!', 'error'); return; }
-    const maHangMucList = Array.from(document.querySelectorAll('.gt-hm-cb:checked')).map(cb => cb.value);
-
-    gsRun('adminSaveGoiThau', myUserId, myPassword, { maGoiThau, tenGoiThau, maHangMucList })
-        .then(() => {
-            closeGoiThauModal();
-            showCustomAlert('Đã lưu Gói thầu.', 'success');
-            reloadData();
-        })
-        .catch(handleBackendError);
-}
-
-function deleteGoiThau(maGoiThau) {
-    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Gói thầu!', 'error'); return; }
-    if (!confirm('Xác nhận XÓA Gói thầu này?')) return;
-
-    gsRun('adminDeleteGoiThau', myUserId, myPassword, maGoiThau)
-        .then(() => {
-            showCustomAlert('Đã xoá Gói thầu.', 'success');
-            reloadData();
-        })
-        .catch(handleBackendError);
-}
 
 // ---------- CÔNG VIỆC (Admin hoặc Giám sát tự tạo cho mình) ----------
 
@@ -181,14 +50,6 @@ function onCvGoiThauChange() {
     fillCvHangMucCheckboxes(document.getElementById('cvGoiThau').value, []);
 }
 
-// Chỉ Admin thấy được ô này, chỉ khi TẠO MỚI (không cho đổi người phụ trách sau khi đã tạo).
-function fillCvGiaoChoSelect() {
-    const sel = document.getElementById('cvGiaoCho');
-    let html = '<option value="">-- Tự đảm nhận --</option>';
-    users.filter(u => u.role !== 'ADMIN').forEach(u => { html += `<option value="${u.id}">${u.name}</option>`; });
-    sel.innerHTML = html;
-}
-
 function renderCvComments(list) {
     const box = document.getElementById('cvCommentList');
     if (!box) return;
@@ -219,48 +80,33 @@ function guiBinhLuanCongViec() {
         .catch(handleBackendError);
 }
 
+// Chỉ dùng để SỬA 1 Công việc đã có — maCongViec luôn bắt buộc (tạo mới nằm ở modal bulk riêng).
 function openCongViecModal(maCongViec) {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
-    const cv = maCongViec ? congViec.find(x => x.maCongViec === maCongViec) : null;
+    const cv = congViec.find(x => x.maCongViec === maCongViec);
+    if (!cv) return;
 
-    document.getElementById('cvEditId').value = maCongViec || '';
-    document.getElementById('congViecModalTitle').innerText = cv ? 'Sửa công việc' : 'Thêm công việc';
-    fillCvGoiThauSelect(cv ? cv.maGoiThau : '');
-    fillCvHangMucCheckboxes(cv ? cv.maGoiThau : '', cv ? cv.maHangMucList : []);
-    document.getElementById('cvTen').value = cv ? cv.tenCongViec : '';
-    document.getElementById('cvBatDau').value = cv ? formatVN(cv.ngayBatDauKH) : '';
-    document.getElementById('cvKetThuc').value = cv ? formatVN(cv.ngayKetThucKH) : '';
-
-    // "Giao việc cho": chỉ Admin, chỉ lúc tạo mới.
-    const giaoChoGroup = document.getElementById('cvGiaoChoGroup');
-    if (!cv && currentRole === 'ADMIN') {
-        giaoChoGroup.style.display = '';
-        fillCvGiaoChoSelect();
-        document.getElementById('cvGiaoCho').value = '';
-    } else {
-        giaoChoGroup.style.display = 'none';
-    }
+    document.getElementById('cvEditId').value = maCongViec;
+    document.getElementById('congViecModalTitle').innerText = 'Sửa công việc';
+    fillCvGoiThauSelect(cv.maGoiThau);
+    fillCvHangMucCheckboxes(cv.maGoiThau, cv.maHangMucList);
+    document.getElementById('cvTen').value = cv.tenCongViec;
+    document.getElementById('cvBatDau').value = formatVN(cv.ngayBatDauKH);
+    document.getElementById('cvKetThuc').value = formatVN(cv.ngayKetThucKH);
 
     const giaoBoiInfo = document.getElementById('cvGiaoBoiInfo');
-    if (cv && cv.nguoiGiaoId) {
+    if (cv.nguoiGiaoId) {
         giaoBoiInfo.style.display = '';
         giaoBoiInfo.innerHTML = `<span style="font-size:0.85rem; color:var(--text-muted);">Được <b>${cv.nguoiGiaoTen}</b> giao cho <b>${cv.nguoiTaoTen}</b></span>`;
     } else {
         giaoBoiInfo.style.display = 'none';
     }
 
-    // Khung bình luận: chỉ hiện khi SỬA (đã có maCongViec).
-    const commentSection = document.getElementById('cvCommentSection');
     document.getElementById('cvCommentInput').value = '';
-    if (cv) {
-        commentSection.style.display = '';
-        renderCvComments([]);
-        gsRun('getBinhLuanCongViec', maCongViec)
-            .then(json => renderCvComments(JSON.parse(json)))
-            .catch(() => renderCvComments([]));
-    } else {
-        commentSection.style.display = 'none';
-    }
+    renderCvComments([]);
+    gsRun('getBinhLuanCongViec', maCongViec)
+        .then(json => renderCvComments(JSON.parse(json)))
+        .catch(() => renderCvComments([]));
 
     document.getElementById('congViecModal').classList.add('active');
 
@@ -284,32 +130,13 @@ function saveCongViecModal() {
     const maCongViec = document.getElementById('cvEditId').value;
     const maGoiThau = document.getElementById('cvGoiThau').value;
     const maHangMucList = Array.from(document.querySelectorAll('.cv-hm-cb:checked')).map(cb => cb.value);
-    let tenCongViec = document.getElementById('cvTen').value.trim();
+    const tenCongViec = document.getElementById('cvTen').value.trim();
     if (!maGoiThau) { showCustomAlert('Vui lòng chọn Gói thầu!', 'error'); return; }
     if (maHangMucList.length === 0) { showCustomAlert('Vui lòng chọn ít nhất 1 Hạng mục!', 'error'); return; }
     if (!tenCongViec) { showCustomAlert('Vui lòng nhập Tên công việc!', 'error'); return; }
 
-    // Tạo mới (không phải sửa) mà trùng tên với 1 công việc ĐÃ XÓA trong cùng Gói thầu — cảnh báo
-    // và gợi ý đổi tên, tránh nhầm lẫn với việc cũ đã xóa trong lịch sử.
-    if (!maCongViec) {
-        const trung = congViec.find(cv => cv.active === false && cv.maGoiThau === maGoiThau
-            && cv.tenCongViec.trim().toLowerCase() === tenCongViec.toLowerCase());
-        if (trung) {
-            const goiY = tenCongViec + ' (tiếp theo 1)';
-            if (confirm(`Tên công việc này trùng với 1 công việc đã XÓA trước đó trong cùng Gói thầu.\n\nBấm OK để đổi tên thành "${goiY}", bấm Hủy để vẫn giữ tên "${tenCongViec}".`)) {
-                tenCongViec = goiY;
-                document.getElementById('cvTen').value = goiY;
-            }
-        }
-    }
-
-    const giaoChoEl = document.getElementById('cvGiaoCho');
     const payload = {
-        maCongViec,
-        tenCongViec,
-        maGoiThau,
-        maHangMucList,
-        nguoiDuocGiaoId: (!maCongViec && giaoChoEl) ? giaoChoEl.value : '',
+        maCongViec, tenCongViec, maGoiThau, maHangMucList,
         ngayBatDauKH: convertDMYtoISO(document.getElementById('cvBatDau').value.trim()) || '',
         ngayKetThucKH: convertDMYtoISO(document.getElementById('cvKetThuc').value.trim()) || ''
     };

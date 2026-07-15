@@ -102,7 +102,8 @@
                         <i class="fa-solid fa-chevron-down nav-group-chev"></i>
                     </div>
                     <div class="nav-group-items">
-                        <button class="nav-btn side-nav-btn nav-child" onclick="switchTab('danhsach')">Công việc</button>
+                        <button class="nav-btn side-nav-btn nav-child admin-only" onclick="switchTab('danhsach')">Gói thầu/Hạng mục</button>
+                        <button class="nav-btn side-nav-btn nav-child" onclick="switchTab('congviectoi')">Công việc cá nhân</button>
                         <button class="nav-btn side-nav-btn nav-child" onclick="switchTab('tiendothicong')">Tiến độ</button>
                     </div>
                 </div>
@@ -129,17 +130,22 @@
                 </button>
             </div>
             <div class="home-tiles">
-                <button class="nav-btn home-tile" onclick="switchTab('danhsach')" style="--tile-c: var(--accent);">
-                    <i class="fa-solid fa-sitemap"></i><span>Công việc</span>
+                <button class="nav-btn home-tile" onclick="switchTab('congviectoi')" style="--tile-c: var(--accent);">
+                    <i class="fa-solid fa-list-check"></i><span>Công việc cá nhân</span>
                 </button>
                 <button class="nav-btn home-tile" onclick="switchTab('tiendothicong')" style="--tile-c: #b45309;">
                     <i class="fa-solid fa-chart-gantt"></i><span>Tiến độ</span>
                 </button>
             </div>
             <div class="home-tiles">
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #64748b;">
+                    <i class="fa-solid fa-sitemap"></i><span>Gói thầu/Hạng mục</span>
+                </button>
                 <button class="nav-btn home-tile" onclick="switchTab('diemdanh')" style="--tile-c: #b8860b;">
                     <i class="fa-solid fa-calendar-check"></i><span>Điểm danh</span>
                 </button>
+            </div>
+            <div class="home-tiles">
                 <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7c3aed;">
                     <i class="fa-solid fa-users-gear"></i><span>Nhân sự</span>
                 </button>
@@ -427,55 +433,69 @@
             </div>
         </section>
 
-        <!-- TAB: THI CÔNG / TIẾN ĐỘ -->
+        <!-- TAB: GÓI THẦU / HẠNG MỤC (chỉ Admin) — quản lý dữ liệu tham chiếu, không có Danh sách
+             Công việc nữa (đã chuyển sang tab "Công việc cá nhân"). Không còn cây bút/thùng rác
+             trên từng dòng — dùng 2 nút "Chỉnh sửa"/"Xóa" chung ở đầu bảng (mở modal kèm dropdown
+             chọn đúng dòng cần sửa/xóa). -->
         <section id="danhsach" class="tab-content">
             <div class="card admin-only">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                     <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-layer-group"></i> Danh sách Gói thầu</div>
-                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openGoiThauModal()"><i class="fa-solid fa-plus"></i> Thêm Gói thầu</button>
+                    <div class="action-cell">
+                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openGoiThauModal()"><i class="fa-solid fa-plus"></i> Thêm Gói thầu</button>
+                        <button class="btn btn-sm" style="background:var(--primary);" onclick="openGoiThauModal('manage')"><i class="fa-solid fa-pen"></i> Chỉnh sửa</button>
+                        <button class="btn btn-sm btn-danger" onclick="openGoiThauModal('manage')"><i class="fa-solid fa-trash"></i> Xóa</button>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th style="text-align:left;">Tên gói thầu</th><th>Hạng mục gộp</th><th>Hành động</th></tr></thead>
+                        <thead><tr><th style="text-align:left;">Tên gói thầu</th><th>Hạng mục gộp</th></tr></thead>
                         <tbody id="goiThauBody"></tbody>
                     </table>
                 </div>
             </div>
 
             <div class="card admin-only">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
                     <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-sitemap"></i> Quản lý Hạng mục <span style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">(mã tham chiếu để lọc, không nhập %)</span></div>
-                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openHangMucModal()"><i class="fa-solid fa-plus"></i> Thêm Hạng mục</button>
+                    <div class="action-cell">
+                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openHangMucModal()"><i class="fa-solid fa-plus"></i> Thêm Hạng mục</button>
+                        <button class="btn btn-sm" style="background:var(--primary);" onclick="openHangMucModal('manage')"><i class="fa-solid fa-pen"></i> Chỉnh sửa</button>
+                        <button class="btn btn-sm btn-danger" onclick="openHangMucModal('manage')"><i class="fa-solid fa-trash"></i> Xóa</button>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th>STT</th><th style="text-align:left;">Mã Hạng mục</th><th style="text-align:left;">Tên Hạng mục</th><th>Hành động</th></tr></thead>
+                        <thead><tr><th>STT</th><th style="text-align:left;">Mã Hạng mục</th><th style="text-align:left;">Tên Hạng mục</th></tr></thead>
                         <tbody id="hangMucRefBody"></tbody>
                     </table>
                 </div>
             </div>
+        </section>
 
+        <!-- TAB: CÔNG VIỆC CÁ NHÂN (nhóm Quản lý thi công) — danh sách Công việc + thêm/báo cáo -->
+        <section id="congviectoi" class="tab-content">
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Danh sách Công việc</div>
+                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Công việc cá nhân</div>
                     <div class="action-cell">
-                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openCongViecModal()"><i class="fa-solid fa-plus"></i> Thêm công việc</button>
+                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openThemCongViecHangLoatModal()"><i class="fa-solid fa-plus"></i> Thêm công việc</button>
                         <button class="btn btn-sm" style="background:var(--primary);" onclick="openBaoCaoModal()"><i class="fa-solid fa-clipboard-list"></i> Báo cáo</button>
                     </div>
                 </div>
                 <div class="filter-bar">
-                    <select id="filterGoiThau" onchange="renderDanhSach()">
+                    <select id="filterGoiThau" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả Gói thầu --</option>
                     </select>
-                    <select id="filterPhanLoai" onchange="renderDanhSach()">
+                    <select id="filterPhanLoai" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả Phần --</option>
                         <option value="ho_so">I. Phần hồ sơ</option>
                         <option value="thi_cong">II. Phần triển khai thi công</option>
                     </select>
-                    <select id="filterGS" onchange="renderDanhSach()">
+                    <select id="filterGS" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả người phụ trách --</option>
                     </select>
-                    <select id="filterTrangThaiMau" onchange="renderDanhSach()">
+                    <select id="filterTrangThaiMau" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả trạng thái --</option>
                         <option value="pending">Chờ thực hiện</option>
                         <option value="inprogress">Đang thực hiện</option>
@@ -483,7 +503,7 @@
                         <option value="late_done">Trễ tiến độ nhưng hoàn thành</option>
                         <option value="overdue">Trễ tiến độ không hoàn thành</option>
                     </select>
-                    <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục..." oninput="renderDanhSach()" style="flex:1; min-width:180px;">
+                    <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục..." oninput="renderCongViecCaNhan()" style="flex:1; min-width:180px;">
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
@@ -564,7 +584,7 @@
     <nav class="nav-mobile">
         <button class="nav-btn active" onclick="switchTab('home')"><i class="fa-solid fa-house"></i><span>Trang chủ</span></button>
         <button class="nav-btn" onclick="switchTab('dashboard')"><i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span></button>
-        <button class="nav-btn" onclick="switchTab('danhsach')"><i class="fa-solid fa-sitemap"></i><span>Thi công</span></button>
+        <button class="nav-btn" onclick="switchTab('congviectoi')"><i class="fa-solid fa-list-check"></i><span>Công việc</span></button>
         <button class="nav-btn" onclick="switchTab('hopdong')"><i class="fa-solid fa-file-contract"></i><span>Hợp đồng</span></button>
         <button class="nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i><span>Nhân sự</span></button>
     </nav>
@@ -574,6 +594,10 @@
         <div class="modal-content" style="max-width:480px;">
             <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-sitemap"></i> <span id="hangMucModalTitle">Thêm Hạng mục</span></h3>
             <input type="hidden" id="hmEditId">
+            <div id="hmPickerGroup" class="form-group" style="margin-bottom:10px; display:none;">
+                <label>Chọn Hạng mục cần sửa/xóa</label>
+                <select id="hmPicker" class="form-control" onchange="onHmPickerChange(this.value)"></select>
+            </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Mã Hạng mục</label>
                 <input type="text" id="hmMaHangMuc" class="form-control" placeholder="VD: 90, 90.1, II...">
@@ -596,7 +620,8 @@
             </div>
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveHangMucModal()">Lưu</button>
-                <button class="btn btn-danger" onclick="closeHangMucModal()">Hủy</button>
+                <button id="hmDeleteBtn" class="btn btn-danger" onclick="deleteHangMucFromModal()" style="display:none;">Xóa</button>
+                <button class="btn" style="background:var(--text-muted);" onclick="closeHangMucModal()">Hủy</button>
             </div>
         </div>
     </div>
@@ -606,6 +631,10 @@
         <div class="modal-content" style="max-width:450px;">
             <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-layer-group"></i> <span id="goiThauModalTitle">Thêm Gói thầu</span></h3>
             <input type="hidden" id="gtEditId">
+            <div id="gtPickerGroup" class="form-group" style="margin-bottom:10px; display:none;">
+                <label>Chọn Gói thầu cần sửa/xóa</label>
+                <select id="gtPicker" class="form-control" onchange="onGtPickerChange(this.value)"></select>
+            </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Tên gói thầu</label>
                 <input type="text" id="gtTen" class="form-control" placeholder="VD: Gói thầu kết cấu & hoàn thiện thô HM 2,3,4...">
@@ -617,7 +646,8 @@
             <p style="font-size:0.78rem; color:var(--text-muted);">Mỗi Gói thầu tự động có 2 phần cố định: <b>I. Phần hồ sơ</b> và <b>II. Phần triển khai thi công</b> — Công việc do nhân sự tự tạo sẽ tự rơi vào đúng phần theo Chức danh của người tạo.</p>
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveGoiThauModal()">Lưu</button>
-                <button class="btn btn-danger" onclick="closeGoiThauModal()">Hủy</button>
+                <button id="gtDeleteBtn" class="btn btn-danger" onclick="deleteGoiThauFromModal()" style="display:none;">Xóa</button>
+                <button class="btn" style="background:var(--text-muted);" onclick="closeGoiThauModal()">Hủy</button>
             </div>
         </div>
     </div>
@@ -625,14 +655,8 @@
     <!-- MODAL: THÊM/SỬA CÔNG VIỆC (nhân sự tự tạo: Gói thầu -> Hạng mục -> Tên -> Ngày) -->
     <div id="congViecModal" class="modal">
         <div class="modal-content" style="max-width:480px;">
-            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="congViecModalTitle">Thêm công việc</span></h3>
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="congViecModalTitle">Sửa công việc</span></h3>
             <input type="hidden" id="cvEditId">
-            <div class="form-group" style="margin-bottom:10px;" id="cvGiaoChoGroup">
-                <label>Giao việc cho <span style="font-weight:400; color:var(--text-muted);">(chỉ Quản trị, để trống = tự đảm nhận)</span></label>
-                <select id="cvGiaoCho" class="form-control">
-                    <option value="">-- Tự đảm nhận --</option>
-                </select>
-            </div>
             <div class="form-group" id="cvGiaoBoiInfo" style="margin-bottom:10px; display:none;"></div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Gói thầu</label>
@@ -713,63 +737,66 @@
         </div>
     </div>
 
-    <!-- MODAL: BÁO CÁO TIẾN ĐỘ (Nhật ký tiến độ) -->
+    <!-- MODAL: BÁO CÁO TIẾN ĐỘ HÀNG LOẠT (Nhật ký tiến độ) — bảng ngang, nhiều Công việc 1 lần -->
     <div id="baoCaoModal" class="modal">
-        <div class="modal-content" style="max-width:520px;">
-            <div class="ntd-wrap">
-                <div class="ntd-header">
-                    <p class="ntd-eyebrow">Nhật ký tiến độ</p>
-                    <h1 class="ntd-title">Báo cáo tiến độ ngày</h1>
-                    <p class="ntd-sub">Đăng nhập: <b id="ntdUserLabel">--</b></p>
+        <div class="modal-content" style="max-width:920px;">
+            <h3 style="margin-bottom:4px; color:var(--primary-dark);"><i class="fa-solid fa-clipboard-list"></i> Báo cáo tiến độ</h3>
+            <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:12px;">Đăng nhập: <b id="ntdUserLabel">--</b> — nhập % hoàn thành hôm nay cho từng công việc bên dưới, để trống dòng nào thì bỏ qua dòng đó.</p>
+            <div class="filter-bar">
+                <select id="ntdGoiThauFilter" onchange="renderBaoCaoTable()" style="min-width:220px;">
+                    <option value="">-- Tất cả Gói thầu --</option>
+                </select>
+                <div class="form-group" style="margin:0; max-width:160px;">
+                    <label style="font-size:0.75rem; margin-bottom:2px; display:block;">Ngày báo cáo (áp dụng chung)</label>
+                    <input type="text" id="ntdNgay" class="form-control" placeholder="dd/mm/yyyy">
                 </div>
+            </div>
+            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+                <table class="data-table">
+                    <thead><tr>
+                        <th style="text-align:left; min-width:200px;">Công việc</th>
+                        <th style="min-width:100px;">Hạng mục</th>
+                        <th style="min-width:80px;">Đã đạt</th>
+                        <th style="min-width:110px;">% Thêm hôm nay</th>
+                        <th style="min-width:160px; text-align:left;">Ghi chú</th>
+                    </tr></thead>
+                    <tbody id="ntdTableBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-actions" style="margin-top:14px;">
+                <button class="btn" style="background:var(--success);" onclick="submitBaoCaoHangLoat()">Gửi báo cáo</button>
+                <button class="btn" style="background:var(--text-muted);" onclick="closeBaoCaoModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
 
-                <div class="ntd-card">
-                    <div class="ntd-field">
-                        <label class="ntd-label">Công việc</label>
-                        <select class="ntd-input" id="ntdCongViec"></select>
-                        <div class="ntd-hangmuc-meta" id="ntdCongViecMeta"></div>
-                    </div>
-                    <div class="ntd-field">
-                        <label class="ntd-label">Ngày báo cáo</label>
-                        <input class="ntd-input" id="ntdNgay" type="text" placeholder="dd/mm/yyyy" readonly>
-                    </div>
-                    <div class="ntd-field">
-                        <label class="ntd-label">% Tiến độ lũy kế hiện tại</label>
-                        <div class="ntd-progress-track">
-                            <div class="ntd-progress-fill" id="ntdFillCurrent"></div>
-                            <div class="ntd-progress-add" id="ntdFillAdd"></div>
-                        </div>
-                        <div class="ntd-progress-labels">
-                            <span id="ntdCurrentLabel">Đã đạt: 0%</span>
-                            <span id="ntdProjectedLabel">Sau khi nhập: 0%</span>
-                        </div>
-                    </div>
-                    <div class="ntd-field">
-                        <label class="ntd-label">% Hoàn thành trong ngày</label>
-                        <div class="ntd-pct-input-row">
-                            <input class="ntd-input" id="ntdPct" type="number" inputmode="decimal" min="0" step="0.5" placeholder="0">
-                            <span class="ntd-pct-suffix">%</span>
-                        </div>
-                        <div class="ntd-feedback" id="ntdFeedback"></div>
-                    </div>
-                    <div class="ntd-field">
-                        <label class="ntd-label">Ghi chú / vướng mắc (nếu có)</label>
-                        <textarea class="ntd-input" id="ntdGhiChu" placeholder="VD: chậm do triều cường, thiếu vật tư..."></textarea>
-                    </div>
-                </div>
-
-                <div class="ntd-card">
-                    <label class="ntd-label" style="margin-bottom:10px;">5 lần nhập gần nhất — công việc này</label>
-                    <div class="ntd-recent" id="ntdRecent"></div>
-                </div>
-
-                <div class="ntd-submit-bar">
-                    <button class="ntd-submit-btn" id="ntdSubmit">Gửi báo cáo</button>
-                    <p class="ntd-submit-hint" id="ntdHint">Chọn công việc để bắt đầu</p>
-                </div>
-                <div class="modal-actions">
-                    <button class="btn btn-danger" onclick="closeBaoCaoModal()">Đóng</button>
-                </div>
+    <!-- MODAL: THÊM CÔNG VIỆC HÀNG LOẠT (1 hoặc nhiều dòng cùng lúc) -->
+    <div id="themCongViecHangLoatModal" class="modal">
+        <div class="modal-content" style="max-width:1000px;">
+            <h3 style="margin-bottom:12px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> Thêm công việc</h3>
+            <div id="cvhlGiaoChoGroup" class="form-group admin-only" style="margin-bottom:12px; max-width:320px;">
+                <label>Giao việc cho <span style="font-weight:400; color:var(--text-muted);">(áp dụng cho mọi dòng bên dưới, để trống = tự đảm nhận)</span></label>
+                <select id="cvhlGiaoCho" class="form-control">
+                    <option value="">-- Tự đảm nhận --</option>
+                </select>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead><tr>
+                        <th style="min-width:170px;">Gói thầu</th>
+                        <th style="min-width:150px;">Hạng mục</th>
+                        <th style="text-align:left; min-width:200px;">Tên công việc</th>
+                        <th style="min-width:120px;">Ngày bắt đầu</th>
+                        <th style="min-width:120px;">Ngày kết thúc</th>
+                        <th></th>
+                    </tr></thead>
+                    <tbody id="cvhlBody"></tbody>
+                </table>
+            </div>
+            <button type="button" class="btn btn-sm" style="background:var(--accent); margin-top:8px;" onclick="themDongCongViec()"><i class="fa-solid fa-plus"></i> Thêm dòng</button>
+            <div class="modal-actions" style="margin-top:14px;">
+                <button class="btn" style="background:var(--success);" onclick="luuCongViecHangLoat()">Lưu tất cả</button>
+                <button class="btn" style="background:var(--text-muted);" onclick="closeThemCongViecHangLoatModal()">Hủy</button>
             </div>
         </div>
     </div>

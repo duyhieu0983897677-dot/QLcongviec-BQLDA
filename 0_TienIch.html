@@ -57,7 +57,8 @@ function switchTab(tabId) {
     });
 
     if (tabId === 'dashboard') safeRender_('renderDashboard', 'Tổng quan');
-    if (tabId === 'danhsach') safeRender_('renderDanhSach', 'Danh sách');
+    if (tabId === 'danhsach') safeRender_('renderDanhSach', 'Gói thầu/Hạng mục');
+    if (tabId === 'congviectoi') safeRender_('renderCongViecCaNhan', 'Công việc cá nhân');
     if (tabId === 'hopdong') safeRender_('renderHopDongList', 'Hợp đồng');
     if (tabId === 'boq') safeRender_('renderBOQ', 'BOQ');
     if (tabId === 'nghiemthu') safeRender_('renderNghiemThu', 'Nghiệm thu');
@@ -153,7 +154,8 @@ function safeRender_(fnName, label, attempt) {
 
 function updateUI() {
     if (document.getElementById('dashboard') && document.getElementById('dashboard').classList.contains('active')) safeRender_('renderDashboard', 'Tổng quan');
-    if (document.getElementById('danhsach') && document.getElementById('danhsach').classList.contains('active')) safeRender_('renderDanhSach', 'Danh sách');
+    if (document.getElementById('danhsach') && document.getElementById('danhsach').classList.contains('active')) safeRender_('renderDanhSach', 'Gói thầu/Hạng mục');
+    if (document.getElementById('congviectoi') && document.getElementById('congviectoi').classList.contains('active')) safeRender_('renderCongViecCaNhan', 'Công việc cá nhân');
     if (document.getElementById('hopdong') && document.getElementById('hopdong').classList.contains('active')) safeRender_('renderHopDongList', 'Hợp đồng');
     if (document.getElementById('boq') && document.getElementById('boq').classList.contains('active')) safeRender_('renderBOQ', 'BOQ');
     if (document.getElementById('nghiemthu') && document.getElementById('nghiemthu').classList.contains('active')) safeRender_('renderNghiemThu', 'Nghiệm thu');

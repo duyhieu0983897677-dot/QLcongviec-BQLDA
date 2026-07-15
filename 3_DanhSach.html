@@ -2,134 +2,24 @@
 /* ================================================================
    FILE 3: 3_DanhSach.html
    ------------------------------------------------------------------
-   PHẠM VI: Tab "Danh sách" — liệt kê CÔNG VIỆC (đơn vị nhận Nhật ký
-   tiến độ), nhóm theo Gói thầu → (I. Phần hồ sơ / II. Phần triển khai
-   thi công) → dòng Công việc kèm lũy kế/trạng thái. Lọc theo Gói
-   thầu/Phần/người phụ trách/trạng thái/tìm kiếm.
+   PHẠM VI: Tab "Gói thầu/Hạng mục" (chỉ Admin) — quản lý 2 khối dữ
+   liệu tham chiếu dùng chung cho cả Công việc lẫn Hợp đồng: cây Hạng
+   mục (mã/tên/cấp/cha-con) và danh sách Gói thầu (gộp nhiều Hạng mục).
 
-   Bên dưới còn 2 khối admin-only để quản lý dữ liệu tham chiếu:
-   cây Hạng mục (mã/tên) và danh sách Gói thầu.
+   KHÔNG còn nút Sửa/Xóa (cây bút/thùng rác) trên từng dòng — thay
+   bằng 2 nút "Chỉnh sửa" / "Xóa" chung ở đầu mỗi bảng, mở modal kèm
+   1 dropdown để CHỌN đúng dòng cần thao tác (xem fillHmPicker_()/
+   fillGtPicker_() và modal ở Index.html).
 
    DANH SÁCH HÀM CHÍNH:
-   - renderDanhSach()      : Vẽ bảng Công việc theo bộ lọc hiện tại
-   - renderHangMucRefList(): Vẽ bảng quản lý Hạng mục (admin-only)
-   - renderGoiThauList()   : Vẽ bảng quản lý Gói thầu (admin-only)
+   - renderDanhSach()       : Vẽ lại cả 2 bảng (gọi khi tab active)
+   - renderHangMucRefList() : Vẽ bảng Hạng mục (không còn cột Hành động)
+   - renderGoiThauList()    : Vẽ bảng Gói thầu (không còn cột Hành động)
+   - openHangMucModal(mode) : mode='manage' mở kèm picker Sửa/Xóa, không truyền = Thêm mới
+   - openGoiThauModal(mode) : tương tự, cho Gói thầu
    ================================================================ */
 
-function toggleTaskGroup(key) {
-    if (collapsedGroups.has(key)) collapsedGroups.delete(key);
-    else collapsedGroups.add(key);
-    renderDanhSach();
-}
-
-function canEditCongViec(cv) {
-    return currentRole === 'ADMIN' || cv.nguoiTaoId === mySupervisorId;
-}
-
-function renderCongViecRow(cv) {
-    const status = cv.trangThaiMau;
-    const meta = (cv.maHangMucList || []).map(id => {
-        const hm = findHangMuc(id);
-        return hm ? `${hm.maHangMuc} — ${hm.tenHangMuc}` : id;
-    }).join('; ');
-    // Công việc đã bị xóa: chỉ hiện ở đây (đã lọc khỏi Tổng quan từ backend), gạch ngang + mờ cả
-    // dòng, không còn nút Sửa/Xóa vì đã xóa rồi.
-    const isDeleted = cv.active === false;
-    const editable = !isDeleted && canEditCongViec(cv);
-    const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
-    const mau = mauChucDanh(chucDanh);
-    return `<tr class="task-row${isDeleted ? ' deleted' : ''}">
-        <td class="task-name-cell" style="padding-left:48px;">
-            <div class="t-name-row">
-                <span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>
-                ${commentBadgeHtml(cv)}
-            </div>
-            <span class="t-target" title="${escapeHtml(meta)}">${meta}</span>
-        </td>
-        <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
-        <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
-        <td class="text-center">${formatVN(cv.ngayBatDauKH)}</td>
-        <td class="text-center">${formatVN(cv.ngayKetThucKH)}</td>
-        <td>
-            <div class="gantt-bar-wrap">
-                <div class="gantt-track"><div class="gantt-fill status-${status}" style="width:${Math.min(100, cv.luyKe || 0)}%;"></div></div>
-                <span class="gantt-pct">${cv.luyKe || 0}%</span>
-            </div>
-        </td>
-        <td class="text-center"><span class="bc-badge ${status}">${TRANGTHAI_LABEL[status] || '--'}</span></td>
-        <td class="text-center">
-            ${isDeleted ? `<span class="deleted-label">Đã xóa</span>` : (editable ? `<div class="action-cell">
-                <button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')"><i class="fa-solid fa-trash"></i></button>
-            </div>` : '')}
-        </td>
-    </tr>`;
-}
-
 function renderDanhSach() {
-    const gtSelect = document.getElementById('filterGoiThau');
-    if (gtSelect.options.length <= 1) {
-        let html = '<option value="">-- Tất cả Gói thầu --</option>';
-        goiThau.forEach(g => html += `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`);
-        gtSelect.innerHTML = html;
-    }
-    const gsSelect = document.getElementById('filterGS');
-    if (gsSelect.options.length <= 1) {
-        let html = '<option value="">-- Tất cả người phụ trách --</option>';
-        const ids = [...new Set(congViec.map(c => c.nguoiTaoId).filter(Boolean))];
-        ids.sort((a, b) => nameOfUser(a).localeCompare(nameOfUser(b)));
-        ids.forEach(id => html += `<option value="${id}">${nameOfUser(id)}</option>`);
-        gsSelect.innerHTML = html;
-    }
-
-    const fGT = gtSelect.value;
-    const fPhan = document.getElementById('filterPhanLoai').value;
-    const fGS = gsSelect.value;
-    const fStatus = document.getElementById('filterTrangThaiMau').value;
-    const fSearch = document.getElementById('filterSearch').value.trim().toLowerCase();
-
-    function matches(cv) {
-        if (fGT && cv.maGoiThau !== fGT) return false;
-        if (fPhan && cv.phanLoai !== fPhan) return false;
-        if (fGS && cv.nguoiTaoId !== fGS) return false;
-        if (fStatus && cv.trangThaiMau !== fStatus) return false;
-        if (fSearch) {
-            const hmNames = (cv.maHangMucList || []).map(id => { const hm = findHangMuc(id); return hm ? hm.tenHangMuc : ''; }).join(' ');
-            const hay = `${cv.tenCongViec} ${(cv.maHangMucList || []).join(' ')} ${hmNames}`.toLowerCase();
-            if (!hay.includes(fSearch)) return false;
-        }
-        return true;
-    }
-
-    const filtered = congViec.filter(matches);
-
-    let html = '';
-    goiThau.forEach(g => {
-        const items = filtered.filter(c => c.maGoiThau === g.maGoiThau);
-        if (items.length === 0) return;
-
-        const gtKey = 'gt:' + g.maGoiThau;
-        const gtOpen = !collapsedGroups.has(gtKey);
-        html += `<tr class="task-group-row" onclick="toggleTaskGroup('${gtKey}')">
-            <td colspan="8"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.tenGoiThau}</td>
-        </tr>`;
-        if (!gtOpen) return;
-
-        ['ho_so', 'thi_cong'].forEach(phan => {
-            const subItems = items.filter(c => c.phanLoai === phan);
-            if (subItems.length === 0) return;
-            const subKey = gtKey + ':' + phan;
-            const subOpen = !collapsedGroups.has(subKey);
-            html += `<tr class="task-group-row" onclick="toggleTaskGroup('${subKey}')" style="background:#F2F0E9;">
-                <td colspan="8" style="padding-left:28px;"><i class="fa-solid ${subOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${PHAN_LOAI_LABEL[phan]}</td>
-            </tr>`;
-            if (!subOpen) return;
-            subItems.forEach(cv => { html += renderCongViecRow(cv); });
-        });
-    });
-
-    document.getElementById('danhSachBody').innerHTML = html || '<tr><td colspan="8" class="text-center" style="color:gray; padding:20px;">Không có công việc nào khớp bộ lọc.</td></tr>';
-
     renderHangMucRefList();
     renderGoiThauList();
 }
@@ -139,7 +29,7 @@ function renderHangMucRefList() {
     if (!body) return;
     if (currentRole !== 'ADMIN') { body.innerHTML = ''; return; }
     if (hangMuc.length === 0) {
-        body.innerHTML = '<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có Hạng mục nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="3" class="text-center" style="color:gray; padding:15px;">Chưa có Hạng mục nào.</td></tr>';
         return;
     }
 
@@ -153,12 +43,6 @@ function renderHangMucRefList() {
             <td class="text-center">${stt}</td>
             <td>${node.maHangMuc}</td>
             <td style="padding-left:${depth * 18}px;">${node.tenHangMuc}</td>
-            <td class="text-center">
-                <div class="action-cell">
-                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openHangMucModal('${node.maHangMuc}')"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteHangMuc('${node.maHangMuc}')"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
         </tr>`;
         (childrenByParent[node.maHangMuc] || []).forEach(child => { rows += renderNode(child, depth + 1); });
         return rows;
@@ -174,21 +58,188 @@ function renderGoiThauList() {
     if (!body) return;
     if (currentRole !== 'ADMIN') { body.innerHTML = ''; return; }
     if (goiThau.length === 0) {
-        body.innerHTML = '<tr><td colspan="3" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="2" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>';
         return;
     }
     body.innerHTML = goiThau.map(g => {
         const names = g.maHangMucList.map(id => { const h = findHangMuc(id); return h ? h.maHangMuc : id; }).join(', ');
-        return `<tr>
-            <td>${g.tenGoiThau}</td>
-            <td>${names || '--'}</td>
-            <td class="text-center">
-                <div class="action-cell">
-                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openGoiThauModal('${g.maGoiThau}')"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteGoiThau('${g.maGoiThau}')"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </td>
-        </tr>`;
+        return `<tr><td>${g.tenGoiThau}</td><td>${names || '--'}</td></tr>`;
     }).join('');
+}
+
+// --- HẠNG MỤC: modal dùng chung cho Thêm (mode bỏ trống) và Sửa/Xóa (mode='manage', có picker) ---
+
+function fillHmPicker_(selectedId) {
+    const sel = document.getElementById('hmPicker');
+    sel.innerHTML = '<option value="">-- Chọn Hạng mục --</option>' +
+        hangMuc.map(h => `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`).join('');
+    if (selectedId) sel.value = selectedId;
+}
+
+function loadHangMucIntoForm_(maHangMuc) {
+    document.getElementById('hmEditId').value = maHangMuc || '';
+    const node = maHangMuc ? findHangMuc(maHangMuc) : null;
+    document.getElementById('hmMaHangMuc').value = node ? node.maHangMuc : '';
+    document.getElementById('hmTen').value = node ? node.tenHangMuc : '';
+    document.getElementById('hmCapDo').value = node ? String(node.capDo) : '1';
+    fillParentSelect(document.getElementById('hmParentId'), node ? node.parentId : '', maHangMuc || null);
+    document.getElementById('hmDeleteBtn').style.display = node ? '' : 'none';
+}
+
+function onHmPickerChange(maHangMuc) {
+    loadHangMucIntoForm_(maHangMuc);
+}
+
+function openHangMucModal(mode) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Hạng mục!', 'error'); return; }
+    const isManage = mode === 'manage';
+    document.getElementById('hmPickerGroup').style.display = isManage ? '' : 'none';
+    document.getElementById('hangMucModalTitle').innerText = isManage ? 'Sửa / Xóa Hạng mục' : 'Thêm Hạng mục';
+    if (isManage) fillHmPicker_('');
+    loadHangMucIntoForm_('');
+    document.getElementById('hangMucModal').classList.add('active');
+}
+
+function closeHangMucModal() {
+    document.getElementById('hangMucModal').classList.remove('active');
+}
+
+// Cho phép đổi Mã hạng mục — backend (adminSaveHangMuc) tự cập nhật dây chuyền mọi Gói thầu/
+// Công việc/Hạng mục con đang tham chiếu mã cũ, tránh mồ côi tham chiếu.
+function saveHangMucModal() {
+    const maHangMuc = document.getElementById('hmMaHangMuc').value.trim();
+    const tenHangMuc = document.getElementById('hmTen').value.trim();
+    const oldMaHangMuc = document.getElementById('hmEditId').value;
+    if (!maHangMuc) { showCustomAlert('Vui lòng nhập Mã Hạng mục!', 'error'); return; }
+    if (!tenHangMuc) { showCustomAlert('Vui lòng nhập Tên Hạng mục!', 'error'); return; }
+    if (maHangMuc !== oldMaHangMuc && findHangMuc(maHangMuc)) { showCustomAlert('Mã Hạng mục này đã tồn tại!', 'error'); return; }
+
+    const node = {
+        maHangMuc,
+        oldMaHangMuc,
+        tenHangMuc,
+        capDo: parseInt(document.getElementById('hmCapDo').value, 10),
+        parentId: document.getElementById('hmParentId').value
+    };
+
+    gsRun('adminSaveHangMuc', myUserId, myPassword, node)
+        .then(() => {
+            closeHangMucModal();
+            showCustomAlert('Đã lưu Hạng mục.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+function deleteHangMuc(maHangMuc) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Hạng mục!', 'error'); return; }
+    const node = findHangMuc(maHangMuc);
+    if (!node) return;
+    if (!confirm(`Xác nhận XÓA "${node.tenHangMuc}"?`)) return;
+
+    gsRun('adminDeleteHangMuc', myUserId, myPassword, maHangMuc)
+        .then(() => {
+            showCustomAlert('Đã xoá Hạng mục.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+function deleteHangMucFromModal() {
+    const id = document.getElementById('hmEditId').value;
+    if (!id) { showCustomAlert('Vui lòng chọn 1 Hạng mục để xóa!', 'error'); return; }
+    closeHangMucModal();
+    deleteHangMuc(id);
+}
+
+// --- GÓI THẦU: modal dùng chung cho Thêm (mode bỏ trống) và Sửa/Xóa (mode='manage', có picker) ---
+
+function fillGoiThauGroupCheckboxes(selectedIds) {
+    const container = document.getElementById('gtHangMucIds');
+    const sel = new Set(selectedIds || []);
+    if (hangMuc.length === 0) {
+        container.innerHTML = '<span style="color:gray;">Chưa có Hạng mục nào, vui lòng tạo Hạng mục trước.</span>';
+        return;
+    }
+    container.innerHTML = hangMuc.map(h => `
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
+            <input type="checkbox" class="gt-hm-cb" value="${h.maHangMuc}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${h.maHangMuc} — ${h.tenHangMuc}
+        </label>`).join('');
+}
+
+function fillGtPicker_(selectedId) {
+    const sel = document.getElementById('gtPicker');
+    sel.innerHTML = '<option value="">-- Chọn Gói thầu --</option>' +
+        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+    if (selectedId) sel.value = selectedId;
+}
+
+function loadGoiThauIntoForm_(maGoiThau) {
+    document.getElementById('gtEditId').value = maGoiThau || '';
+    const g = maGoiThau ? goiThau.find(x => x.maGoiThau === maGoiThau) : null;
+    document.getElementById('gtTen').value = g ? g.tenGoiThau : '';
+    fillGoiThauGroupCheckboxes(g ? g.maHangMucList : []);
+    document.getElementById('gtDeleteBtn').style.display = g ? '' : 'none';
+}
+
+function onGtPickerChange(maGoiThau) {
+    loadGoiThauIntoForm_(maGoiThau);
+}
+
+function openGoiThauModal(mode) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Gói thầu!', 'error'); return; }
+    const isManage = mode === 'manage';
+    document.getElementById('gtPickerGroup').style.display = isManage ? '' : 'none';
+    document.getElementById('goiThauModalTitle').innerText = isManage ? 'Sửa / Xóa Gói thầu' : 'Thêm Gói thầu';
+    if (isManage) fillGtPicker_('');
+    loadGoiThauIntoForm_('');
+    document.getElementById('goiThauModal').classList.add('active');
+}
+
+function closeGoiThauModal() {
+    document.getElementById('goiThauModal').classList.remove('active');
+}
+
+function saveGoiThauModal() {
+    const maGoiThau = document.getElementById('gtEditId').value;
+    const tenGoiThau = document.getElementById('gtTen').value.trim();
+    if (!tenGoiThau) { showCustomAlert('Vui lòng nhập Tên gói thầu!', 'error'); return; }
+    const maHangMucList = Array.from(document.querySelectorAll('.gt-hm-cb:checked')).map(cb => cb.value);
+
+    gsRun('adminSaveGoiThau', myUserId, myPassword, { maGoiThau, tenGoiThau, maHangMucList })
+        .then(() => {
+            closeGoiThauModal();
+            showCustomAlert('Đã lưu Gói thầu.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+function deleteGoiThau(maGoiThau) {
+    if (currentRole !== 'ADMIN') { showCustomAlert('Chỉ Quản trị mới có quyền quản lý Gói thầu!', 'error'); return; }
+    if (!confirm('Xác nhận XÓA Gói thầu này?')) return;
+
+    gsRun('adminDeleteGoiThau', myUserId, myPassword, maGoiThau)
+        .then(() => {
+            showCustomAlert('Đã xoá Gói thầu.', 'success');
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+function deleteGoiThauFromModal() {
+    const id = document.getElementById('gtEditId').value;
+    if (!id) { showCustomAlert('Vui lòng chọn 1 Gói thầu để xóa!', 'error'); return; }
+    closeGoiThauModal();
+    deleteGoiThau(id);
+}
+
+function fillParentSelect(selectEl, selectedId, excludeId) {
+    let html = '<option value="">-- Không có (là gốc) --</option>';
+    hangMuc.filter(h => h.maHangMuc !== excludeId).forEach(h => {
+        html += `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`;
+    });
+    selectEl.innerHTML = html;
+    if (selectedId) selectEl.value = selectedId;
 }
 </script>
