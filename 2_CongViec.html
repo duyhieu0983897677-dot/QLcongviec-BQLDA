@@ -181,6 +181,44 @@ function onCvGoiThauChange() {
     fillCvHangMucCheckboxes(document.getElementById('cvGoiThau').value, []);
 }
 
+// Chỉ Admin thấy được ô này, chỉ khi TẠO MỚI (không cho đổi người phụ trách sau khi đã tạo).
+function fillCvGiaoChoSelect() {
+    const sel = document.getElementById('cvGiaoCho');
+    let html = '<option value="">-- Tự đảm nhận --</option>';
+    users.filter(u => u.role !== 'ADMIN').forEach(u => { html += `<option value="${u.id}">${u.name}</option>`; });
+    sel.innerHTML = html;
+}
+
+function renderCvComments(list) {
+    const box = document.getElementById('cvCommentList');
+    if (!box) return;
+    box.innerHTML = (!list || list.length === 0)
+        ? '<div class="cv-comment-empty">Chưa có bình luận nào.</div>'
+        : list.map(c => `
+            <div class="cv-comment-item">
+                <div class="cv-comment-meta"><b>${c.nguoiBinhLuanTen}</b> <span>${c.thoiGian}</span></div>
+                <div class="cv-comment-noidung">${c.noiDung}</div>
+            </div>`).join('');
+    box.scrollTop = box.scrollHeight;
+}
+
+// Phản hồi ngay tại chỗ (thêm bình luận vào danh sách) — không đóng modal, để bình luận liên tiếp
+// được, giống mẫu "phản hồi ngay, tải lại nền" dùng khắp app.
+function guiBinhLuanCongViec() {
+    const maCongViec = document.getElementById('cvEditId').value;
+    const input = document.getElementById('cvCommentInput');
+    const noiDung = input.value.trim();
+    if (!maCongViec || !noiDung) return;
+
+    gsRun('themBinhLuanCongViec', myUserId, myPassword, maCongViec, noiDung)
+        .then(() => {
+            input.value = '';
+            return gsRun('getBinhLuanCongViec', maCongViec);
+        })
+        .then(json => renderCvComments(JSON.parse(json)))
+        .catch(handleBackendError);
+}
+
 function openCongViecModal(maCongViec) {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
     const cv = maCongViec ? congViec.find(x => x.maCongViec === maCongViec) : null;
@@ -192,6 +230,37 @@ function openCongViecModal(maCongViec) {
     document.getElementById('cvTen').value = cv ? cv.tenCongViec : '';
     document.getElementById('cvBatDau').value = cv ? formatVN(cv.ngayBatDauKH) : '';
     document.getElementById('cvKetThuc').value = cv ? formatVN(cv.ngayKetThucKH) : '';
+
+    // "Giao việc cho": chỉ Admin, chỉ lúc tạo mới.
+    const giaoChoGroup = document.getElementById('cvGiaoChoGroup');
+    if (!cv && currentRole === 'ADMIN') {
+        giaoChoGroup.style.display = '';
+        fillCvGiaoChoSelect();
+        document.getElementById('cvGiaoCho').value = '';
+    } else {
+        giaoChoGroup.style.display = 'none';
+    }
+
+    const giaoBoiInfo = document.getElementById('cvGiaoBoiInfo');
+    if (cv && cv.nguoiGiaoId) {
+        giaoBoiInfo.style.display = '';
+        giaoBoiInfo.innerHTML = `<span style="font-size:0.85rem; color:var(--text-muted);">Được <b>${cv.nguoiGiaoTen}</b> giao cho <b>${cv.nguoiTaoTen}</b></span>`;
+    } else {
+        giaoBoiInfo.style.display = 'none';
+    }
+
+    // Khung bình luận: chỉ hiện khi SỬA (đã có maCongViec).
+    const commentSection = document.getElementById('cvCommentSection');
+    document.getElementById('cvCommentInput').value = '';
+    if (cv) {
+        commentSection.style.display = '';
+        renderCvComments([]);
+        gsRun('getBinhLuanCongViec', maCongViec)
+            .then(json => renderCvComments(JSON.parse(json)))
+            .catch(() => renderCvComments([]));
+    } else {
+        commentSection.style.display = 'none';
+    }
 
     document.getElementById('congViecModal').classList.add('active');
 
@@ -234,11 +303,13 @@ function saveCongViecModal() {
         }
     }
 
+    const giaoChoEl = document.getElementById('cvGiaoCho');
     const payload = {
         maCongViec,
         tenCongViec,
         maGoiThau,
         maHangMucList,
+        nguoiDuocGiaoId: (!maCongViec && giaoChoEl) ? giaoChoEl.value : '',
         ngayBatDauKH: convertDMYtoISO(document.getElementById('cvBatDau').value.trim()) || '',
         ngayKetThucKH: convertDMYtoISO(document.getElementById('cvKetThuc').value.trim()) || ''
     };

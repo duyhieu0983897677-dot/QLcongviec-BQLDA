@@ -25,6 +25,47 @@
         .header-change-pass { color: #bae6fd; font-size: 0.75rem; cursor: pointer; text-decoration: underline; }
         .sidebar-brand { display: none; }
 
+        /* Chuông thông báo — ẩn mặc định, JS bật lên (display:inline-flex) khi đã đăng nhập
+           (xem setBellVisibleState() ở 1_DangNhap.html). Xuất hiện ở cả header mobile lẫn
+           sidebar desktop, dùng chung class nên querySelectorAll cập nhật cả 2 bản cùng lúc. */
+        .bell-wrap { display: none; position: relative; }
+        .bell-btn {
+            position: relative; background: rgba(255,255,255,0.08); border: none; color: white;
+            width: 38px; height: 38px; border-radius: 50%; cursor: pointer; font-size: 1.05rem;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .bell-btn:hover { background: rgba(255,255,255,0.18); }
+        .bell-badge {
+            position: absolute; top: -2px; right: -2px; min-width: 16px; height: 16px; padding: 0 3px;
+            border-radius: 999px; background: var(--danger); color: white; font-size: 10px; font-weight: 700;
+            display: none; align-items: center; justify-content: center; line-height: 1;
+        }
+        .thongbao-panel {
+            display: none; position: absolute; top: calc(100% + 8px); right: 0; width: 300px;
+            max-height: 360px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border);
+            border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 3000; text-align: left;
+        }
+        .thongbao-panel.active { display: block; }
+        .thongbao-panel-title { padding: 10px 14px; font-weight: 700; font-size: 0.85rem; color: var(--text-main); border-bottom: 1px solid var(--border); }
+        .thongbao-empty { padding: 20px 14px; text-align: center; color: var(--text-muted); font-size: 0.85rem; }
+        .thongbao-item { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+        .thongbao-item:last-child { border-bottom: none; }
+        .thongbao-item:hover { background: var(--bg); }
+        .thongbao-item.unread { background: #EAF2FE; }
+        .thongbao-noidung { font-size: 0.82rem; color: var(--text-main); line-height: 1.4; }
+        .thongbao-thoigian { font-size: 0.7rem; color: var(--text-muted); margin-top: 3px; }
+
+        /* Khung bình luận 2 chiều trong modal Công việc. */
+        .cv-comment-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px; margin-bottom: 8px; background: var(--bg); }
+        .cv-comment-empty { color: var(--text-muted); font-size: 0.82rem; text-align: center; padding: 10px 0; }
+        .cv-comment-item { padding: 6px 0; border-bottom: 1px solid var(--border); }
+        .cv-comment-item:last-child { border-bottom: none; }
+        .cv-comment-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between; gap: 8px; }
+        .cv-comment-meta b { color: var(--text-main); }
+        .cv-comment-noidung { font-size: 0.85rem; color: var(--text-main); margin-top: 2px; white-space: pre-wrap; }
+        .cv-comment-input-row { display: flex; gap: 8px; align-items: flex-end; }
+        .cv-comment-input-row textarea { flex: 1; resize: vertical; }
+
         body.view-only-mode .admin-element { display: none !important; }
         body:not(.view-only-mode) .locked-element { display: none !important; }
         body.role-view .admin-only, body.role-view .staff-element { display: none !important; }

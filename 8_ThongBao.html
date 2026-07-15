@@ -1,0 +1,86 @@
+<script>
+/* ================================================================
+   FILE 8: 8_ThongBao.html
+   ------------------------------------------------------------------
+   PHẠM VI: Chuông thông báo (2 bản sao — header mobile + sidebar
+   desktop, dùng chung class js-bell-xxx / js-thongbao-xxx giống cách
+   js-user-info đã làm) — báo cho nhân sự khi Trưởng Ban giao Công
+   việc mới hoặc có người bình luận vào Công việc mình phụ trách.
+
+   KHÔNG có polling định kỳ (Apps Script không đẩy realtime được) —
+   loadThongBao() chỉ được gọi lại từ reloadData() ở 0_TienIch.html,
+   tức là mỗi khi bấm "Làm mới", mở lại trang, hoặc sau mỗi lần lưu/
+   xóa dữ liệu (đúng tần suất đã chốt với người dùng).
+
+   DANH SÁCH HÀM CHÍNH:
+   - loadThongBao()         : Gọi getThongBaoCuaToi(), lưu rồi vẽ lại chuông + khung thả xuống
+   - toggleThongBaoPanel()  : Mở/đóng khung thông báo
+   - moThongBao(id)         : Đánh dấu đã đọc + nhảy đến đúng Công việc liên quan
+   ================================================================ */
+
+let dsThongBao = [];
+
+function loadThongBao() {
+    if (!myUserId) { dsThongBao = []; renderThongBaoBadge(); renderThongBaoPanel(); return; }
+    gsRun('getThongBaoCuaToi', myUserId, myPassword)
+        .then(json => {
+            dsThongBao = JSON.parse(json);
+            renderThongBaoBadge();
+            renderThongBaoPanel();
+        })
+        .catch(() => { /* tính năng phụ — lỗi tải thông báo không cần làm phiền người dùng */ });
+}
+
+function renderThongBaoBadge() {
+    const count = dsThongBao.filter(t => !t.daDoc).length;
+    document.querySelectorAll('.js-bell-badge').forEach(el => {
+        el.textContent = count > 9 ? '9+' : String(count);
+        el.style.display = count > 0 ? 'flex' : 'none';
+    });
+}
+
+function toggleThongBaoPanel() {
+    const panels = document.querySelectorAll('.js-thongbao-panel');
+    const willOpen = panels.length && !panels[0].classList.contains('active');
+    panels.forEach(el => el.classList.toggle('active', willOpen));
+}
+
+function closeThongBaoPanel() {
+    document.querySelectorAll('.js-thongbao-panel').forEach(el => el.classList.remove('active'));
+}
+
+// Bấm ra ngoài khung thông báo thì tự đóng lại.
+document.addEventListener('click', e => {
+    if (!e.target.closest('.js-bell-wrap')) closeThongBaoPanel();
+});
+
+function renderThongBaoPanel() {
+    const lists = document.querySelectorAll('.js-thongbao-list');
+    if (!lists.length) return;
+    const html = dsThongBao.length === 0
+        ? '<div class="thongbao-empty">Chưa có thông báo nào.</div>'
+        : dsThongBao.map(t => `
+            <div class="thongbao-item ${t.daDoc ? '' : 'unread'}" onclick="moThongBao('${t.id}')">
+                <div class="thongbao-noidung">${t.noiDung}</div>
+                <div class="thongbao-thoigian">${t.thoiGian}</div>
+            </div>`).join('');
+    lists.forEach(el => { el.innerHTML = html; });
+}
+
+function moThongBao(thongBaoId) {
+    const tb = dsThongBao.find(t => t.id === thongBaoId);
+    if (!tb) return;
+    closeThongBaoPanel();
+
+    if (!tb.daDoc) {
+        gsRun('danhDauDaDocThongBao', myUserId, myPassword, thongBaoId)
+            .then(() => { tb.daDoc = true; renderThongBaoBadge(); renderThongBaoPanel(); })
+            .catch(handleBackendError);
+    }
+
+    if (tb.maCongViec) {
+        switchTab('danhsach');
+        openCongViecModal(tb.maCongViec);
+    }
+}
+</script>

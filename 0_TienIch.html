@@ -101,7 +101,7 @@ if (typeof google !== 'undefined') {
 // Gọi lại sau khi ghi Nhật ký tiến độ / sửa Hạng mục / Gói thầu — server luôn là nguồn sự thật
 // (lũy kế % được server tính lại từ NhatKyTienDo), không tự suy đoán ở client.
 function reloadData() {
-    return gsRun('getData').then(applyLoadedData);
+    return gsRun('getData').then(applyLoadedData).then(loadThongBao);
 }
 
 // Nhận TÊN CHUỖI của hàm (không nhận thẳng tham chiếu hàm) và tra qua window[...] —

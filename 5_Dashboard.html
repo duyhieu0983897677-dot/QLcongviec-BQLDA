@@ -24,6 +24,51 @@ let bcPieChartInstance = null;
 let bcBarChartInstance = null;
 const BC_STATUS_COLORS = { pending: '#94A3B8', inprogress: '#60A5FA', done: '#34D399', late_done: '#FBBF24', overdue: '#F87171' };
 
+// Chart.js không có sẵn kiểu nhãn % kéo "râu" ra ngoài lát cắt (kiểu Excel/Google Sheets) — tự vẽ
+// bằng 1 plugin nhỏ, không cần thêm thư viện ngoài. Bỏ qua lát cắt = 0 (không có gì để chỉ vào).
+const PIE_OUTSIDE_LABELS_PLUGIN = {
+    id: 'pieOutsideLabels',
+    afterDraw(chart) {
+        if (chart.config.type !== 'pie') return;
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(0);
+        const values = chart.data.datasets[0].data;
+        const total = values.reduce((s, v) => s + (v || 0), 0);
+        if (!total) return;
+
+        ctx.save();
+        meta.data.forEach((arc, i) => {
+            const value = values[i];
+            if (!value) return;
+            const pct = Math.round((value / total) * 100);
+            const angle = (arc.startAngle + arc.endAngle) / 2;
+            const cx = arc.x, cy = arc.y;
+            const outerR = arc.outerRadius;
+            const cos = Math.cos(angle), sin = Math.sin(angle);
+
+            const p1x = cx + cos * outerR, p1y = cy + sin * outerR;
+            const p2x = cx + cos * (outerR + 14), p2y = cy + sin * (outerR + 14);
+            const goRight = cos >= 0;
+            const p3x = p2x + (goRight ? 14 : -14), p3y = p2y;
+
+            ctx.strokeStyle = '#94A3B8';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(p1x, p1y);
+            ctx.lineTo(p2x, p2y);
+            ctx.lineTo(p3x, p3y);
+            ctx.stroke();
+
+            ctx.fillStyle = '#334155';
+            ctx.font = '600 12px Inter, sans-serif';
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = goRight ? 'left' : 'right';
+            ctx.fillText(pct + '%', p3x + (goRight ? 4 : -4), p3y);
+        });
+        ctx.restore();
+    }
+};
+
 // Bấm "Làm mới" gọi reloadData() (tải lại toàn bộ congViec/hangMuc/goiThau/users rồi tự render lại
 // tab đang mở) thay vì tự gọi riêng 1 lệnh backend khác ở đây — nhất quán với mọi tab khác.
 function renderDashboard() {
@@ -43,6 +88,7 @@ function renderBcCharts() {
     if (bcPieChartInstance) bcPieChartInstance.destroy();
     bcPieChartInstance = new Chart(pieCanvas.getContext('2d'), {
         type: 'pie',
+        plugins: [PIE_OUTSIDE_LABELS_PLUGIN],
         data: {
             labels: ['Chờ thực hiện', 'Đang thực hiện', 'Hoàn thành', 'Trễ tiến độ nhưng hoàn thành', 'Trễ tiến độ không hoàn thành'],
             datasets: [{
@@ -50,7 +96,11 @@ function renderBcCharts() {
                 backgroundColor: [BC_STATUS_COLORS.pending, BC_STATUS_COLORS.inprogress, BC_STATUS_COLORS.done, BC_STATUS_COLORS.late_done, BC_STATUS_COLORS.overdue]
             }]
         },
-        options: { plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } }
+        options: {
+            // Chừa khoảng trống quanh vòng tròn để "râu" + nhãn % không bị cắt ở mép canvas.
+            layout: { padding: 44 },
+            plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+        }
     });
 
     // Hiện đủ mọi nhân sự (Giám sát) trên biểu đồ, kể cả người chưa tạo công việc nào (đếm = 0).

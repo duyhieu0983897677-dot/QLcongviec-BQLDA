@@ -9,8 +9,14 @@ const HANGMUC_HEADERS_ = ['maHangMuc', 'tenHangMuc', 'capDo', 'parentId', 'activ
 const GOITHAU_HEADERS_ = ['maGoiThau', 'tenGoiThau', 'maHangMucList'];
 // CongViec: đơn vị công việc thật do Admin/Giám sát tự tạo — đây mới là nơi Nhật ký tiến độ trỏ vào.
 // phanLoai ('ho_so'/'thi_cong') tự gán = phanMacDinh của người tạo tại thời điểm tạo, không sửa tay.
+// nguoiGiao_id/nguoiGiao_ten CHỈ có giá trị khi Admin tạo Công việc và giao cho người KHÁC (khác
+// nguoiTao_id — người phụ trách); rỗng nghĩa là tự tạo/tự đảm nhận, không ai giao.
 const CONGVIEC_HEADERS_ = ['maCongViec', 'tenCongViec', 'maGoiThau', 'maHangMucList', 'phanLoai',
-  'nguoiTao_id', 'nguoiTao_ten', 'ngayBatDauKH', 'ngayKetThucKH', 'active'];
+  'nguoiTao_id', 'nguoiTao_ten', 'ngayBatDauKH', 'ngayKetThucKH', 'active', 'nguoiGiao_id', 'nguoiGiao_ten'];
+// ThongBao: thông báo 1 chiều gửi cho 1 người (được giao việc / có người bình luận vào việc mình
+// phụ trách). BinhLuanCongViec: bình luận 2 chiều append-only theo từng Công việc.
+const THONGBAO_HEADERS_ = ['id', 'userId', 'loai', 'noiDung', 'maCongViec', 'nguoiGui_id', 'nguoiGui_ten', 'thoiGian', 'daDoc', 'active'];
+const BINHLUAN_HEADERS_ = ['id', 'maCongViec', 'nguoiBinhLuan_id', 'nguoiBinhLuan_ten', 'noiDung', 'thoiGian', 'active'];
 const NHATKY_HEADERS_ = ['logId', 'maCongViec', 'ngayBaoCao', 'phanTramNgay', 'ghiChu',
   'nguoiNhap_id', 'nguoiNhap_ten', 'thoiGianNhap', 'fileDinhKem', 'active'];
 // DiemDanhCuoiTuan: trạng thái điểm danh Thứ 7/CN hiện tại (upsert theo userId+ngay, KHÔNG phải
@@ -66,13 +72,21 @@ function thietLapBanDauSheet() {
     ss.insertSheet('PhepThang').getRange(1, 1, 1, PHEP_HEADERS_.length).setValues([PHEP_HEADERS_]);
   }
 
+  if (!ss.getSheetByName('ThongBao')) {
+    ss.insertSheet('ThongBao').getRange(1, 1, 1, THONGBAO_HEADERS_.length).setValues([THONGBAO_HEADERS_]);
+  }
+
+  if (!ss.getSheetByName('BinhLuanCongViec')) {
+    ss.insertSheet('BinhLuanCongViec').getRange(1, 1, 1, BINHLUAN_HEADERS_.length).setValues([BINHLUAN_HEADERS_]);
+  }
+
   ss.getSheets().forEach(sh => {
     if (/^(Sheet1|Trang tính1)$/.test(sh.getName()) && ss.getSheets().length > 3) {
       ss.deleteSheet(sh);
     }
   });
 
-  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, DiemDanhCuoiTuan, PhepThang.';
+  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, DiemDanhCuoiTuan, PhepThang, ThongBao, BinhLuanCongViec.';
 }
 
 // Chạy 1 lần khi cần xóa sạch toàn bộ Hạng mục + Công việc kiểu cũ để làm lại từ đầu.
@@ -187,6 +201,8 @@ function readCongViecRows_(sheet, includeInactive) {
       ngayBatDauKH: formatDateCell_(r[7]),
       ngayKetThucKH: formatDateCell_(r[8]),
       active,
+      nguoiGiaoId: String(r[10] || '').trim(),
+      nguoiGiaoTen: String(r[11] || '').trim(),
       rowIndex: idx + 2
     });
   });
@@ -536,7 +552,8 @@ function sinhMaCongViec_(sheet, now) {
 }
 
 // congViec = { maCongViec (rỗng nếu tạo mới), tenCongViec, maGoiThau, maHangMucList (mảng, chọn
-// được 1 hoặc nhiều Hạng mục), ngayBatDauKH, ngayKetThucKH }
+// được 1 hoặc nhiều Hạng mục), ngayBatDauKH, ngayKetThucKH, nguoiDuocGiaoId (optional — CHỈ Admin,
+// CHỈ lúc tạo mới, giao Công việc cho 1 Giám sát khác thay vì tự đảm nhận) }
 function adminSaveCongViec(userId, password, congViec) {
   const user = login(userId, password);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CongViec');
@@ -558,7 +575,8 @@ function adminSaveCongViec(userId, password, congViec) {
         if (user.role !== 'ADMIN' && String(data[i][5]).trim() !== user.supervisorId) {
           throw new Error('Bạn không có quyền sửa Công việc này!');
         }
-        // Giữ nguyên phanLoai (cột E) và người tạo (cột F/G) — chỉ cho sửa các field mô tả.
+        // Giữ nguyên phanLoai (cột E), người phụ trách (cột F/G) và người giao (cột K/L) — chỉ cho
+        // sửa các field mô tả, không cho đổi tay người phụ trách sau khi đã tạo.
         sheet.getRange(i + 1, 2, 1, 4).setValues([[tenCongViec, maGoiThau, maHangMucJoined, data[i][4]]]);
         sheet.getRange(i + 1, 8, 1, 2).setValues([[congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '']]);
         logActivity(userId, user.name, 'Sửa Công việc', `Sửa ${maCongViec} - ${tenCongViec}`);
@@ -568,20 +586,45 @@ function adminSaveCongViec(userId, password, congViec) {
     throw new Error('Không tìm thấy Công việc!');
   }
 
-  const phanMacDinh = String(user.phanMacDinh || '').trim()
-    || String((listSupervisors().find(u => u.id === user.supervisorId) || {}).phanMacDinh || '').trim();
+  const allUsers = listSupervisors();
+  let nguoiPhuTrachId = user.supervisorId;
+  let nguoiPhuTrachTen = user.name;
+  let nguoiGiaoId = '';
+  let nguoiGiaoTen = '';
+
+  const nguoiDuocGiaoId = String(congViec.nguoiDuocGiaoId || '').trim();
+  if (nguoiDuocGiaoId && nguoiDuocGiaoId !== user.supervisorId) {
+    if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền giao việc cho người khác!');
+    const target = allUsers.find(u => u.id === nguoiDuocGiaoId);
+    if (!target) throw new Error('Không tìm thấy nhân sự được giao!');
+    nguoiPhuTrachId = target.id;
+    nguoiPhuTrachTen = target.name;
+    nguoiGiaoId = user.supervisorId;
+    nguoiGiaoTen = user.name;
+  }
+
+  const nguoiPhuTrach = allUsers.find(u => u.id === nguoiPhuTrachId);
+  const phanMacDinh = String((nguoiPhuTrach && nguoiPhuTrach.phanMacDinh) || '').trim();
   if (!phanMacDinh) {
-    throw new Error('Tài khoản của bạn chưa được Quản trị gán Phần mặc định (Chức danh). Vui lòng liên hệ Quản trị trước khi tự tạo Công việc.');
+    throw new Error(nguoiGiaoId
+      ? `Nhân sự "${nguoiPhuTrachTen}" chưa được Quản trị gán Phần mặc định (Chức danh). Vui lòng gán trước khi giao việc.`
+      : 'Tài khoản của bạn chưa được Quản trị gán Phần mặc định (Chức danh). Vui lòng liên hệ Quản trị trước khi tự tạo Công việc.');
   }
 
   const now = new Date();
   const newId = sinhMaCongViec_(sheet, now);
   sheet.appendRow([
     newId, tenCongViec, maGoiThau, maHangMucJoined, phanMacDinh,
-    user.supervisorId, user.name,
-    congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '', true
+    nguoiPhuTrachId, nguoiPhuTrachTen,
+    congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '', true,
+    nguoiGiaoId, nguoiGiaoTen
   ]);
   logActivity(userId, user.name, 'Thêm Công việc', `Thêm ${newId} - ${tenCongViec}`);
+
+  if (nguoiGiaoId) {
+    guiThongBao_(nguoiPhuTrachId, 'giao_viec', `Bạn được giao công việc mới: "${tenCongViec}"`, newId, nguoiGiaoId, nguoiGiaoTen);
+  }
+
   return newId;
 }
 
@@ -602,6 +645,148 @@ function adminDeleteCongViec(userId, password, maCongViec) {
     }
   }
   throw new Error('Không tìm thấy Công việc!');
+}
+
+// =======================================================
+// THÔNG BÁO & BÌNH LUẬN CÔNG VIỆC — báo cho nhân sự khi được giao việc mới hoặc có người bình
+// luận vào việc mình phụ trách. KHÔNG có polling định kỳ (Apps Script không đẩy realtime được) —
+// frontend chỉ hỏi lại sau mỗi lần reloadData() (bấm "Làm mới"/sau khi lưu/mở lại trang).
+// =======================================================
+
+function sinhMaTuTang_(sheet, prefix, now) {
+  const ngay = Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyyMMdd');
+  const fullPrefix = prefix + '-' + ngay + '-';
+  const lastRow = sheet.getLastRow();
+  let maxSTT = 0;
+  if (lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    ids.forEach(r => {
+      const id = String(r[0] || '');
+      if (id.indexOf(fullPrefix) === 0) {
+        const stt = parseInt(id.slice(fullPrefix.length), 10);
+        if (!isNaN(stt) && stt > maxSTT) maxSTT = stt;
+      }
+    });
+  }
+  return fullPrefix + String(maxSTT + 1).padStart(3, '0');
+}
+
+// Gửi 1 thông báo cho 1 người — tự bỏ qua nếu không có người nhận hoặc người nhận chính là người
+// gây ra hành động (không cần tự báo cho chính mình).
+function guiThongBao_(userId, loai, noiDung, maCongViec, nguoiGuiId, nguoiGuiTen) {
+  if (!userId || userId === nguoiGuiId) return;
+  const sheet = layHoacTaoSheet_('ThongBao', THONGBAO_HEADERS_);
+  const id = sinhMaTuTang_(sheet, 'TB', new Date());
+  sheet.appendRow([id, userId, loai, noiDung, maCongViec || '', nguoiGuiId || '', nguoiGuiTen || '', new Date(), false, true]);
+}
+
+function readThongBaoRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, THONGBAO_HEADERS_.length).getValues();
+  const result = [];
+  values.forEach((r, idx) => {
+    const id = String(r[0] || '').trim();
+    if (!id) return;
+    if (!isActiveVal_(r[9])) return;
+    result.push({
+      id,
+      userId: String(r[1] || '').trim(),
+      loai: String(r[2] || '').trim(),
+      noiDung: String(r[3] || '').trim(),
+      maCongViec: String(r[4] || '').trim(),
+      nguoiGuiId: String(r[5] || '').trim(),
+      nguoiGuiTen: String(r[6] || '').trim(),
+      thoiGian: formatDateTimeCell_(r[7]),
+      daDoc: r[8] === true || String(r[8]).trim().toUpperCase() === 'TRUE',
+      rowIndex: idx + 2
+    });
+  });
+  return result;
+}
+
+// Trả về thông báo của đúng user gọi hàm, mới nhất trước.
+function getThongBaoCuaToi(userId, password) {
+  const user = login(userId, password);
+  const sheet = layHoacTaoSheet_('ThongBao', THONGBAO_HEADERS_);
+  const list = readThongBaoRows_(sheet).filter(t => t.userId === user.supervisorId);
+  list.sort((a, b) => b.id.localeCompare(a.id));
+  return JSON.stringify(list);
+}
+
+function danhDauDaDocThongBao(userId, password, thongBaoId) {
+  const user = login(userId, password);
+  const sheet = layHoacTaoSheet_('ThongBao', THONGBAO_HEADERS_);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(thongBaoId).trim()) {
+      if (String(data[i][1]).trim() !== user.supervisorId) throw new Error('Thông báo này không thuộc về bạn!');
+      sheet.getRange(i + 1, 9).setValue(true);
+      return 'Success';
+    }
+  }
+  throw new Error('Không tìm thấy thông báo!');
+}
+
+function readBinhLuanRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, BINHLUAN_HEADERS_.length).getValues();
+  const result = [];
+  values.forEach(r => {
+    const id = String(r[0] || '').trim();
+    if (!id) return;
+    if (!isActiveVal_(r[6])) return;
+    result.push({
+      id,
+      maCongViec: String(r[1] || '').trim(),
+      nguoiBinhLuanId: String(r[2] || '').trim(),
+      nguoiBinhLuanTen: String(r[3] || '').trim(),
+      noiDung: String(r[4] || '').trim(),
+      thoiGian: formatDateTimeCell_(r[5])
+    });
+  });
+  return result;
+}
+
+// Không cần đăng nhập để xem — nhất quán với getNhatKyGanNhat cũng đọc công khai.
+function getBinhLuanCongViec(maCongViec) {
+  const sheet = layHoacTaoSheet_('BinhLuanCongViec', BINHLUAN_HEADERS_);
+  const list = readBinhLuanRows_(sheet).filter(c => c.maCongViec === String(maCongViec || '').trim());
+  list.sort((a, b) => a.id.localeCompare(b.id));
+  return JSON.stringify(list);
+}
+
+function themBinhLuanCongViec(userId, password, maCongViec, noiDung) {
+  const user = login(userId, password);
+  const noiDungTrim = String(noiDung || '').trim();
+  if (!noiDungTrim) throw new Error('Vui lòng nhập nội dung bình luận!');
+
+  const cvSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CongViec');
+  if (!cvSheet) throw new Error('Chưa cấu hình Tab CongViec trên Google Sheet!');
+  const cv = readCongViecRows_(cvSheet, true).find(c => c.maCongViec === String(maCongViec || '').trim());
+  if (!cv) throw new Error('Không tìm thấy Công việc!');
+  if (user.role !== 'ADMIN' && cv.nguoiTaoId !== user.supervisorId) {
+    throw new Error('Bạn không có quyền bình luận vào Công việc này!');
+  }
+
+  const blSheet = layHoacTaoSheet_('BinhLuanCongViec', BINHLUAN_HEADERS_);
+  const id = sinhMaTuTang_(blSheet, 'BL', new Date());
+  blSheet.appendRow([id, cv.maCongViec, user.supervisorId, user.name, noiDungTrim, new Date(), true]);
+  logActivity(userId, user.name, 'Bình luận Công việc', `${cv.maCongViec}: ${noiDungTrim}`);
+
+  // Báo cho mọi người từng liên quan tới Công việc này (người phụ trách, người giao — nếu có, và
+  // mọi người đã từng bình luận), trừ chính người vừa bình luận.
+  const nguoiLienQuan = new Set([cv.nguoiTaoId, cv.nguoiGiaoId].filter(Boolean));
+  readBinhLuanRows_(blSheet).forEach(c => { if (c.maCongViec === cv.maCongViec) nguoiLienQuan.add(c.nguoiBinhLuanId); });
+  nguoiLienQuan.delete(user.supervisorId);
+  nguoiLienQuan.forEach(id2 => {
+    guiThongBao_(id2, 'binh_luan', `${user.name} vừa bình luận vào "${cv.tenCongViec}"`, cv.maCongViec, user.supervisorId, user.name);
+  });
+
+  return 'Success';
 }
 
 // =======================================================

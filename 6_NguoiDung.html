@@ -28,10 +28,11 @@ function renderNguoiDung() {
 
     const body = document.getElementById('nguoiDungBody');
     if (users.length === 0) {
-        body.innerHTML = '<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
         return;
     }
-    body.innerHTML = users.map(u => `<tr>
+    body.innerHTML = users.map((u, idx) => `<tr>
+        <td class="text-center">${idx + 1}</td>
         <td>${u.id}</td>
         <td>${u.name}</td>
         <td class="text-center">${u.role === 'ADMIN' ? 'Quản trị' : 'Giám sát'}</td>

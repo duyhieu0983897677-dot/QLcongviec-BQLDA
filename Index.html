@@ -32,6 +32,16 @@
         </div>
 
         <div class="header-actions">
+            <div class="js-bell-wrap bell-wrap">
+                <button class="js-bell-btn bell-btn" onclick="toggleThongBaoPanel()" title="Thông báo">
+                    <i class="fa-solid fa-bell"></i>
+                    <span class="js-bell-badge bell-badge">0</span>
+                </button>
+                <div class="js-thongbao-panel thongbao-panel">
+                    <div class="thongbao-panel-title">Thông báo</div>
+                    <div class="js-thongbao-list thongbao-list"></div>
+                </div>
+            </div>
             <div class="js-user-info header-user-info">
                 <div class="header-username"><i class="fa-solid fa-user"></i> <span class="js-user-name">--</span></div>
                 <div class="header-change-pass" onclick="openChangePassModal()">Đổi mật khẩu</div>
@@ -50,6 +60,16 @@
                 </div>
             </div>
             <div class="sidebar-login">
+                <div class="js-bell-wrap bell-wrap">
+                    <button class="js-bell-btn bell-btn" onclick="toggleThongBaoPanel()" title="Thông báo">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="js-bell-badge bell-badge">0</span>
+                    </button>
+                    <div class="js-thongbao-panel thongbao-panel">
+                        <div class="thongbao-panel-title">Thông báo</div>
+                        <div class="js-thongbao-list thongbao-list"></div>
+                    </div>
+                </div>
                 <div class="js-user-info header-user-info">
                     <div class="header-username"><i class="fa-solid fa-user"></i> <span class="js-user-name">--</span></div>
                     <div class="header-change-pass" onclick="openChangePassModal()">Đổi mật khẩu</div>
@@ -104,7 +124,7 @@
                 <div class="bc-charts-grid">
                     <div>
                         <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Tỷ lệ trạng thái công việc</div>
-                        <div style="max-width:300px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
+                        <div style="max-width:380px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
                     </div>
                     <div>
                         <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Số công việc theo Người phụ trách</div>
@@ -250,7 +270,7 @@
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Chức danh</th><th>Phần mặc định</th><th>Số Công việc đã tạo</th><th>Hành động</th></tr></thead>
+                        <thead><tr><th>STT</th><th>Tên đăng nhập (ID)</th><th>Họ tên</th><th>Vai trò</th><th>Chức danh</th><th>Phần mặc định</th><th>Số Công việc đã tạo</th><th>Hành động</th></tr></thead>
                         <tbody id="nguoiDungBody"></tbody>
                     </table>
                 </div>
@@ -326,6 +346,13 @@
         <div class="modal-content" style="max-width:480px;">
             <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="congViecModalTitle">Thêm công việc</span></h3>
             <input type="hidden" id="cvEditId">
+            <div class="form-group" style="margin-bottom:10px;" id="cvGiaoChoGroup">
+                <label>Giao việc cho <span style="font-weight:400; color:var(--text-muted);">(chỉ Quản trị, để trống = tự đảm nhận)</span></label>
+                <select id="cvGiaoCho" class="form-control">
+                    <option value="">-- Tự đảm nhận --</option>
+                </select>
+            </div>
+            <div class="form-group" id="cvGiaoBoiInfo" style="margin-bottom:10px; display:none;"></div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Gói thầu</label>
                 <select id="cvGoiThau" class="form-control" onchange="onCvGoiThauChange()"></select>
@@ -342,6 +369,19 @@
                 <div class="form-group"><label>Bắt đầu</label><input type="text" id="cvBatDau" class="form-control" placeholder="dd/mm/yyyy"></div>
                 <div class="form-group"><label>Kết thúc</label><input type="text" id="cvKetThuc" class="form-control" placeholder="dd/mm/yyyy"></div>
             </div>
+
+            <!-- Khung bình luận 2 chiều — chỉ hiện khi SỬA (đã có maCongViec), ẩn lúc tạo mới. -->
+            <div id="cvCommentSection" style="display:none; margin-bottom:14px;">
+                <label style="display:block; margin-bottom:6px; font-size:0.85rem; font-weight:600; color:var(--text-muted);">
+                    <i class="fa-solid fa-comments"></i> Bình luận
+                </label>
+                <div id="cvCommentList" class="cv-comment-list"></div>
+                <div class="cv-comment-input-row">
+                    <textarea id="cvCommentInput" class="form-control" rows="2" placeholder="Nhập bình luận..."></textarea>
+                    <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="guiBinhLuanCongViec()"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveCongViecModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeCongViecModal()">Hủy</button>
@@ -507,5 +547,6 @@
     <?!= include('5_Dashboard'); ?>
     <?!= include('6_NguoiDung'); ?>
     <?!= include('7_DiemDanh'); ?>
+    <?!= include('8_ThongBao'); ?>
 </body>
 </html>

@@ -45,6 +45,18 @@ function setUserInfoState(visible, name) {
     });
 }
 
+// Chuông thông báo chỉ có ý nghĩa khi đã đăng nhập (thông báo gắn với 1 người cụ thể).
+function setBellVisibleState(visible) {
+    document.querySelectorAll('.js-bell-wrap').forEach(el => {
+        el.style.display = visible ? 'inline-flex' : 'none';
+    });
+    if (!visible) {
+        dsThongBao = [];
+        renderThongBaoBadge();
+        closeThongBaoPanel();
+    }
+}
+
 function toggleAdmin() {
     const body = document.body;
     if (currentRole === "VIEW") {
@@ -57,6 +69,7 @@ function toggleAdmin() {
         body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
+        setBellVisibleState(false);
         switchTab(window.innerWidth < 768 ? 'home' : 'dashboard');
     }
 }
@@ -100,6 +113,8 @@ function confirmPassword() {
             }
 
             setUserInfoState(true, myUserName);
+            setBellVisibleState(true);
+            loadThongBao();
 
             btnSubmit.innerHTML = originalText;
             btnSubmit.disabled = false;
@@ -171,6 +186,7 @@ function handleBackendError(error) {
         document.body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
+        setBellVisibleState(false);
     }
 }
 </script>
