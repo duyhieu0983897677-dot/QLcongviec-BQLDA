@@ -17,6 +17,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
     <script src="https://npmcdn.com/flatpickr/dist/l10n/vi.js" defer></script>
+    <!-- SheetJS: đọc file Excel (.xlsx/.xls/.csv) ngay trên trình duyệt cho 3 chỗ "Nhập Excel" ở
+         BOQ/Nghiệm thu/Thanh toán — không upload file lên server, chỉ đọc rồi gọi các hàm lưu có sẵn. -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 
     <?!= include('Style'); ?>
 </head>
@@ -153,58 +156,97 @@
                 <button class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="reloadData()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
             </div>
 
-            <div class="card">
-                <div class="card-title"><i class="fa-solid fa-file-contract"></i> Tổng quan Hợp đồng</div>
-                <div id="bcHopDongSummary" class="kpi-row"></div>
+            <div class="bc-pill-switch">
+                <button type="button" class="bc-pill active" data-panel="congviec" onclick="switchBcPanel('congviec')"><i class="fa-solid fa-list-check"></i> Báo cáo Công việc</button>
+                <button type="button" class="bc-pill" data-panel="chiphi" onclick="switchBcPanel('chiphi')"><i class="fa-solid fa-file-invoice-dollar"></i> Báo cáo Chi phí</button>
             </div>
 
-            <div class="card">
-                <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-list-check"></i> Công việc</div>
-                <div class="bc-charts-grid">
-                    <div>
-                        <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Tỷ lệ trạng thái công việc</div>
-                        <div style="max-width:380px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
-                    </div>
-                    <div>
-                        <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Số công việc theo Người phụ trách</div>
-                        <div id="bcBarChartWrap" class="bc-bar-scroll">
-                            <div id="bcBarChartInner"><canvas id="bcBarChart"></canvas></div>
+            <div id="bcPanelCongViec" class="bc-panel active">
+                <div class="card">
+                    <div class="bc-charts-grid">
+                        <div>
+                            <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Tỷ lệ trạng thái công việc</div>
+                            <div style="max-width:380px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
                         </div>
+                        <div>
+                            <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Số công việc theo Người phụ trách</div>
+                            <div id="bcBarChartWrap" class="bc-bar-scroll">
+                                <div id="bcBarChartInner"><canvas id="bcBarChart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Báo cáo chi tiết</div>
+                    <div class="filter-bar">
+                        <select id="bcDetailType" onchange="onBcDetailTypeChange()">
+                            <option value="goithau">Xem theo Gói thầu</option>
+                            <option value="hangmuc">Xem theo Hạng mục</option>
+                        </select>
+                        <select id="bcDetailSelect" onchange="renderBcDetail()" style="flex:1; min-width:200px;"></select>
+                        <div class="col-toggle-wrap">
+                            <button type="button" class="btn btn-sm col-toggle-btn" onclick="toggleBcColPanel()"><i class="fa-solid fa-table-columns"></i> Cột hiển thị</button>
+                            <div id="bcColTogglePanel" class="col-toggle-panel">
+                                <div id="bcColToggleList"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table" id="bcDetailTable">
+                            <thead><tr>
+                                <th data-col="stt">STT</th>
+                                <th data-col="mahangmuc" style="min-width:110px;">Mã hạng mục</th>
+                                <th data-col="ten" style="text-align:left; min-width:220px;">Tên công việc</th>
+                                <th data-col="nguoiphutrach" style="min-width:100px;">Người phụ trách</th>
+                                <th data-col="chucdanh" style="min-width:90px;">Chức danh</th>
+                                <th data-col="ngaybatdau" style="min-width:100px;">Ngày bắt đầu</th>
+                                <th data-col="ngayketthuc" style="min-width:100px;">Ngày hoàn thành</th>
+                                <th data-col="tiendo" style="min-width:140px;">Tiến độ</th>
+                                <th data-col="tinhtrang" style="min-width:150px;">Tình trạng</th>
+                                <th data-col="ghichu" style="text-align:left; min-width:180px;">Ghi chú</th>
+                            </tr></thead>
+                            <tbody id="bcDetailBody"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Báo cáo chi tiết</div>
-                <div class="filter-bar">
-                    <select id="bcDetailType" onchange="onBcDetailTypeChange()">
-                        <option value="goithau">Xem theo Gói thầu</option>
-                        <option value="hangmuc">Xem theo Hạng mục</option>
-                    </select>
-                    <select id="bcDetailSelect" onchange="renderBcDetail()" style="flex:1; min-width:200px;"></select>
-                    <div class="col-toggle-wrap">
-                        <button type="button" class="btn btn-sm col-toggle-btn" onclick="toggleBcColPanel()"><i class="fa-solid fa-table-columns"></i> Cột hiển thị</button>
-                        <div id="bcColTogglePanel" class="col-toggle-panel">
-                            <div id="bcColToggleList"></div>
+            <div id="bcPanelChiPhi" class="bc-panel">
+                <div class="card">
+                    <div class="filter-bar">
+                        <select id="bcChiPhiHopDongSelect" class="hd-select" onchange="renderBcChiPhi()"></select>
+                    </div>
+                    <div class="kpi-row">
+                        <div class="kpi-mini"><span>Giá trị Hợp đồng</span><b id="cpKpiTong">0</b></div>
+                        <div class="kpi-mini"><span>Đã thực hiện</span><b id="cpKpiThucHien">0</b></div>
+                        <div class="kpi-mini"><span>Phát sinh (vượt KL)</span><b id="cpKpiPhatSinh">0</b></div>
+                        <div class="kpi-mini"><span>Đã thanh toán</span><b id="cpKpiThanhToan">0</b></div>
+                    </div>
+                </div>
+
+                <div id="cpChartsCard" class="card">
+                    <div class="bc-charts-grid">
+                        <div>
+                            <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Sản lượng đã thực hiện</div>
+                            <div style="max-width:340px; margin:0 auto;"><canvas id="cpPieChart"></canvas></div>
+                            <div id="cpPieLegend" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"></div>
+                        </div>
+                        <div>
+                            <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Sản lượng thực hiện 6 tháng gần nhất</div>
+                            <div style="height:280px;"><canvas id="cpMonthlyChart"></canvas></div>
                         </div>
                     </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="data-table" id="bcDetailTable">
-                        <thead><tr>
-                            <th data-col="stt">STT</th>
-                            <th data-col="mahangmuc" style="min-width:110px;">Mã hạng mục</th>
-                            <th data-col="ten" style="text-align:left; min-width:220px;">Tên công việc</th>
-                            <th data-col="nguoiphutrach" style="min-width:100px;">Người phụ trách</th>
-                            <th data-col="chucdanh" style="min-width:90px;">Chức danh</th>
-                            <th data-col="ngaybatdau" style="min-width:100px;">Ngày bắt đầu</th>
-                            <th data-col="ngayketthuc" style="min-width:100px;">Ngày hoàn thành</th>
-                            <th data-col="tiendo" style="min-width:140px;">Tiến độ</th>
-                            <th data-col="tinhtrang" style="min-width:150px;">Tình trạng</th>
-                            <th data-col="ghichu" style="text-align:left; min-width:180px;">Ghi chú</th>
-                        </tr></thead>
-                        <tbody id="bcDetailBody"></tbody>
-                    </table>
+
+                <div id="cpSCurveCard" class="card">
+                    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Biểu đồ dòng tiền (Kế hoạch vs Thực tế lũy kế)</div>
+                    <p id="cpSCurveEmptyNote" style="font-size:0.78rem; color:var(--text-muted); display:none;">Chưa có hạng mục BOQ nào đặt Ngày bắt đầu/kết thúc kế hoạch nên chưa vẽ được đường "Kế hoạch lũy kế".</p>
+                    <div style="height:320px;"><canvas id="cpSCurveChart"></canvas></div>
+                </div>
+
+                <div id="cpLockedNote" class="card" style="text-align:center; padding:24px; display:none;">
+                    <p style="color:var(--text-muted); margin:0;"><i class="fa-solid fa-lock"></i> Chỉ Quản trị hoặc Giám sát QS mới xem được biểu đồ chi phí.</p>
                 </div>
             </div>
         </section>
@@ -234,9 +276,13 @@
 
         <!-- TAB: BOQ -->
         <section id="boq" class="tab-content">
-            <div id="boqNoHopDong" class="card" style="text-align:center; padding:30px;">
-                <p style="color:var(--text-muted); margin-bottom:12px;">Chưa chọn Hợp đồng để xem BOQ.</p>
-                <button class="btn" style="width:auto; background:var(--primary);" onclick="switchTab('hopdong')">Chọn Hợp đồng</button>
+            <div class="card">
+                <div class="filter-bar" style="margin-bottom:0;">
+                    <select id="boqHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderBOQ();"></select>
+                </div>
+            </div>
+            <div id="boqNoHopDong" class="card" style="text-align:center; padding:24px;">
+                <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
             </div>
             <div id="boqContent">
                 <div class="card">
@@ -262,10 +308,12 @@
                         </table>
                     </div>
                     <details class="admin-only" style="margin-top:14px;">
-                        <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ Excel (dán dữ liệu)</summary>
-                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">Copy các cột từ Excel theo đúng thứ tự: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Ngày bắt đầu (dd/mm/yyyy) | Ngày kết thúc, rồi dán vào ô bên dưới (mỗi dòng Excel = 1 hạng mục thường, không phải Đầu mục).</p>
-                        <textarea id="boqImportBox" class="form-control" rows="5" placeholder="Dán dữ liệu từ Excel vào đây..."></textarea>
-                        <button class="btn btn-sm" style="background:var(--primary); margin-top:8px; width:auto;" onclick="importBOQFromPaste()"><i class="fa-solid fa-file-import"></i> Nhập vào BOQ</button>
+                        <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel</summary>
+                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo đúng thứ tự cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Thành tiền (bỏ qua) | Ngày bắt đầu KH | Ngày kết thúc KH (2 cột ngày cuối không bắt buộc, dòng đầu là tiêu đề). Dòng có STT dạng số La Mã/chữ cái hoặc không có Khối lượng lẫn Đơn giá sẽ tự nhận là Đầu mục.</p>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <input type="file" id="boqExcelFile" accept=".xlsx,.xls,.csv" class="form-control" style="flex:1; min-width:200px;">
+                            <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="importBOQFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập vào BOQ</button>
+                        </div>
                     </details>
                 </div>
 
@@ -281,15 +329,19 @@
 
         <!-- TAB: NGHIỆM THU -->
         <section id="nghiemthu" class="tab-content">
-            <div id="ntNoHopDong" class="card" style="text-align:center; padding:30px;">
-                <p style="color:var(--text-muted); margin-bottom:12px;">Chưa chọn Hợp đồng để nghiệm thu.</p>
-                <button class="btn" style="width:auto; background:var(--primary);" onclick="switchTab('hopdong')">Chọn Hợp đồng</button>
+            <div class="card">
+                <div class="filter-bar" style="margin-bottom:0;">
+                    <select id="ntHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderNghiemThu();"></select>
+                </div>
+            </div>
+            <div id="ntNoHopDong" class="card" style="text-align:center; padding:24px;">
+                <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
             </div>
             <div id="ntContent">
                 <div class="card">
                     <div id="ntHopDongInfo" style="margin-bottom:10px; font-size:0.9rem;"></div>
                     <div class="card-title"><i class="fa-solid fa-clipboard-check"></i> Ghi nhận khối lượng nghiệm thu</div>
-                    <div class="form-group" style="margin-bottom:10px;">
+                    <div class="form-group" style="margin-bottom:10px; max-width:380px;">
                         <label>Hạng mục BOQ</label>
                         <select id="ntBOQ" class="form-control" onchange="selectNghiemThuBOQ(this.value)"></select>
                     </div>
@@ -308,21 +360,38 @@
                             <input type="text" id="ntGhiChu" class="form-control">
                         </div>
                     </div>
-                    <button id="ntSubmit" class="btn" style="background:var(--success); width:auto;" onclick="submitNghiemThu()" disabled><i class="fa-solid fa-check"></i> Ghi nhận</button>
+                    <button id="ntSubmit" class="btn btn-sm" style="background:var(--success);" onclick="submitNghiemThu()" disabled><i class="fa-solid fa-check"></i> Ghi nhận</button>
 
                     <div style="margin-top:16px;">
                         <div class="card-title" style="font-size:0.9rem;">5 lượt gần nhất</div>
                         <div id="ntRecent"></div>
                     </div>
+
+                    <details class="admin-only" style="margin-top:16px;">
+                        <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel (nhiều hạng mục cùng lúc)</summary>
+                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo cột: STT | Tên hạng mục | ĐVT | Khối lượng (dòng đầu là tiêu đề). Mỗi dòng khớp với đúng 1 hạng mục BOQ theo STT+Tên, áp dụng cho CÙNG 1 ngày nhập bên dưới.</p>
+                        <div class="form-group" style="margin-bottom:10px; max-width:220px;">
+                            <label>Ngày nghiệm thu</label>
+                            <input type="text" id="ntExcelNgay" class="form-control" placeholder="dd/mm/yyyy">
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <input type="file" id="ntExcelFile" accept=".xlsx,.xls,.csv" class="form-control" style="flex:1; min-width:200px;">
+                            <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="importNghiemThuFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
+                        </div>
+                    </details>
                 </div>
             </div>
         </section>
 
         <!-- TAB: THANH TOÁN -->
         <section id="thanhtoan" class="tab-content">
-            <div id="ttNoHopDong" class="card" style="text-align:center; padding:30px;">
-                <p style="color:var(--text-muted); margin-bottom:12px;">Chưa chọn Hợp đồng để xem Thanh toán.</p>
-                <button class="btn" style="width:auto; background:var(--primary);" onclick="switchTab('hopdong')">Chọn Hợp đồng</button>
+            <div class="card">
+                <div class="filter-bar" style="margin-bottom:0;">
+                    <select id="ttHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderThanhToan();"></select>
+                </div>
+            </div>
+            <div id="ttNoHopDong" class="card" style="text-align:center; padding:24px;">
+                <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
             </div>
             <div id="ttContent">
                 <div class="card">
@@ -340,9 +409,13 @@
 
         <!-- TAB: QUYẾT TOÁN -->
         <section id="quyettoan" class="tab-content">
-            <div id="qtNoHopDong" class="card" style="text-align:center; padding:30px;">
-                <p style="color:var(--text-muted); margin-bottom:12px;">Chưa chọn Hợp đồng để xem Quyết toán.</p>
-                <button class="btn" style="width:auto; background:var(--primary);" onclick="switchTab('hopdong')">Chọn Hợp đồng</button>
+            <div class="card">
+                <div class="filter-bar" style="margin-bottom:0;">
+                    <select id="qtHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderQuyetToan();"></select>
+                </div>
+            </div>
+            <div id="qtNoHopDong" class="card" style="text-align:center; padding:24px;">
+                <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
             </div>
             <div id="qtContent">
                 <div class="card">
@@ -482,12 +555,6 @@
                         <tbody id="nguoiDungBody"></tbody>
                     </table>
                 </div>
-
-                <details class="admin-only" style="margin-top:16px;">
-                    <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Công cụ: Di trú dữ liệu Hợp đồng từ app cũ (chỉ chạy 1 lần)</summary>
-                    <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">Đọc toàn bộ Hợp đồng/BOQ/Phụ lục/Nghiệm thu/Thanh toán từ app "Quản Lý Đa Hợp Đồng & Tiến Độ" cũ và ghi vào các sheet Hợp đồng của dự án này. KHÔNG đụng gì tới app cũ (chỉ đọc). Chạy lại nhiều lần sẽ tạo trùng dữ liệu — chỉ bấm 1 lần.</p>
-                    <button class="btn btn-sm" style="background:var(--danger); width:auto;" onclick="chayDiTruHopDong()"><i class="fa-solid fa-database"></i> Chạy di trú dữ liệu Hợp đồng</button>
-                </details>
             </div>
         </section>
     </main>
@@ -897,6 +964,13 @@
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Khối lượng thực hiện kỳ này (theo hạng mục)</label>
                 <div id="ttItemsBox" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:8px;"></div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">Hoặc nhập nhanh từ file Excel (STT | Tên | ĐVT | Khối lượng) — tự điền vào danh sách trên, chưa lưu ngay</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <input type="file" id="ttExcelFile" accept=".xlsx,.xls,.csv" class="form-control" style="flex:1; min-width:180px;">
+                    <button type="button" class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="importThanhToanFromExcel()"><i class="fa-solid fa-file-import"></i> Điền từ Excel</button>
+                </div>
             </div>
             <div class="form-row-3">
                 <div class="form-group">

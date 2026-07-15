@@ -4,17 +4,19 @@
    ------------------------------------------------------------------
    PHẠM VI: Tab "BOQ" — cây hạng mục khối lượng mời thầu của Hợp đồng
    đang chọn (currentHopDongId, xem 9_HopDong.html) + quản lý Phụ lục
-   điều chỉnh giá/khối lượng theo thời điểm + nhập nhanh BOQ bằng cách
-   dán dữ liệu copy từ Excel (tab-separated, không cần thư viện ngoài).
+   điều chỉnh giá/khối lượng theo thời điểm + nhập nhanh BOQ từ file
+   Excel thật (SheetJS, xem docFileExcel_ ở 9_HopDong.html).
 
    DANH SÁCH HÀM CHÍNH:
-   - renderBOQ()            : Vẽ cây BOQ + danh sách Phụ lục cho Hợp đồng đang chọn
+   - renderBOQ()            : Vẽ cây BOQ + danh sách Phụ lục cho Hợp đồng đang chọn (ĐÚNG thứ tự
+                              lưu trong sheet, không tự sắp lại theo STT)
    - openBOQItemModal(id)   : Thêm/sửa 1 hạng mục BOQ
    - openThayDoiModal(mplc) : Thêm 1 dòng thay đổi (MOI/THAY_THE/DIEU_CHINH) vào Phụ lục
-   - importBOQFromPaste()   : Nhập hàng loạt hạng mục từ dữ liệu dán (copy từ Excel)
+   - importBOQFromExcel()   : Nhập hàng loạt hạng mục từ file Excel (.xlsx/.xls/.csv)
    ================================================================ */
 
 function renderBOQ() {
+    fillHopDongSelect_('boqHopDongSelect');
     const emptyBox = document.getElementById('boqNoHopDong');
     const content = document.getElementById('boqContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
@@ -26,27 +28,17 @@ function renderBOQ() {
     if (emptyBox) emptyBox.style.display = 'none';
     if (content) content.style.display = '';
     document.getElementById('boqHopDongInfo').innerHTML =
-        `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'} · Giá trị hiện hành: <b>${formatTien(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
+        `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'} · Giá trị hiện hành: <b>${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
     renderBOQTree();
     renderPhuLucList();
 }
 
-function sortBySTT_(items) {
-    return items.slice().sort((a, b) => {
-        const pa = String(a.stt || '').split('.').map(n => parseInt(n, 10) || 0);
-        const pb = String(b.stt || '').split('.').map(n => parseInt(n, 10) || 0);
-        const len = Math.max(pa.length, pb.length);
-        for (let i = 0; i < len; i++) {
-            const d = (pa[i] || 0) - (pb[i] || 0);
-            if (d !== 0) return d;
-        }
-        return 0;
-    });
-}
-
+// Cây BOQ hiển thị ĐÚNG theo thứ tự lưu trong sheet (= thứ tự tạo/nhập) — KHÔNG tự sắp xếp lại
+// theo STT, vì STT chỉ là nhãn hiển thị tự do (có thể trùng/bỏ trống ở nhiều dòng), giống hệt cách
+// app cũ coi vị trí trong mảng items[] là thứ tự đúng, còn STT/level chỉ để hiển thị thụt lề.
 function renderBOQTree() {
     const tbody = document.getElementById('boqBody');
-    const items = sortBySTT_(boq.filter(b => b.maHopDong === currentHopDongId));
+    const items = boq.filter(b => b.maHopDong === currentHopDongId);
     if (items.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
         return;
@@ -71,7 +63,7 @@ function renderBOQTree() {
             <td class="text-center">${b.donVi || '--'}</td>
             <td class="text-right">${formatTien(b.khoiLuongHopDong)}</td>
             <td class="text-right">${formatTien(b.khoiLuongHieuLuc)}</td>
-            <td class="text-right">${formatTien(b.donGiaHieuLuc)}</td>
+            <td class="text-right">${tienHienThi_(b.donGiaHieuLuc)}</td>
             <td class="text-right">${formatTien(b.khoiLuongDaNghiemThu)}</td>
             <td class="text-center"><span class="bc-badge ${pct >= 100 ? 'done' : 'inprogress'}">${pct}%</span></td>
             <td class="text-center">${formatVN(b.ngayBatDauKH)} - ${formatVN(b.ngayKetThucKH)}</td>
@@ -256,33 +248,46 @@ function saveThayDoiModal() {
         .catch(handleBackendError);
 }
 
-// --- Nhập nhanh BOQ bằng cách dán dữ liệu copy từ Excel (Tab phân cách cột) ---
-// Cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Ngày bắt đầu (dd/mm/yyyy) | Ngày kết thúc.
-// Chỉ thêm hạng mục thường (không phải Đầu mục) — thêm Đầu mục thì dùng nút "Thêm hạng mục" tay.
-function importBOQFromPaste() {
+// --- Nhập nhanh BOQ từ file Excel thật (.xlsx/.xls/.csv) ---
+// Cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Thành tiền (bỏ qua) | Ngày BĐ KH | Ngày KT
+// KH (2 cột ngày cuối không bắt buộc). Dòng có STT là số La Mã/chữ cái, HOẶC không có cả Khối
+// lượng lẫn Đơn giá, được tự nhận là Đầu mục — port nguyên logic đọc file BOQ của app cũ (importExcel).
+function importBOQFromExcel() {
     if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
-    const raw = document.getElementById('boqImportBox').value;
-    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    if (lines.length === 0) { showCustomAlert('Chưa dán dữ liệu để nhập!', 'error'); return; }
+    const fileInput = document.getElementById('boqExcelFile');
+    const file = fileInput.files[0];
+    if (!file) { showCustomAlert('Vui lòng chọn file Excel!', 'error'); return; }
 
-    let chain = Promise.resolve();
-    let ok = 0, fail = 0;
-    lines.forEach(line => {
-        const cols = line.split('\t');
-        const [stt, ten, donVi, khoiLuong, donGia, ngayBD, ngayKT] = cols;
-        if (!ten || !ten.trim()) return;
-        chain = chain.then(() => gsRun('adminSaveBOQItem', myUserId, myPassword, {
-            maHopDong: currentHopDongId, stt: (stt || '').trim(), tenHangMuc: ten.trim(),
-            donVi: (donVi || '').trim(), khoiLuongHopDong: parseNumberSafely(khoiLuong) || 0,
-            donGia: parseNumberSafely(donGia) || 0,
-            ngayBatDauKH: convertDMYtoISO((ngayBD || '').trim()) || '',
-            ngayKetThucKH: convertDMYtoISO((ngayKT || '').trim()) || ''
-        }).then(() => ok++).catch(() => fail++));
-    });
-    chain.then(() => {
-        showCustomAlert(`Đã nhập ${ok} hạng mục${fail ? `, ${fail} dòng lỗi` : ''}.`, fail ? 'error' : 'success');
-        document.getElementById('boqImportBox').value = '';
-        reloadData();
-    });
+    docFileExcel_(file).then(rows => {
+        let ok = 0;
+        let chain = Promise.resolve();
+        rows.forEach((row, idx) => {
+            if (idx === 0) return; // bỏ dòng tiêu đề
+            const stt = String(row[0] || '').trim();
+            const ten = String(row[1] || '').trim();
+            if (!ten) return;
+            const lower = ten.toLowerCase();
+            if (lower.includes('tổng cộng') || lower.includes('thuế vat') || lower.includes('giảm giá')) return;
+
+            const qty = parseNumberSafely(row[3]);
+            const price = parseNumberSafely(row[4]);
+            const level = layCapTuSTT_(stt);
+            const isHeader = level === 0 || level === 1 || (isNaN(qty) && isNaN(price));
+
+            chain = chain.then(() => gsRun('adminSaveBOQItem', myUserId, myPassword, {
+                maHopDong: currentHopDongId, stt, tenHangMuc: ten, isHeader,
+                cap: level === -1 ? (isHeader ? 0 : 2) : level,
+                donVi: isHeader ? '' : String(row[2] || '').trim(),
+                khoiLuongHopDong: (isHeader || isNaN(qty)) ? 0 : qty,
+                donGia: (isHeader || isNaN(price)) ? 0 : price,
+                ngayBatDauKH: ngayExcelToISO_(row[6]), ngayKetThucKH: ngayExcelToISO_(row[7])
+            }).then(() => ok++).catch(() => {}));
+        });
+        chain.then(() => {
+            showCustomAlert(`Đã nhập ${ok} dòng vào BOQ.`, ok > 0 ? 'success' : 'error');
+            fileInput.value = '';
+            reloadData();
+        });
+    }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }
 </script>

@@ -122,14 +122,4 @@ function deleteUser(userId) {
         })
         .catch(handleBackendError);
 }
-
-// Công cụ 1 lần: đọc dữ liệu Hợp đồng/BOQ/Phụ lục/Nghiệm thu/Thanh toán từ app cũ và ghi vào các
-// sheet Hợp đồng của dự án này (xem migrateHopDongTuAppCu() ở Code.js) — CHẠY LẠI SẼ TẠO TRÙNG DỮ
-// LIỆU, chỉ bấm khi chắc chắn chưa di trú lần nào.
-function chayDiTruHopDong() {
-    if (!confirm('Chạy di trú dữ liệu Hợp đồng từ app cũ? CHỈ chạy 1 lần duy nhất — chạy lại sẽ tạo trùng dữ liệu.')) return;
-    gsRun('migrateHopDongTuAppCu', myUserId, myPassword)
-        .then(msg => { showCustomAlert(msg, 'success'); reloadData(); })
-        .catch(handleBackendError);
-}
 </script>

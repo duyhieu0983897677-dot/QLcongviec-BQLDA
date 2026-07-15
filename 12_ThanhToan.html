@@ -8,14 +8,17 @@
    động theo tỷ lệ tạm ứng/giá trị HĐ) + Khấu trừ khác.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderThanhToan()          : Vẽ dải tóm tắt + danh sách Đợt thanh toán
-   - getPaymentRoundBreakdown() : Diễn giải số liệu 1 Đợt (thực hiện/VAT/thu hồi/giá trị cuối)
-   - openPaymentModal()         : Mở modal tạo Đợt mới (chọn khối lượng từng hạng mục)
-   - goiYThuHoi_(loai)          : Gọi goiYThuHoiTamUng() điền sẵn số đề xuất
-   - openDieuChinhModal(id)     : Sửa lại phần thu hồi/khấu trừ sau khi đã tạo Đợt
+   - renderThanhToan()             : Vẽ dải tóm tắt + danh sách Đợt thanh toán
+   - getPaymentRoundBreakdown()    : Diễn giải số liệu 1 Đợt (thực hiện/VAT/thu hồi/giá trị cuối)
+   - openPaymentModal()            : Mở modal tạo Đợt mới (chọn khối lượng từng hạng mục)
+   - importThanhToanFromExcel()    : Đọc file Excel (STT|Tên|ĐVT|Khối lượng), khớp BOQ rồi điền
+                                     sẵn khối lượng vào đúng ô trong modal đang mở (chưa lưu ngay)
+   - goiYThuHoi_(loai)             : Gọi goiYThuHoiTamUng() điền sẵn số đề xuất
+   - openDieuChinhModal(id)        : Sửa lại phần thu hồi/khấu trừ sau khi đã tạo Đợt
    ================================================================ */
 
 function renderThanhToan() {
+    fillHopDongSelect_('ttHopDongSelect');
     const emptyBox = document.getElementById('ttNoHopDong');
     const content = document.getElementById('ttContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
@@ -32,10 +35,10 @@ function renderThanhToan() {
     const tongDaTT = Math.round(rounds.reduce((s, r) => s + getPaymentRoundBreakdown(r).finalValue, 0));
 
     document.getElementById('ttSummary').innerHTML = `
-        <div class="kpi-mini"><span>Giá trị HĐ hiện hành</span><b>${formatTien(giaTriHD)}</b></div>
-        <div class="kpi-mini"><span>Tạm ứng hợp đồng</span><b>${formatTien(hd.tamUngHopDong)}</b></div>
-        <div class="kpi-mini"><span>Tạm ứng thi công</span><b>${formatTien(hd.tamUngThiCong)}</b></div>
-        <div class="kpi-mini"><span>Tổng đã thanh toán</span><b>${formatTien(tongDaTT)}</b></div>`;
+        <div class="kpi-mini"><span>Giá trị HĐ hiện hành</span><b>${tienHienThi_(giaTriHD)}</b></div>
+        <div class="kpi-mini"><span>Tạm ứng hợp đồng</span><b>${tienHienThi_(hd.tamUngHopDong)}</b></div>
+        <div class="kpi-mini"><span>Tạm ứng thi công</span><b>${tienHienThi_(hd.tamUngThiCong)}</b></div>
+        <div class="kpi-mini"><span>Tổng đã thanh toán</span><b>${tienHienThi_(tongDaTT)}</b></div>`;
 
     const box = document.getElementById('ttList');
     if (rounds.length === 0) {
@@ -54,10 +57,10 @@ function renderThanhToan() {
                 </span>` : ''}
             </div>
             <div class="pl-item-note">
-                Thực hiện: ${formatTien(bd.thucHien)} · Tạm tính: ${formatTien(bd.tamTinh)} · VAT (${bd.vatRate}%): ${formatTien(bd.thueGTGT)}<br>
-                Thu hồi tạm ứng HĐ: ${formatTien(r.thuHoiTamUngHopDong)} · TC: ${formatTien(r.thuHoiTamUngThiCong)} · Khấu trừ khác: ${formatTien(r.khauTruKhac)}
+                Thực hiện: ${tienHienThi_(bd.thucHien)} · Tạm tính: ${tienHienThi_(bd.tamTinh)} · VAT (${bd.vatRate}%): ${tienHienThi_(bd.thueGTGT)}<br>
+                Thu hồi tạm ứng HĐ: ${tienHienThi_(r.thuHoiTamUngHopDong)} · TC: ${tienHienThi_(r.thuHoiTamUngThiCong)} · Khấu trừ khác: ${tienHienThi_(r.khauTruKhac)}
             </div>
-            <div class="pl-item-note"><b>Giá trị thanh toán kỳ này: ${formatTien(bd.finalValue)}</b></div>
+            <div class="pl-item-note"><b>Giá trị thanh toán kỳ này: ${tienHienThi_(bd.finalValue)}</b></div>
         </div>`;
     }).join('');
 }
@@ -117,6 +120,34 @@ function timDsChiTietTamThoi_() {
     return Array.from(document.querySelectorAll('.js-tt-qty'))
         .map(el => ({ maBOQ: el.getAttribute('data-boq'), khoiLuong: parseNumberSafely(el.value) }))
         .filter(x => !isNaN(x.khoiLuong) && x.khoiLuong > 0);
+}
+
+// Đọc file Excel (STT | Tên | ĐVT | Khối lượng), khớp từng dòng với đúng hạng mục BOQ theo STT+Tên
+// rồi ĐIỀN vào ô khối lượng tương ứng trong modal "Thêm Đợt thanh toán" đang mở — CHƯA lưu ngay,
+// người dùng vẫn xem/chỉnh lại % và các khoản thu hồi trước khi bấm Lưu.
+function importThanhToanFromExcel() {
+    const fileInput = document.getElementById('ttExcelFile');
+    const file = fileInput.files[0];
+    if (!file) { showCustomAlert('Vui lòng chọn file Excel!', 'error'); return; }
+
+    docFileExcel_(file).then(rows => {
+        let ok = 0;
+        const khongKhop = [];
+        rows.forEach((row, idx) => {
+            if (idx === 0) return;
+            const stt = row[0], ten = row[1];
+            const qty = parseNumberSafely(row[3]);
+            if (!ten || isNaN(qty) || qty <= 0) return;
+            const item = khopBOQTheoSttTen_(stt, ten);
+            if (!item) { khongKhop.push(`[${stt}] ${ten}`); return; }
+            const input = document.querySelector(`.js-tt-qty[data-boq="${item.maBOQ}"]`);
+            if (input) { input.value = qty; ok++; }
+        });
+        let msg = `Đã điền khối lượng cho ${ok} hạng mục vào danh sách bên dưới.`;
+        if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '...' : '');
+        showCustomAlert(msg, ok > 0 ? 'success' : 'error');
+        fileInput.value = '';
+    }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }
 
 function goiYThuHoi_(loai) {

@@ -8,14 +8,17 @@
    (thanh Đã đạt/Sắp nhập) nhưng cho khối lượng BOQ thay vì % Công việc.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderNghiemThu()     : Vẽ form chọn hạng mục + danh sách gần đây
-   - selectNghiemThuBOQ()  : Chọn 1 hạng mục, cập nhật thanh khối lượng
-   - submitNghiemThu()     : Gửi themNghiemThu()
+   - renderNghiemThu()          : Vẽ form chọn hạng mục + danh sách gần đây
+   - selectNghiemThuBOQ()       : Chọn 1 hạng mục, cập nhật thanh khối lượng
+   - submitNghiemThu()          : Gửi themNghiemThu() cho 1 hạng mục
+   - importNghiemThuFromExcel() : Nhập hàng loạt khối lượng từ file Excel cho 1 ngày, khớp theo
+                                  STT+Tên với BOQ (xem khopBOQTheoSttTen_ ở 9_HopDong.html)
    ================================================================ */
 
 let ntState_ = { boq: null };
 
 function renderNghiemThu() {
+    fillHopDongSelect_('ntHopDongSelect');
     const emptyBox = document.getElementById('ntNoHopDong');
     const content = document.getElementById('ntContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
@@ -36,7 +39,21 @@ function renderNghiemThu() {
     if (currentVal && items.some(b => b.maBOQ === currentVal)) sel.value = currentVal;
 
     document.getElementById('ntNgay').value = formatVN(getTodayDate());
+    if (!document.getElementById('ntExcelNgay').value) document.getElementById('ntExcelNgay').value = formatVN(getTodayDate());
     selectNghiemThuBOQ(sel.value);
+
+    // Bảng chọn ngày trên lịch — chỉ khởi tạo 1 lần cho mỗi ô (el._flatpickr), không phải mở modal
+    // nên không gọi lại setTimeout mỗi lần render như các modal khác, chỉ cần gọi 1 lần là đủ.
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr === 'undefined') return;
+            const opts = { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true };
+            ['ntNgay', 'ntExcelNgay'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el._flatpickr) flatpickr(el, opts);
+            });
+        } catch (e) { console.warn(e); }
+    }, 100);
 }
 
 function selectNghiemThuBOQ(maBOQ) {
@@ -82,5 +99,40 @@ function submitNghiemThu() {
             reloadData();
         })
         .catch(err => { handleBackendError(err); btn.disabled = false; });
+}
+
+// Nhập hàng loạt khối lượng Nghiệm thu từ file Excel (STT | Tên | ĐVT | Khối lượng) cho CÙNG 1
+// ngày — khớp từng dòng với đúng hạng mục BOQ theo STT+Tên, dòng không khớp bị bỏ qua và liệt kê
+// lại để người dùng tự kiểm tra (giống hệt cách app cũ báo notFoundItems).
+function importNghiemThuFromExcel() {
+    if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
+    const fileInput = document.getElementById('ntExcelFile');
+    const file = fileInput.files[0];
+    if (!file) { showCustomAlert('Vui lòng chọn file Excel!', 'error'); return; }
+    const ngay = convertDMYtoISO(document.getElementById('ntExcelNgay').value.trim());
+    if (!ngay) { showCustomAlert('Vui lòng nhập Ngày nghiệm thu hợp lệ!', 'error'); return; }
+
+    docFileExcel_(file).then(rows => {
+        let ok = 0;
+        const khongKhop = [];
+        let chain = Promise.resolve();
+        rows.forEach((row, idx) => {
+            if (idx === 0) return;
+            const stt = row[0], ten = row[1];
+            const qty = parseNumberSafely(row[3]);
+            if (!ten || isNaN(qty) || qty <= 0) return;
+            const item = khopBOQTheoSttTen_(stt, ten);
+            if (!item) { khongKhop.push(`[${stt}] ${ten}`); return; }
+            chain = chain.then(() => gsRun('themNghiemThu', myUserId, myPassword, item.maBOQ, ngay, qty, '')
+                .then(() => ok++).catch(() => {}));
+        });
+        chain.then(() => {
+            let msg = `Đã nhập Nghiệm thu cho ${ok} hạng mục.`;
+            if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '...' : '');
+            showCustomAlert(msg, ok > 0 ? 'success' : 'error');
+            fileInput.value = '';
+            reloadData();
+        });
+    }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }
 </script>

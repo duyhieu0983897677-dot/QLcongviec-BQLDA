@@ -37,6 +37,7 @@ function tinhQuyetToanPreview_(maHopDong) {
 }
 
 function renderQuyetToan() {
+    fillHopDongSelect_('qtHopDongSelect');
     const emptyBox = document.getElementById('qtNoHopDong');
     const content = document.getElementById('qtContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
@@ -55,17 +56,17 @@ function renderQuyetToan() {
         ${qt ? `<span class="bc-badge done">Đã Quyết toán ngày ${formatVN(qt.ngayQuyetToan)}</span>` : '<span class="bc-badge pending">Chưa Quyết toán (số liệu tạm tính)</span>'}`;
 
     document.getElementById('qtBody').innerHTML = `
-        <div class="kpi-mini"><span>Giá trị sau Phụ lục</span><b>${formatTien(so.giaTriSauPhuLuc)}</b></div>
-        <div class="kpi-mini"><span>Giá trị trước thuế (đã trừ giảm giá)</span><b>${formatTien(so.giaTriTruocThue)}</b></div>
-        <div class="kpi-mini"><span>Thuế GTGT</span><b>${formatTien(so.thueGTGT)}</b></div>
-        <div class="kpi-mini"><span>Giá trị sau thuế</span><b>${formatTien(so.giaTriSauThue)}</b></div>
-        <div class="kpi-mini"><span>Đã thanh toán</span><b>${formatTien(so.tongDaThanhToan)}</b></div>
-        <div class="kpi-mini"><span>Còn phải thanh toán</span><b>${formatTien(so.conPhaiThanhToan)}</b></div>
+        <div class="kpi-mini"><span>Giá trị sau Phụ lục</span><b>${tienHienThi_(so.giaTriSauPhuLuc)}</b></div>
+        <div class="kpi-mini"><span>Giá trị trước thuế (đã trừ giảm giá)</span><b>${tienHienThi_(so.giaTriTruocThue)}</b></div>
+        <div class="kpi-mini"><span>Thuế GTGT</span><b>${tienHienThi_(so.thueGTGT)}</b></div>
+        <div class="kpi-mini"><span>Giá trị sau thuế</span><b>${tienHienThi_(so.giaTriSauThue)}</b></div>
+        <div class="kpi-mini"><span>Đã thanh toán</span><b>${tienHienThi_(so.tongDaThanhToan)}</b></div>
+        <div class="kpi-mini"><span>Còn phải thanh toán</span><b>${tienHienThi_(so.conPhaiThanhToan)}</b></div>
         <div class="kpi-mini"><span>Tỷ lệ hoàn thành khối lượng</span><b>${so.tyLeHoanThanhKhoiLuong}%</b></div>`;
 
     document.getElementById('qtActions').innerHTML = !canEditHopDong() ? '' : (qt
-        ? `<button class="btn btn-danger" onclick="huyQuyetToan('${qt.maQuyetToan}')"><i class="fa-solid fa-rotate-left"></i> Hủy Quyết toán</button>`
-        : `<button class="btn" style="background:var(--success);" onclick="xacNhanQuyetToan()"><i class="fa-solid fa-check"></i> Xác nhận Quyết toán</button>`);
+        ? `<button class="btn btn-sm btn-danger" onclick="huyQuyetToan('${qt.maQuyetToan}')"><i class="fa-solid fa-rotate-left"></i> Hủy Quyết toán</button>`
+        : `<button class="btn btn-sm" style="background:var(--success);" onclick="xacNhanQuyetToan()"><i class="fa-solid fa-check"></i> Xác nhận Quyết toán</button>`);
 }
 
 function xacNhanQuyetToan() {

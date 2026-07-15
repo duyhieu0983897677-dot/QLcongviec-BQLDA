@@ -9,15 +9,33 @@
    - Báo cáo chi tiết: chọn 1 Gói thầu hoặc 1 Hạng mục, xem danh sách
      Công việc + % + trạng thái của đúng lựa chọn đó.
 
+   Tab Tổng quan có 2 báo cáo tách riêng, chuyển qua lại bằng 2 nút pill (switchBcPanel()):
+   - "Báo cáo Công việc" (mặc định) : biểu đồ tròn trạng thái + biểu đồ thanh theo người phụ trách
+     + bảng chi tiết theo Gói thầu/Hạng mục — y hệt trước đây.
+   - "Báo cáo Chi phí" : KPI (Giá trị HĐ/Đã thực hiện/Phát sinh/Đã thanh toán) + biểu đồ tròn sản
+     lượng + biểu đồ thanh 6 tháng gần nhất + biểu đồ dòng tiền (S-Curve kế hoạch vs thực tế lũy
+     kế) — tổng hợp từ module Hợp đồng (BOQ/Nghiệm thu/Thanh toán), có dropdown lọc theo 1 Hợp đồng
+     hoặc "Tổng hợp toàn bộ", port công thức từ tab Tổng quan của app "Quản Lý Đa Hợp Đồng" cũ.
+
    DANH SÁCH HÀM CHÍNH:
-   - renderDashboard()      : Đọc từ congViec toàn cục (đã tải sẵn) rồi vẽ lại 2 biểu đồ + đổ danh
-                              sách chọn — KHÔNG gọi round-trip riêng lên Apps Script nữa (trước đây
-                              gọi getBaoCaoTongHop() làm chậm gấp đôi lần tải đầu tiên, vì getData()
-                              đã tự gắn sẵn recentLogs cho mọi Công việc rồi, xem Code.js)
-   - renderBcCharts()       : Vẽ biểu đồ tròn trạng thái + biểu đồ thanh theo người phụ trách
+   - renderDashboard()      : Dispatcher — vẽ lại đúng panel (Công việc/Chi phí) đang được chọn
+   - switchBcPanel(name)    : Chuyển giữa 2 báo cáo
+   - renderBcCongViecPanel(): Toàn bộ nội dung "Báo cáo Công việc" (KHÔNG round-trip riêng — đọc từ
+                              congViec toàn cục đã tải sẵn, xem getData() ở Code.js)
+   - renderBcChiPhi()       : Toàn bộ nội dung "Báo cáo Chi phí"
    - onBcDetailTypeChange() : Đổi giữa "Xem theo Gói thầu" / "Xem theo Hạng mục"
    - renderBcDetail()       : Vẽ bảng chi tiết theo Gói thầu/Hạng mục đang chọn
    ================================================================ */
+
+let currentBcPanel = 'congviec';
+
+function switchBcPanel(name) {
+    currentBcPanel = name;
+    document.querySelectorAll('.bc-pill').forEach(btn => btn.classList.toggle('active', btn.dataset.panel === name));
+    document.getElementById('bcPanelCongViec').classList.toggle('active', name === 'congviec');
+    document.getElementById('bcPanelChiPhi').classList.toggle('active', name === 'chiphi');
+    renderDashboard();
+}
 
 let bcAllCongViec = [];
 let bcPieChartInstance = null;
@@ -72,39 +90,18 @@ const PIE_OUTSIDE_LABELS_PLUGIN = {
 // Bấm "Làm mới" gọi reloadData() (tải lại toàn bộ congViec/hangMuc/goiThau/users rồi tự render lại
 // tab đang mở) thay vì tự gọi riêng 1 lệnh backend khác ở đây — nhất quán với mọi tab khác.
 function renderDashboard() {
+    if (currentBcPanel === 'chiphi') renderBcChiPhi();
+    else renderBcCongViecPanel();
+    document.getElementById('bcUpdatedAt').textContent = new Date().toLocaleString('vi-VN');
+}
+
+function renderBcCongViecPanel() {
     bcAllCongViec = (congViec || []).filter(cv => cv.active !== false);
     document.getElementById('bc-kpi-total').textContent = bcAllCongViec.length;
     renderBcCharts();
     fillBcDetailSelect();
     renderBcColToggle();
     renderBcDetail();
-    renderBcHopDongSummary();
-    document.getElementById('bcUpdatedAt').textContent = new Date().toLocaleString('vi-VN');
-}
-
-// Khối "Tổng quan Hợp đồng" — tổng số Hợp đồng + tổng giá trị hiện hành + tổng đã/còn phải thanh
-// toán, cộng dồn qua mọi Hợp đồng (dùng lại giaTriHienHanhHopDong()/getPaymentRoundBreakdown() đã
-// có ở 9_HopDong.html/12_ThanhToan.html, không tính lại công thức riêng ở đây).
-function renderBcHopDongSummary() {
-    const box = document.getElementById('bcHopDongSummary');
-    if (!box) return;
-    if (!hopDong || hopDong.length === 0) {
-        box.innerHTML = `<div class="thongbao-empty">Chưa có Hợp đồng nào. Vào "Quản lý hợp đồng" để thêm.</div>`;
-        return;
-    }
-    let tongGiaTri = 0, tongDaThanhToan = 0;
-    hopDong.forEach(hd => {
-        tongGiaTri += giaTriHienHanhHopDong(hd.maHopDong);
-        (dotThanhToan || []).filter(d => d.maHopDong === hd.maHopDong)
-            .forEach(r => { tongDaThanhToan += getPaymentRoundBreakdown(r).finalValue; });
-    });
-    tongDaThanhToan = Math.round(tongDaThanhToan);
-    // Không cộng "còn phải thanh toán" ở đây vì tongGiaTri (trước thuế) và tongDaThanhToan (đã gồm
-    // thuế từng đợt) không cùng cơ sở so sánh — số chính xác từng Hợp đồng xem ở tab Quyết toán.
-    box.innerHTML = `
-        <div class="kpi-mini"><span>Tổng số Hợp đồng</span><b>${hopDong.length}</b></div>
-        <div class="kpi-mini"><span>Tổng giá trị hiện hành (trước thuế)</span><b>${formatTien(tongGiaTri)}</b></div>
-        <div class="kpi-mini"><span>Tổng đã thanh toán</span><b>${formatTien(tongDaThanhToan)}</b></div>`;
 }
 
 function renderBcCharts() {
@@ -325,4 +322,212 @@ document.addEventListener('click', e => {
         if (panel) panel.classList.remove('active');
     }
 });
+
+// =======================================================
+// BÁO CÁO CHI PHÍ — port từ tab "Tổng quan" của app "Quản Lý Đa Hợp Đồng & Tiến Độ" cũ, tính lại
+// trên mô hình BOQ/Nghiệm thu/Thanh toán quan hệ hiện tại (không còn lịch sử giá theo từng ngày ghi
+// log như app cũ — dùng thống nhất donGiaHieuLuc hiện hành cho mọi lượt Nghiệm thu, giống cách
+// tinhQuyetToanHopDong_() ở Code.js đã làm, để nhất quán trong toàn module).
+// =======================================================
+let cpPieChartInstance = null;
+let cpMonthlyChartInstance = null;
+let cpSCurveChartInstance = null;
+
+function fillBcChiPhiHopDongSelect() {
+    const sel = document.getElementById('bcChiPhiHopDongSelect');
+    if (!sel) return;
+    const currentVal = sel.value;
+    sel.innerHTML = '<option value="all">-- Tổng hợp toàn bộ Hợp đồng --</option>' +
+        (hopDong || []).map(h => `<option value="${h.maHopDong}">HĐ: ${h.tenHopDong}</option>`).join('');
+    if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal;
+    else sel.value = 'all';
+}
+
+// Phân bổ đều 1 khoản giá trị theo từng ngày trong khoảng [startISO, endISO] vào các tháng tương
+// ứng — dùng để dựng đường "Kế hoạch lũy kế" từ ngày bắt đầu/kết thúc kế hoạch của từng hạng mục BOQ.
+function distributePlannedValue_(startISO, endISO, value, monthMap) {
+    const start = new Date(startISO + 'T00:00:00');
+    const end = new Date(endISO + 'T00:00:00');
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start || !value) return;
+
+    const totalDays = Math.round((end - start) / 86400000) + 1;
+    if (totalDays <= 0) return;
+    const valuePerDay = value / totalDays;
+
+    const cur = new Date(start);
+    for (let i = 0; i < totalDays; i++) {
+        const monthKey = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0');
+        monthMap[monthKey] = (monthMap[monthKey] || 0) + valuePerDay;
+        cur.setDate(cur.getDate() + 1);
+    }
+}
+
+function renderBcChiPhi() {
+    fillBcChiPhiHopDongSelect();
+    const filterId = document.getElementById('bcChiPhiHopDongSelect').value || 'all';
+    const contracts = filterId === 'all' ? (hopDong || []) : (hopDong || []).filter(h => h.maHopDong === filterId);
+
+    let tCont = 0, tExec = 0, tExtra = 0, tPayment = 0;
+    const monthlyMap = {};     // 'yyyy-MM' -> giá trị Nghiệm thu thực tế tháng đó
+    const planMonthlyMap = {}; // 'yyyy-MM' -> giá trị kế hoạch phân bổ theo ngày BĐ/KT của BOQ
+
+    contracts.forEach(hd => {
+        const vatFactor = 1 + (hd.thueVAT || 0) / 100;
+        const items = (boq || []).filter(b => b.maHopDong === hd.maHopDong && !b.isHeader);
+
+        let cTotal = 0;
+        items.forEach(item => {
+            const valContract = Math.round(item.khoiLuongHieuLuc * item.donGiaHieuLuc * vatFactor);
+            cTotal += valContract;
+            if (item.ngayBatDauKH && item.ngayKetThucKH) {
+                distributePlannedValue_(item.ngayBatDauKH, item.ngayKetThucKH, valContract, planMonthlyMap);
+            }
+
+            const logs = (nghiemThu || []).filter(n => n.maBOQ === item.maBOQ);
+            const extraQty = Math.max(0, item.khoiLuongDaNghiemThu - item.khoiLuongHieuLuc);
+            const extraVal = Math.round(extraQty * item.donGiaHieuLuc * vatFactor);
+            const rawExecutedValue = logs.reduce((s, l) => s + l.khoiLuong * item.donGiaHieuLuc * vatFactor, 0);
+            tExec += Math.round(rawExecutedValue) - extraVal;
+            tExtra += extraVal;
+
+            logs.forEach(l => {
+                const mk = (l.ngayNghiemThu || '').slice(0, 7);
+                if (mk) monthlyMap[mk] = (monthlyMap[mk] || 0) + l.khoiLuong * item.donGiaHieuLuc * vatFactor;
+            });
+        });
+
+        const discountValue = Math.round((hd.giamGia || 0) * vatFactor);
+        tCont += Math.max(0, cTotal - discountValue);
+
+        (dotThanhToan || []).filter(d => d.maHopDong === hd.maHopDong)
+            .forEach(r => { tPayment += getPaymentRoundBreakdown(r).finalValue; });
+    });
+    tPayment = Math.round(tPayment);
+    const tRem = Math.max(0, tCont - tExec);
+
+    document.getElementById('cpKpiTong').textContent = tienHienThi_(tCont);
+    document.getElementById('cpKpiThucHien').textContent = tienHienThi_(tExec);
+    document.getElementById('cpKpiPhatSinh').textContent = tienHienThi_(tExtra);
+    document.getElementById('cpKpiThanhToan').textContent = tienHienThi_(tPayment);
+
+    // Biểu đồ chi phí toàn bộ đều dựa trên số tiền — không đủ quyền (không phải ADMIN/QS) thì chỉ
+    // hiện thông báo khóa thay vì vẽ biểu đồ với số liệu đã ẩn (vô nghĩa với dạng hình ảnh).
+    const coQuyen = canXemGiaTriHopDong();
+    document.getElementById('cpChartsCard').style.display = coQuyen ? '' : 'none';
+    document.getElementById('cpSCurveCard').style.display = coQuyen ? '' : 'none';
+    document.getElementById('cpLockedNote').style.display = coQuyen ? 'none' : '';
+    if (coQuyen) {
+        renderCpPieChart_(tExec, tRem);
+        renderCpMonthlyChart_(monthlyMap);
+        renderCpSCurveChart_(planMonthlyMap, monthlyMap);
+    }
+}
+
+function renderCpPieChart_(tExec, tRem) {
+    const canvas = document.getElementById('cpPieChart');
+    if (cpPieChartInstance) cpPieChartInstance.destroy();
+    cpPieChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'pie',
+        data: {
+            labels: ['Sản lượng đã thực hiện', 'Giá trị còn lại'],
+            datasets: [{ data: [tExec, tRem], backgroundColor: [BC_STATUS_COLORS.done, BC_STATUS_COLORS.pending], borderWidth: 0 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+
+    const total = tExec + tRem;
+    const pctExec = total > 0 ? Math.round((tExec / total) * 1000) / 10 : 0;
+    const pctRem = total > 0 ? Math.round((tRem / total) * 1000) / 10 : 0;
+    document.getElementById('cpPieLegend').innerHTML = `
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+            <div style="width:14px; height:14px; border-radius:50%; background:${BC_STATUS_COLORS.done}; margin-top:4px; flex-shrink:0;"></div>
+            <div><b>Sản lượng đã thực hiện — ${pctExec}%</b><div style="font-size:0.82rem; color:var(--text-muted);">${formatTien(tExec)} đ</div></div>
+        </div>
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+            <div style="width:14px; height:14px; border-radius:50%; background:${BC_STATUS_COLORS.pending}; margin-top:4px; flex-shrink:0;"></div>
+            <div><b>Giá trị còn lại — ${pctRem}%</b><div style="font-size:0.82rem; color:var(--text-muted);">${formatTien(tRem)} đ</div></div>
+        </div>`;
+}
+
+function renderCpMonthlyChart_(monthlyMap) {
+    let sortedMonths = Object.keys(monthlyMap).sort();
+    if (sortedMonths.length > 6) sortedMonths = sortedMonths.slice(-6);
+    if (sortedMonths.length === 0) {
+        const d = new Date();
+        const m = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+        sortedMonths = [m]; monthlyMap[m] = 0;
+    }
+    const labels = sortedMonths.map(m => { const p = m.split('-'); return p[1] + '/' + p[0]; });
+    const values = sortedMonths.map(m => Math.round(monthlyMap[m] || 0));
+
+    const canvas = document.getElementById('cpMonthlyChart');
+    if (cpMonthlyChartInstance) cpMonthlyChartInstance.destroy();
+    cpMonthlyChartInstance = new Chart(canvas.getContext('2d'), {
+        data: {
+            labels,
+            datasets: [
+                { type: 'bar', label: 'Sản lượng thực hiện', data: values, backgroundColor: BC_STATUS_COLORS.inprogress, borderRadius: 4, maxBarThickness: 50, barPercentage: 0.6 },
+                { type: 'line', label: 'Xu hướng', data: values, borderColor: BC_STATUS_COLORS.done, borderWidth: 2, fill: false, tension: 0.3, pointBackgroundColor: BC_STATUS_COLORS.done }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw.toLocaleString('vi-VN') + ' đ' } }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { font: { size: 10 }, callback: v => formatTienGon_(v) } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+function renderCpSCurveChart_(planMonthlyMap, monthlyMap) {
+    const allMonths = Array.from(new Set([...Object.keys(planMonthlyMap), ...Object.keys(monthlyMap)])).sort();
+    document.getElementById('cpSCurveEmptyNote').style.display = Object.keys(planMonthlyMap).length === 0 ? 'block' : 'none';
+
+    let months = allMonths;
+    if (months.length === 0) {
+        const d = new Date();
+        months = [d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')];
+    }
+
+    let cumPlan = 0, cumActual = 0;
+    const labels = months.map(m => { const p = m.split('-'); return p[1] + '/' + p[0]; });
+    const planData = months.map(m => { cumPlan += (planMonthlyMap[m] || 0); return Math.round(cumPlan); });
+    const actualData = months.map(m => { cumActual += (monthlyMap[m] || 0); return Math.round(cumActual); });
+
+    const canvas = document.getElementById('cpSCurveChart');
+    if (cpSCurveChartInstance) cpSCurveChartInstance.destroy();
+    cpSCurveChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Kế hoạch lũy kế', data: planData, borderColor: BC_STATUS_COLORS.late_done, borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.late_done },
+                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(52,211,153,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw.toLocaleString('vi-VN') + ' đ' } }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { font: { size: 10 }, callback: v => formatTienGon_(v) } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+// Rút gọn số tiền lớn cho trục biểu đồ (Tỷ/Tr) — chỉ dùng để hiển thị trục, không dùng để tính toán.
+function formatTienGon_(value) {
+    if (value >= 1000000000) return (value / 1000000000).toFixed(1) + ' Tỷ';
+    if (value >= 1000000) return (value / 1000000).toFixed(0) + ' Tr';
+    return value;
+}
 </script>

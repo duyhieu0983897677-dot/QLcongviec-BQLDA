@@ -39,8 +39,20 @@ function giaTriHienHanhHopDong(maHopDong) {
     return Math.max(0, Math.round(total) - ((hd && hd.giamGia) || 0));
 }
 
+// Chỉ Quản trị hoặc Giám sát có Chức danh "QS" mới được xem SỐ TIỀN (đơn giá/giá trị/thanh toán...)
+// và sửa dữ liệu Hợp đồng — người khác vẫn xem được khối lượng bình thường, số tiền ẩn qua
+// tienHienThi_() (xem kiemTraQuyenHopDong_() ở Code.js, phải khớp đúng luật này ở backend).
+function canXemGiaTriHopDong() {
+    return currentRole === 'ADMIN' || String(myChucDanh || '').trim().toUpperCase() === 'QS';
+}
+
 function canEditHopDong() {
-    return currentRole === 'ADMIN';
+    return canXemGiaTriHopDong();
+}
+
+// Định dạng tiền có kiểm tra quyền — không đủ quyền thì trả về "*********" thay vì số thật.
+function tienHienThi_(n) {
+    return canXemGiaTriHopDong() ? formatTien(n) : '*********';
 }
 
 // Đặt "Hợp đồng đang xem" — dùng ở dải chọn nhanh trong danh sách và ở các tab BOQ/Nghiệm thu/
@@ -49,6 +61,17 @@ function chonHopDong(maHopDong, tabId) {
     currentHopDongId = maHopDong;
     if (tabId) switchTab(tabId);
     else renderHopDongList();
+}
+
+// Đổ danh sách Hợp đồng vào 1 select "Hợp đồng đang xem" — dùng chung cho BOQ/Nghiệm thu/Thanh
+// toán/Quyết toán, mỗi tab có select riêng (độc lập, không cần quay lại tab "Hợp đồng" trước) nhưng
+// luôn đồng bộ theo currentHopDongId hiện tại.
+function fillHopDongSelect_(selectId) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    sel.innerHTML = '<option value="">-- Chọn Hợp đồng --</option>' +
+        (hopDong || []).map(h => `<option value="${h.maHopDong}">${h.tenHopDong}</option>`).join('');
+    sel.value = currentHopDongId || '';
 }
 
 function renderHopDongList() {
@@ -65,7 +88,7 @@ function renderHopDongList() {
                 <td>${hd.nhaThau || '--'}</td>
                 <td>${g ? g.tenGoiThau : '--'}</td>
                 <td class="text-center">${formatVN(hd.ngayKy)}</td>
-                <td class="text-right">${formatTien(giaTriHienHanhHopDong(hd.maHopDong))}</td>
+                <td class="text-right">${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</td>
                 <td class="text-center">
                     <div class="action-cell">
                         <button class="btn btn-sm" style="background:var(--primary);" onclick="chonHopDong('${hd.maHopDong}', 'boq')" title="Xem BOQ"><i class="fa-solid fa-list-check"></i></button>
@@ -142,5 +165,64 @@ function deleteHopDong(maHopDong) {
     gsRun('adminXoaHopDong', myUserId, myPassword, maHopDong)
         .then(() => { showCustomAlert('Đã xóa Hợp đồng.', 'success'); reloadData(); })
         .catch(handleBackendError);
+}
+
+// --- Nhập Excel dùng chung cho BOQ/Nghiệm thu/Thanh toán (thư viện SheetJS, xem Index.html) ---
+
+// Đoán cấp từ chuỗi STT — số La Mã (I,II..)=0, 1 chữ cái (A,B..)=1, số nguyên (1,2..)=2, số có dấu
+// chấm (1.1, 1.1.2..)=3, không nhận diện được thì -1. Port nguyên mẫu app cũ (getLevelFromSTT).
+function layCapTuSTT_(stt) {
+    if (!stt) return -1;
+    const s = String(stt).trim().toUpperCase().replace(/\.$/, '');
+    if (/^\d+(\.\d+)+$/.test(s)) return 3;
+    if (/^\d+$/.test(s)) return 2;
+    const roman = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV'];
+    if (roman.includes(s)) return 0;
+    if (/^[A-Z]$/.test(s)) return 1;
+    return -1;
+}
+
+// Đọc file Excel (.xlsx/.xls/.csv) thành mảng dòng (mỗi dòng là mảng ô, dòng 0 = tiêu đề).
+function docFileExcel_(file) {
+    return new Promise((resolve, reject) => {
+        if (typeof XLSX === 'undefined') { reject(new Error('Chưa tải xong thư viện đọc Excel, vui lòng thử lại sau vài giây.')); return; }
+        const reader = new FileReader();
+        reader.onload = e => {
+            try {
+                const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1, defval: '' });
+                resolve(rows);
+            } catch (err) { reject(err); }
+        };
+        reader.onerror = () => reject(new Error('Không đọc được file.'));
+        reader.readAsArrayBuffer(file);
+    });
+}
+
+// Ngày Excel có thể là Date object, số serial, hoặc chuỗi dd/mm/yyyy — chuyển hết về yyyy-MM-dd.
+function ngayExcelToISO_(value) {
+    if (value instanceof Date && !isNaN(value.getTime())) {
+        return value.getFullYear() + '-' + String(value.getMonth() + 1).padStart(2, '0') + '-' + String(value.getDate()).padStart(2, '0');
+    }
+    if (typeof value === 'number' && value > 0) {
+        const d = new Date(Math.round((value - 25569) * 86400 * 1000));
+        if (!isNaN(d.getTime())) return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    if (typeof value === 'string' && value.trim()) {
+        const iso = convertDMYtoISO(value.trim());
+        if (iso) return iso;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value.trim())) return value.trim();
+    }
+    return '';
+}
+
+// Khớp 1 dòng Excel (STT+Tên) với đúng 1 hạng mục BOQ của Hợp đồng đang chọn — so sánh không phân
+// biệt hoa/thường, bỏ khoảng trắng thừa, giống hệt cách app cũ khớp (importProgressExcel).
+function khopBOQTheoSttTen_(stt, ten) {
+    const cleanStt = String(stt || '').toLowerCase().replace(/\.$/, '').trim();
+    const cleanTen = String(ten || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    return (boq || []).find(b => b.maHopDong === currentHopDongId
+        && String(b.stt || '').toLowerCase().replace(/\.$/, '').trim() === cleanStt
+        && String(b.tenHangMuc || '').toLowerCase().replace(/\s+/g, ' ').trim() === cleanTen);
 }
 </script>
