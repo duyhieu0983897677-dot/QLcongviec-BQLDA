@@ -235,8 +235,17 @@
         .task-group-row td { padding: 10px 12px; }
         .task-row td { padding: 8px 10px; vertical-align: middle; }
         .task-name-cell { display: flex; flex-direction: column; gap: 2px; }
-        .task-name-cell .t-name { font-weight: 600; color: var(--text-main); }
-        .task-name-cell .t-target { font-size: 0.76rem; color: var(--text-muted); }
+        /* Tên công việc gọn 1 dòng (…) cho mọi bảng, rê chuột (title) mới hiện đủ. */
+        .t-name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+        .t-name { font-weight: 600; color: var(--text-main); display: inline-block; max-width: 260px;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+        .task-name-cell .t-target { font-size: 0.76rem; color: var(--text-muted); display: inline-block;
+            max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Chấm số bình luận cạnh tên công việc — công khai, ai cũng xem được, rê chuột hiện nội dung. */
+        .comment-badge { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+            background: var(--info-dim); color: var(--info); font-size: 0.68rem; font-weight: 700;
+            padding: 1px 6px; border-radius: 10px; cursor: help; white-space: nowrap; }
+        .comment-badge i { font-size: 0.6rem; }
         /* Công việc đã bị Giám sát xóa: chỉ hiện ở tab "Thi công / Tiến độ" (không lên Tổng quan),
            gạch ngang tên + mờ cả dòng thay vì ẩn hẳn, để vẫn thấy lịch sử. */
         .task-row.deleted { opacity: 0.5; }
@@ -262,6 +271,19 @@
 
         .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: center; }
         .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }
+
+        /* Dropdown chọn cột hiển thị cho bảng "Báo cáo chi tiết" — cùng phong cách .thongbao-panel. */
+        .col-toggle-wrap { position: relative; }
+        .col-toggle-btn { background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); width: auto; white-space: nowrap; }
+        .col-toggle-panel {
+            display: none; position: absolute; top: calc(100% + 6px); left: 0; width: 220px;
+            max-height: 300px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border);
+            border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 500; text-align: left; padding: 6px 0;
+        }
+        .col-toggle-panel.active { display: block; }
+        .col-toggle-item { display: flex; align-items: center; gap: 8px; padding: 6px 14px; font-size: 0.84rem; color: var(--text-main); cursor: pointer; }
+        .col-toggle-item:hover { background: var(--bg); }
+        .col-toggle-item input { margin: 0; }
 
         /* --- VIỆC CỦA TÔI (mobile quick-update) --- */
         .my-task-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }

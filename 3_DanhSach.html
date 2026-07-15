@@ -40,8 +40,11 @@ function renderCongViecRow(cv) {
     const mau = mauChucDanh(chucDanh);
     return `<tr class="task-row${isDeleted ? ' deleted' : ''}">
         <td class="task-name-cell" style="padding-left:48px;">
-            <span class="t-name">${cv.tenCongViec}</span>
-            <span class="t-target">${meta}</span>
+            <div class="t-name-row">
+                <span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>
+                ${commentBadgeHtml(cv)}
+            </div>
+            <span class="t-target" title="${escapeHtml(meta)}">${meta}</span>
         </td>
         <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
         <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>

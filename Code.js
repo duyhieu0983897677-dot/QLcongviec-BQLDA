@@ -254,6 +254,7 @@ function getData() {
   const goiThau = readGoiThauRows_(ss.getSheetByName('GoiThau'));
   const congViec = readCongViecRows_(ss.getSheetByName('CongViec'), true);
   const logs = readNhatKyRows_(ss.getSheetByName('NhatKyTienDo')).filter(l => l.active);
+  const binhLuan = readBinhLuanRows_(ss.getSheetByName('BinhLuanCongViec'));
 
   const luyKeMap = {};
   const logsByCongViec = {};
@@ -267,12 +268,20 @@ function getData() {
     logsByCongViec[id].sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao));
   });
 
+  // Gắn sẵn số lượng + 5 bình luận gần nhất cho mỗi Công việc (giống recentLogs ở trên) — để chuông
+  // số trên tên Công việc + tooltip xem nhanh không cần round-trip getBinhLuanCongViec() riêng.
+  const binhLuanByCongViec = {};
+  binhLuan.forEach(c => { (binhLuanByCongViec[c.maCongViec] = binhLuanByCongViec[c.maCongViec] || []).push(c); });
+
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
   congViec.forEach(cv => {
     const luyKe = Math.round((luyKeMap[cv.maCongViec] || 0) * 10) / 10;
     cv.luyKe = luyKe;
     cv.recentLogs = recentLogsByCongViec[cv.maCongViec] || [];
+    const cmts = binhLuanByCongViec[cv.maCongViec] || [];
+    cv.soBinhLuan = cmts.length;
+    cv.recentComments = cmts.slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 5);
 
     if (luyKe >= 100) {
       let ngayHoanThanhThucTe = null;

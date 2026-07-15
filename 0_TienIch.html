@@ -244,4 +244,21 @@ function mauChucDanh(chucDanh) {
     for (let i = 0; i < s.length; i++) hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
     return CHUCDANH_COLORS_[hash % (CHUCDANH_COLORS_.length - 1)];
 }
+
+function escapeHtml(str) {
+    return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Chấm số bình luận cạnh tên Công việc (mọi vai trò đều xem được) — rê chuột hiện 5 bình luận gần
+// nhất qua thuộc tính title (tooltip trình duyệt, không bị cắt bởi overflow của bảng cuộn ngang).
+function commentBadgeHtml(cv) {
+    const n = cv.soBinhLuan || 0;
+    if (!n) return '';
+    const lines = (cv.recentComments || []).slice().reverse()
+        .map(c => `${c.nguoiBinhLuanTen} (${c.thoiGian}): ${c.noiDung}`);
+    if (n > lines.length) lines.push(`... và ${n - lines.length} bình luận khác`);
+    return `<span class="comment-badge" title="${escapeHtml(lines.join('\n'))}"><i class="fa-solid fa-comment"></i>${n}</span>`;
+}
 </script>

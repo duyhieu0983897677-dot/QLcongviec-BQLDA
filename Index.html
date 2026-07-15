@@ -143,20 +143,26 @@
                         <option value="hangmuc">Xem theo Hạng mục</option>
                     </select>
                     <select id="bcDetailSelect" onchange="renderBcDetail()" style="flex:1; min-width:200px;"></select>
+                    <div class="col-toggle-wrap">
+                        <button type="button" class="btn btn-sm col-toggle-btn" onclick="toggleBcColPanel()"><i class="fa-solid fa-table-columns"></i> Cột hiển thị</button>
+                        <div id="bcColTogglePanel" class="col-toggle-panel">
+                            <div id="bcColToggleList"></div>
+                        </div>
+                    </div>
                 </div>
                 <div class="table-responsive">
-                    <table class="data-table">
+                    <table class="data-table" id="bcDetailTable">
                         <thead><tr>
-                            <th>STT</th>
-                            <th style="min-width:110px;">Mã hạng mục</th>
-                            <th style="text-align:left; min-width:220px;">Tên công việc</th>
-                            <th style="min-width:100px;">Người phụ trách</th>
-                            <th style="min-width:90px;">Chức danh</th>
-                            <th style="min-width:100px;">Ngày bắt đầu</th>
-                            <th style="min-width:100px;">Ngày hoàn thành</th>
-                            <th style="min-width:140px;">Tiến độ</th>
-                            <th style="min-width:150px;">Tình trạng</th>
-                            <th style="text-align:left; min-width:180px;">Ghi chú</th>
+                            <th data-col="stt">STT</th>
+                            <th data-col="mahangmuc" style="min-width:110px;">Mã hạng mục</th>
+                            <th data-col="ten" style="text-align:left; min-width:220px;">Tên công việc</th>
+                            <th data-col="nguoiphutrach" style="min-width:100px;">Người phụ trách</th>
+                            <th data-col="chucdanh" style="min-width:90px;">Chức danh</th>
+                            <th data-col="ngaybatdau" style="min-width:100px;">Ngày bắt đầu</th>
+                            <th data-col="ngayketthuc" style="min-width:100px;">Ngày hoàn thành</th>
+                            <th data-col="tiendo" style="min-width:140px;">Tiến độ</th>
+                            <th data-col="tinhtrang" style="min-width:150px;">Tình trạng</th>
+                            <th data-col="ghichu" style="text-align:left; min-width:180px;">Ghi chú</th>
                         </tr></thead>
                         <tbody id="bcDetailBody"></tbody>
                     </table>

@@ -76,6 +76,7 @@ function renderDashboard() {
     document.getElementById('bc-kpi-total').textContent = bcAllCongViec.length;
     renderBcCharts();
     fillBcDetailSelect();
+    renderBcColToggle();
     renderBcDetail();
     document.getElementById('bcUpdatedAt').textContent = new Date().toLocaleString('vi-VN');
 }
@@ -226,24 +227,76 @@ function renderBcDetail() {
             const mau = mauChucDanh(chucDanh);
             html += `
             <tr>
-                <td class="text-center">${BC_PHAN_ROMAN[phan]}.${idx + 1}</td>
-                <td class="text-center">${(cv.maHangMucList || []).join(', ') || '--'}</td>
-                <td>${cv.tenCongViec}</td>
-                <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
-                <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
-                <td class="text-center">${formatVN(cv.ngayBatDauKH)}</td>
-                <td class="text-center">${formatVN(cv.ngayKetThucKH)}</td>
-                <td class="bc-bar-cell">
+                <td class="text-center" data-col="stt">${BC_PHAN_ROMAN[phan]}.${idx + 1}</td>
+                <td class="text-center" data-col="mahangmuc">${(cv.maHangMucList || []).join(', ') || '--'}</td>
+                <td data-col="ten"><div class="t-name-row"><span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>${commentBadgeHtml(cv)}</div></td>
+                <td class="text-center" data-col="nguoiphutrach">${nameOfUser(cv.nguoiTaoId)}</td>
+                <td class="text-center" data-col="chucdanh">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
+                <td class="text-center" data-col="ngaybatdau">${formatVN(cv.ngayBatDauKH)}</td>
+                <td class="text-center" data-col="ngayketthuc">${formatVN(cv.ngayKetThucKH)}</td>
+                <td class="bc-bar-cell" data-col="tiendo">
                     <div class="bc-bar-flex">
                         <div class="bc-bar-track"><div class="bc-bar-fill status-${cv.trangThaiMau}" style="width:${pct}%;"></div></div>
                         <span class="bc-bar-pct">${cv.luyKe || 0}%</span>
                     </div>
                 </td>
-                <td class="text-center"><span class="bc-badge ${cv.trangThaiMau}">${TRANGTHAI_LABEL[cv.trangThaiMau] || '--'}</span></td>
-                <td class="bc-detail-note">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
+                <td class="text-center" data-col="tinhtrang"><span class="bc-badge ${cv.trangThaiMau}">${TRANGTHAI_LABEL[cv.trangThaiMau] || '--'}</span></td>
+                <td class="bc-detail-note" data-col="ghichu">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
             </tr>`;
         });
     });
     tbody.innerHTML = html;
+    applyBcColVisibility();
 }
+
+// --- Chọn cột hiển thị cho bảng Báo cáo chi tiết (mọi cột đều tick sẵn mặc định) ---
+const BC_COLS = [
+    { key: 'stt', label: 'STT' },
+    { key: 'mahangmuc', label: 'Mã hạng mục' },
+    { key: 'ten', label: 'Tên công việc' },
+    { key: 'nguoiphutrach', label: 'Người phụ trách' },
+    { key: 'chucdanh', label: 'Chức danh' },
+    { key: 'ngaybatdau', label: 'Ngày bắt đầu' },
+    { key: 'ngayketthuc', label: 'Ngày hoàn thành' },
+    { key: 'tiendo', label: 'Tiến độ' },
+    { key: 'tinhtrang', label: 'Tình trạng' },
+    { key: 'ghichu', label: 'Ghi chú' }
+];
+let bcVisibleCols = new Set(BC_COLS.map(c => c.key));
+
+function renderBcColToggle() {
+    const box = document.getElementById('bcColToggleList');
+    if (!box) return;
+    box.innerHTML = BC_COLS.map(c => `
+        <label class="col-toggle-item">
+            <input type="checkbox" value="${c.key}" ${bcVisibleCols.has(c.key) ? 'checked' : ''} onchange="toggleBcCol('${c.key}', this.checked)">
+            ${c.label}
+        </label>`).join('');
+}
+
+function toggleBcCol(key, checked) {
+    if (checked) bcVisibleCols.add(key); else bcVisibleCols.delete(key);
+    applyBcColVisibility();
+}
+
+function applyBcColVisibility() {
+    BC_COLS.forEach(c => {
+        const show = bcVisibleCols.has(c.key);
+        document.querySelectorAll(`#bcDetailTable [data-col="${c.key}"]`).forEach(el => {
+            el.style.display = show ? '' : 'none';
+        });
+    });
+}
+
+function toggleBcColPanel() {
+    const panel = document.getElementById('bcColTogglePanel');
+    if (panel) panel.classList.toggle('active');
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.col-toggle-wrap')) {
+        const panel = document.getElementById('bcColTogglePanel');
+        if (panel) panel.classList.remove('active');
+    }
+});
 </script>
