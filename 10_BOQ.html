@@ -1,0 +1,288 @@
+<script>
+/* ================================================================
+   FILE 10: 10_BOQ.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "BOQ" — cây hạng mục khối lượng mời thầu của Hợp đồng
+   đang chọn (currentHopDongId, xem 9_HopDong.html) + quản lý Phụ lục
+   điều chỉnh giá/khối lượng theo thời điểm + nhập nhanh BOQ bằng cách
+   dán dữ liệu copy từ Excel (tab-separated, không cần thư viện ngoài).
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderBOQ()            : Vẽ cây BOQ + danh sách Phụ lục cho Hợp đồng đang chọn
+   - openBOQItemModal(id)   : Thêm/sửa 1 hạng mục BOQ
+   - openThayDoiModal(mplc) : Thêm 1 dòng thay đổi (MOI/THAY_THE/DIEU_CHINH) vào Phụ lục
+   - importBOQFromPaste()   : Nhập hàng loạt hạng mục từ dữ liệu dán (copy từ Excel)
+   ================================================================ */
+
+function renderBOQ() {
+    const emptyBox = document.getElementById('boqNoHopDong');
+    const content = document.getElementById('boqContent');
+    const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    if (!hd) {
+        if (emptyBox) emptyBox.style.display = '';
+        if (content) content.style.display = 'none';
+        return;
+    }
+    if (emptyBox) emptyBox.style.display = 'none';
+    if (content) content.style.display = '';
+    document.getElementById('boqHopDongInfo').innerHTML =
+        `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'} · Giá trị hiện hành: <b>${formatTien(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
+    renderBOQTree();
+    renderPhuLucList();
+}
+
+function sortBySTT_(items) {
+    return items.slice().sort((a, b) => {
+        const pa = String(a.stt || '').split('.').map(n => parseInt(n, 10) || 0);
+        const pb = String(b.stt || '').split('.').map(n => parseInt(n, 10) || 0);
+        const len = Math.max(pa.length, pb.length);
+        for (let i = 0; i < len; i++) {
+            const d = (pa[i] || 0) - (pb[i] || 0);
+            if (d !== 0) return d;
+        }
+        return 0;
+    });
+}
+
+function renderBOQTree() {
+    const tbody = document.getElementById('boqBody');
+    const items = sortBySTT_(boq.filter(b => b.maHopDong === currentHopDongId));
+    if (items.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
+        return;
+    }
+    const editable = canEditHopDong();
+    tbody.innerHTML = items.map(b => {
+        const indent = 16 + (b.cap || 0) * 20;
+        if (b.isHeader) {
+            return `<tr class="boq-header-row">
+                <td colspan="9" style="padding-left:${indent}px;">
+                    <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
+                    ${editable ? `<span class="action-cell" style="float:right;">
+                        <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')"><i class="fa-solid fa-trash"></i></button>
+                    </span>` : ''}
+                </td>
+            </tr>`;
+        }
+        const pct = b.khoiLuongHieuLuc > 0 ? Math.min(100, Math.round((b.khoiLuongDaNghiemThu / b.khoiLuongHieuLuc) * 1000) / 10) : 0;
+        return `<tr>
+            <td style="padding-left:${indent}px;">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge late_done">PL</span>' : ''}</td>
+            <td class="text-center">${b.donVi || '--'}</td>
+            <td class="text-right">${formatTien(b.khoiLuongHopDong)}</td>
+            <td class="text-right">${formatTien(b.khoiLuongHieuLuc)}</td>
+            <td class="text-right">${formatTien(b.donGiaHieuLuc)}</td>
+            <td class="text-right">${formatTien(b.khoiLuongDaNghiemThu)}</td>
+            <td class="text-center"><span class="bc-badge ${pct >= 100 ? 'done' : 'inprogress'}">${pct}%</span></td>
+            <td class="text-center">${formatVN(b.ngayBatDauKH)} - ${formatVN(b.ngayKetThucKH)}</td>
+            <td class="text-center">
+                ${editable ? `<div class="action-cell">
+                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')"><i class="fa-solid fa-trash"></i></button>
+                </div>` : '--'}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function openBOQItemModal(maBOQ) {
+    const item = maBOQ ? boq.find(b => b.maBOQ === maBOQ) : null;
+    document.getElementById('boqModalTitle').textContent = item ? 'Sửa hạng mục BOQ' : 'Thêm hạng mục BOQ';
+    document.getElementById('boqEditId').value = item ? item.maBOQ : '';
+    document.getElementById('boqStt').value = item ? item.stt : '';
+    document.getElementById('boqTen').value = item ? item.tenHangMuc : '';
+    document.getElementById('boqIsHeader').checked = item ? item.isHeader : false;
+    document.getElementById('boqCap').value = item ? item.cap : 0;
+    document.getElementById('boqDonVi').value = item ? item.donVi : '';
+    document.getElementById('boqKhoiLuong').value = item ? item.khoiLuongHopDong : '';
+    document.getElementById('boqDonGia').value = item ? item.donGia : '';
+    document.getElementById('boqNgayBD').value = item && item.ngayBatDauKH ? formatVN(item.ngayBatDauKH) : '';
+    document.getElementById('boqNgayKT').value = item && item.ngayKetThucKH ? formatVN(item.ngayKetThucKH) : '';
+    toggleBOQHeaderFields();
+    document.getElementById('boqItemModal').classList.add('active');
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr !== 'undefined') {
+                ['boqNgayBD', 'boqNgayKT'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
+                });
+            }
+        } catch (e) { console.warn(e); }
+    }, 100);
+}
+
+function toggleBOQHeaderFields() {
+    const isHeader = document.getElementById('boqIsHeader').checked;
+    document.getElementById('boqNonHeaderFields').style.display = isHeader ? 'none' : '';
+}
+
+function closeBOQItemModal() { document.getElementById('boqItemModal').classList.remove('active'); }
+
+function saveBOQItemModal() {
+    const payload = {
+        maBOQ: document.getElementById('boqEditId').value,
+        maHopDong: currentHopDongId,
+        stt: document.getElementById('boqStt').value.trim(),
+        tenHangMuc: document.getElementById('boqTen').value.trim(),
+        isHeader: document.getElementById('boqIsHeader').checked,
+        cap: parseInt(document.getElementById('boqCap').value, 10) || 0,
+        donVi: document.getElementById('boqDonVi').value.trim(),
+        khoiLuongHopDong: parseNumberSafely(document.getElementById('boqKhoiLuong').value) || 0,
+        donGia: parseNumberSafely(document.getElementById('boqDonGia').value) || 0,
+        ngayBatDauKH: convertDMYtoISO(document.getElementById('boqNgayBD').value.trim()) || '',
+        ngayKetThucKH: convertDMYtoISO(document.getElementById('boqNgayKT').value.trim()) || ''
+    };
+    if (!payload.tenHangMuc) { showCustomAlert('Vui lòng nhập Tên hạng mục!', 'error'); return; }
+
+    gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
+        .then(() => { showCustomAlert('Đã lưu hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadData(); })
+        .catch(handleBackendError);
+}
+
+function deleteBOQItem(maBOQ) {
+    const item = boq.find(b => b.maBOQ === maBOQ);
+    if (!item) return;
+    if (!confirm(`Xác nhận XÓA hạng mục "${item.tenHangMuc}"?`)) return;
+    gsRun('adminXoaBOQItem', myUserId, myPassword, maBOQ)
+        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); reloadData(); })
+        .catch(handleBackendError);
+}
+
+// --- Phụ lục Hợp đồng ---
+function renderPhuLucList() {
+    const box = document.getElementById('phuLucList');
+    if (!box) return;
+    const list = phuLuc.filter(p => p.maHopDong === currentHopDongId);
+    if (list.length === 0) {
+        box.innerHTML = `<div class="thongbao-empty">Chưa có Phụ lục nào.</div>`;
+        return;
+    }
+    const editable = canEditHopDong();
+    box.innerHTML = list.map(pl => {
+        const changes = phuLucThayDoi.filter(c => c.maPhuLuc === pl.maPhuLuc);
+        const rows = changes.map(c => {
+            const item = boq.find(b => b.maBOQ === c.maBOQ);
+            const ten = item ? item.tenHangMuc : c.maBOQ;
+            let mota = 'Thêm hạng mục mới';
+            if (c.loaiThayDoi === 'THAY_THE') mota = `Thay khối lượng → ${formatTien(c.khoiLuongMoi)}`;
+            else if (c.loaiThayDoi === 'DIEU_CHINH') mota = `Điều chỉnh ${c.khoiLuongDieuChinh > 0 ? '+' : ''}${formatTien(c.khoiLuongDieuChinh)}`;
+            return `<li>${ten}: ${mota}</li>`;
+        }).join('');
+        return `<div class="pl-item">
+            <div class="pl-item-head">
+                <b>${pl.soHieu}</b> <span class="pl-item-date">${formatVN(pl.ngayPhuLuc)}</span>
+                ${editable ? `<button class="btn btn-sm" style="background:var(--primary); float:right;" onclick="openThayDoiModal('${pl.maPhuLuc}')"><i class="fa-solid fa-plus"></i> Thay đổi</button>` : ''}
+            </div>
+            ${pl.ghiChu ? `<div class="pl-item-note">${pl.ghiChu}</div>` : ''}
+            ${rows ? `<ul class="pl-change-list">${rows}</ul>` : '<div class="pl-item-note">Chưa có thay đổi nào.</div>'}
+        </div>`;
+    }).join('');
+}
+
+function openPhuLucModal() {
+    document.getElementById('plSoHieu').value = '';
+    document.getElementById('plNgay').value = formatVN(getTodayDate());
+    document.getElementById('plGhiChu').value = '';
+    document.getElementById('phuLucModal').classList.add('active');
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr !== 'undefined') {
+                const el = document.getElementById('plNgay');
+                if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
+            }
+        } catch (e) { console.warn(e); }
+    }, 100);
+}
+function closePhuLucModal() { document.getElementById('phuLucModal').classList.remove('active'); }
+
+function savePhuLucModal() {
+    const soHieu = document.getElementById('plSoHieu').value.trim();
+    const ngay = convertDMYtoISO(document.getElementById('plNgay').value.trim());
+    const ghiChu = document.getElementById('plGhiChu').value.trim();
+    if (!soHieu) { showCustomAlert('Vui lòng nhập Số hiệu Phụ lục!', 'error'); return; }
+    gsRun('adminTaoPhuLuc', myUserId, myPassword, currentHopDongId, soHieu, ngay, ghiChu)
+        .then(() => { showCustomAlert('Đã tạo Phụ lục.', 'success'); closePhuLucModal(); reloadData(); })
+        .catch(handleBackendError);
+}
+
+let thayDoiPhuLucId_ = '';
+function openThayDoiModal(maPhuLuc) {
+    thayDoiPhuLucId_ = maPhuLuc;
+    const sel = document.getElementById('tdBOQ');
+    sel.innerHTML = '<option value="">-- Chọn hạng mục --</option>' +
+        boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader)
+           .map(b => `<option value="${b.maBOQ}">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</option>`).join('');
+    document.getElementById('tdLoai').value = 'DIEU_CHINH';
+    document.getElementById('tdKhoiLuong').value = '';
+    document.getElementById('tdDonGiaMoi').value = '';
+    document.getElementById('tdTenMoi').value = '';
+    document.getElementById('tdDonViMoi').value = '';
+    toggleThayDoiFields();
+    document.getElementById('thayDoiModal').classList.add('active');
+}
+function closeThayDoiModal() { document.getElementById('thayDoiModal').classList.remove('active'); }
+
+function toggleThayDoiFields() {
+    const loai = document.getElementById('tdLoai').value;
+    document.getElementById('tdBOQGroup').style.display = loai === 'MOI' ? 'none' : '';
+    document.getElementById('tdMoiGroup').style.display = loai === 'MOI' ? '' : 'none';
+    document.getElementById('tdKhoiLuongLabel').textContent =
+        loai === 'THAY_THE' ? 'Khối lượng mới (thay hẳn)' : (loai === 'DIEU_CHINH' ? 'Chênh lệch (+/-)' : 'Khối lượng ban đầu');
+}
+
+function saveThayDoiModal() {
+    const loai = document.getElementById('tdLoai').value;
+    const klRaw = parseNumberSafely(document.getElementById('tdKhoiLuong').value);
+    const donGiaMoiRaw = document.getElementById('tdDonGiaMoi').value.trim();
+
+    const payload = { loaiThayDoi: loai, donGiaMoi: donGiaMoiRaw ? parseNumberSafely(donGiaMoiRaw) : null };
+    if (loai === 'MOI') {
+        const ten = document.getElementById('tdTenMoi').value.trim();
+        if (!ten) { showCustomAlert('Vui lòng nhập Tên hạng mục mới!', 'error'); return; }
+        payload.boqMoi = {
+            tenHangMuc: ten, donVi: document.getElementById('tdDonViMoi').value.trim(),
+            khoiLuongHopDong: isNaN(klRaw) ? 0 : klRaw, donGia: donGiaMoiRaw ? parseNumberSafely(donGiaMoiRaw) : 0
+        };
+    } else {
+        payload.maBOQ = document.getElementById('tdBOQ').value;
+        if (!payload.maBOQ) { showCustomAlert('Vui lòng chọn Hạng mục!', 'error'); return; }
+        if (isNaN(klRaw)) { showCustomAlert('Vui lòng nhập khối lượng!', 'error'); return; }
+        if (loai === 'THAY_THE') payload.khoiLuongMoi = klRaw; else payload.khoiLuongDieuChinh = klRaw;
+    }
+
+    gsRun('adminThemThayDoiPhuLuc', myUserId, myPassword, thayDoiPhuLucId_, payload)
+        .then(() => { showCustomAlert('Đã thêm thay đổi vào Phụ lục.', 'success'); closeThayDoiModal(); reloadData(); })
+        .catch(handleBackendError);
+}
+
+// --- Nhập nhanh BOQ bằng cách dán dữ liệu copy từ Excel (Tab phân cách cột) ---
+// Cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Ngày bắt đầu (dd/mm/yyyy) | Ngày kết thúc.
+// Chỉ thêm hạng mục thường (không phải Đầu mục) — thêm Đầu mục thì dùng nút "Thêm hạng mục" tay.
+function importBOQFromPaste() {
+    if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
+    const raw = document.getElementById('boqImportBox').value;
+    const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length === 0) { showCustomAlert('Chưa dán dữ liệu để nhập!', 'error'); return; }
+
+    let chain = Promise.resolve();
+    let ok = 0, fail = 0;
+    lines.forEach(line => {
+        const cols = line.split('\t');
+        const [stt, ten, donVi, khoiLuong, donGia, ngayBD, ngayKT] = cols;
+        if (!ten || !ten.trim()) return;
+        chain = chain.then(() => gsRun('adminSaveBOQItem', myUserId, myPassword, {
+            maHopDong: currentHopDongId, stt: (stt || '').trim(), tenHangMuc: ten.trim(),
+            donVi: (donVi || '').trim(), khoiLuongHopDong: parseNumberSafely(khoiLuong) || 0,
+            donGia: parseNumberSafely(donGia) || 0,
+            ngayBatDauKH: convertDMYtoISO((ngayBD || '').trim()) || '',
+            ngayKetThucKH: convertDMYtoISO((ngayKT || '').trim()) || ''
+        }).then(() => ok++).catch(() => fail++));
+    });
+    chain.then(() => {
+        showCustomAlert(`Đã nhập ${ok} hạng mục${fail ? `, ${fail} dòng lỗi` : ''}.`, fail ? 'error' : 'success');
+        document.getElementById('boqImportBox').value = '';
+        reloadData();
+    });
+}
+</script>

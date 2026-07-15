@@ -1,0 +1,146 @@
+<script>
+/* ================================================================
+   FILE 9: 9_HopDong.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Hợp đồng" trong nhóm "Quản lý hợp đồng" — danh sách
+   Hợp đồng + chọn "Hợp đồng đang xem" (biến currentHopDongId) dùng
+   chung cho BOQ/Nghiệm thu/Thanh toán/Quyết toán, giống cách app cũ
+   dùng currentContractId. Ai cũng xem được, chỉ ADMIN thêm/sửa/xóa.
+
+   Cũng chứa vài hàm dùng chung cho toàn module Hợp đồng (định dạng
+   tiền, tra tên Hợp đồng, tính giá trị hiện hành) vì file này nạp
+   trước các file 10-14 (xem thứ tự include ở Index.html).
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderHopDongList()    : Vẽ bảng Hợp đồng + dải "đang chọn"
+   - chonHopDong(id, tab?)  : Đặt currentHopDongId, có thể nhảy luôn sang tab khác
+   - openHopDongModal(id)   : Mở modal thêm/sửa Hợp đồng
+   - saveHopDongModal()     : Lưu Hợp đồng qua adminSaveHopDong
+   - giaTriHienHanhHopDong(maHopDong) : Tổng giá trị HĐ hiện hành (dùng chung nhiều nơi)
+   ================================================================ */
+
+let currentHopDongId = '';
+
+function formatTien(n) {
+    return Math.round(n || 0).toLocaleString('vi-VN');
+}
+
+function tenHopDong(maHopDong) {
+    const hd = hopDong.find(h => h.maHopDong === maHopDong);
+    return hd ? hd.tenHopDong : (maHopDong || '--');
+}
+
+// Tổng giá trị Hợp đồng hiện hành (Tổng KL hiệu lực x Đơn giá hiệu lực, trừ Giảm giá) — chưa gồm
+// thuế GTGT, dùng làm mẫu số tính tỷ lệ Thu hồi tạm ứng và hiển thị nhanh trên danh sách.
+function giaTriHienHanhHopDong(maHopDong) {
+    const items = boq.filter(b => b.maHopDong === maHopDong && !b.isHeader);
+    const hd = hopDong.find(h => h.maHopDong === maHopDong);
+    const total = items.reduce((s, b) => s + (b.khoiLuongHieuLuc || 0) * (b.donGiaHieuLuc || 0), 0);
+    return Math.max(0, Math.round(total) - ((hd && hd.giamGia) || 0));
+}
+
+function canEditHopDong() {
+    return currentRole === 'ADMIN';
+}
+
+// Đặt "Hợp đồng đang xem" — dùng ở dải chọn nhanh trong danh sách và ở các tab BOQ/Nghiệm thu/
+// Thanh toán/Quyết toán khi chưa có gì được chọn. Nếu truyền kèm tabId thì nhảy luôn sang tab đó.
+function chonHopDong(maHopDong, tabId) {
+    currentHopDongId = maHopDong;
+    if (tabId) switchTab(tabId);
+    else renderHopDongList();
+}
+
+function renderHopDongList() {
+    const tbody = document.getElementById('hopDongBody');
+    if (!tbody) return;
+    if (hopDong.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có Hợp đồng nào.</td></tr>`;
+    } else {
+        tbody.innerHTML = hopDong.map(hd => {
+            const g = goiThau.find(x => x.maGoiThau === hd.maGoiThau);
+            const dangChon = hd.maHopDong === currentHopDongId;
+            return `<tr class="${dangChon ? 'hd-row-active' : ''}">
+                <td>${hd.tenHopDong}${dangChon ? ' <span class="bc-badge inprogress">Đang xem</span>' : ''}</td>
+                <td>${hd.nhaThau || '--'}</td>
+                <td>${g ? g.tenGoiThau : '--'}</td>
+                <td class="text-center">${formatVN(hd.ngayKy)}</td>
+                <td class="text-right">${formatTien(giaTriHienHanhHopDong(hd.maHopDong))}</td>
+                <td class="text-center">
+                    <div class="action-cell">
+                        <button class="btn btn-sm" style="background:var(--primary);" onclick="chonHopDong('${hd.maHopDong}', 'boq')" title="Xem BOQ"><i class="fa-solid fa-list-check"></i></button>
+                        <button class="btn btn-sm" style="background:var(--info);" onclick="chonHopDong('${hd.maHopDong}', 'thanhtoan')" title="Xem Thanh toán"><i class="fa-solid fa-money-check-dollar"></i></button>
+                        ${canEditHopDong() ? `
+                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openHopDongModal('${hd.maHopDong}')"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteHopDong('${hd.maHopDong}')"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+}
+
+function openHopDongModal(maHopDong) {
+    const hd = maHopDong ? hopDong.find(h => h.maHopDong === maHopDong) : null;
+    document.getElementById('hopDongModalTitle').textContent = hd ? 'Sửa Hợp đồng' : 'Thêm Hợp đồng';
+    document.getElementById('hdEditId').value = hd ? hd.maHopDong : '';
+    document.getElementById('hdTen').value = hd ? hd.tenHopDong : '';
+    document.getElementById('hdNhaThau').value = hd ? hd.nhaThau : '';
+    document.getElementById('hdNgayKy').value = hd ? formatVN(hd.ngayKy) : '';
+    document.getElementById('hdTamUngHopDong').value = hd ? hd.tamUngHopDong : '';
+    document.getElementById('hdTamUngThiCong').value = hd ? hd.tamUngThiCong : '';
+    document.getElementById('hdThueVAT').value = hd ? hd.thueVAT : 10;
+    document.getElementById('hdGiamGia').value = hd ? hd.giamGia : '';
+
+    const gtSelect = document.getElementById('hdGoiThau');
+    gtSelect.innerHTML = '<option value="">-- Chưa gắn Gói thầu --</option>' +
+        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+    gtSelect.value = hd ? (hd.maGoiThau || '') : '';
+
+    document.getElementById('hopDongModal').classList.add('active');
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr !== 'undefined') {
+                const el = document.getElementById('hdNgayKy');
+                if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
+            }
+        } catch (e) { console.warn(e); }
+    }, 100);
+}
+
+function closeHopDongModal() {
+    document.getElementById('hopDongModal').classList.remove('active');
+}
+
+function saveHopDongModal() {
+    const payload = {
+        maHopDong: document.getElementById('hdEditId').value,
+        tenHopDong: document.getElementById('hdTen').value.trim(),
+        maGoiThau: document.getElementById('hdGoiThau').value,
+        nhaThau: document.getElementById('hdNhaThau').value.trim(),
+        ngayKy: convertDMYtoISO(document.getElementById('hdNgayKy').value.trim()) || '',
+        tamUngHopDong: parseNumberSafely(document.getElementById('hdTamUngHopDong').value) || 0,
+        tamUngThiCong: parseNumberSafely(document.getElementById('hdTamUngThiCong').value) || 0,
+        thueVAT: parseNumberSafely(document.getElementById('hdThueVAT').value) || 0,
+        giamGia: parseNumberSafely(document.getElementById('hdGiamGia').value) || 0
+    };
+    if (!payload.tenHopDong) { showCustomAlert('Vui lòng nhập Tên hợp đồng!', 'error'); return; }
+
+    gsRun('adminSaveHopDong', myUserId, myPassword, payload)
+        .then(() => {
+            showCustomAlert('Đã lưu Hợp đồng.', 'success');
+            closeHopDongModal();
+            reloadData();
+        })
+        .catch(handleBackendError);
+}
+
+function deleteHopDong(maHopDong) {
+    const hd = hopDong.find(h => h.maHopDong === maHopDong);
+    if (!hd) return;
+    if (!confirm(`Xác nhận XÓA Hợp đồng "${hd.tenHopDong}"? (BOQ/Nghiệm thu/Thanh toán liên quan vẫn được giữ lại)`)) return;
+    gsRun('adminXoaHopDong', myUserId, myPassword, maHopDong)
+        .then(() => { showCustomAlert('Đã xóa Hợp đồng.', 'success'); reloadData(); })
+        .catch(handleBackendError);
+}
+</script>

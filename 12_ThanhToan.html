@@ -1,0 +1,183 @@
+<script>
+/* ================================================================
+   FILE 12: 12_ThanhToan.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Thanh toán" — các Đợt thanh toán của Hợp đồng đang
+   chọn (currentHopDongId): chọn khối lượng từng hạng mục cho kỳ này,
+   tự tính Giá trị thực hiện + VAT, trừ Thu hồi tạm ứng (có gợi ý tự
+   động theo tỷ lệ tạm ứng/giá trị HĐ) + Khấu trừ khác.
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderThanhToan()          : Vẽ dải tóm tắt + danh sách Đợt thanh toán
+   - getPaymentRoundBreakdown() : Diễn giải số liệu 1 Đợt (thực hiện/VAT/thu hồi/giá trị cuối)
+   - openPaymentModal()         : Mở modal tạo Đợt mới (chọn khối lượng từng hạng mục)
+   - goiYThuHoi_(loai)          : Gọi goiYThuHoiTamUng() điền sẵn số đề xuất
+   - openDieuChinhModal(id)     : Sửa lại phần thu hồi/khấu trừ sau khi đã tạo Đợt
+   ================================================================ */
+
+function renderThanhToan() {
+    const emptyBox = document.getElementById('ttNoHopDong');
+    const content = document.getElementById('ttContent');
+    const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    if (!hd) {
+        if (emptyBox) emptyBox.style.display = '';
+        if (content) content.style.display = 'none';
+        return;
+    }
+    if (emptyBox) emptyBox.style.display = 'none';
+    if (content) content.style.display = '';
+
+    const rounds = dotThanhToan.filter(d => d.maHopDong === currentHopDongId);
+    const giaTriHD = giaTriHienHanhHopDong(currentHopDongId);
+    const tongDaTT = Math.round(rounds.reduce((s, r) => s + getPaymentRoundBreakdown(r).finalValue, 0));
+
+    document.getElementById('ttSummary').innerHTML = `
+        <div class="kpi-mini"><span>Giá trị HĐ hiện hành</span><b>${formatTien(giaTriHD)}</b></div>
+        <div class="kpi-mini"><span>Tạm ứng hợp đồng</span><b>${formatTien(hd.tamUngHopDong)}</b></div>
+        <div class="kpi-mini"><span>Tạm ứng thi công</span><b>${formatTien(hd.tamUngThiCong)}</b></div>
+        <div class="kpi-mini"><span>Tổng đã thanh toán</span><b>${formatTien(tongDaTT)}</b></div>`;
+
+    const box = document.getElementById('ttList');
+    if (rounds.length === 0) {
+        box.innerHTML = `<div class="thongbao-empty">Chưa có Đợt thanh toán nào.</div>`;
+        return;
+    }
+    const editable = canEditHopDong();
+    box.innerHTML = rounds.map(r => {
+        const bd = getPaymentRoundBreakdown(r);
+        return `<div class="pl-item">
+            <div class="pl-item-head">
+                <b>${r.tenDot}</b> <span class="pl-item-date">${formatVN(r.ngayThanhToan)} · ${r.phanTramThanhToan}%</span>
+                ${editable ? `<span class="action-cell" style="float:right;">
+                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openDieuChinhModal('${r.maDotThanhToan}')" title="Sửa điều chỉnh"><i class="fa-solid fa-sliders"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteDotThanhToan('${r.maDotThanhToan}')"><i class="fa-solid fa-trash"></i></button>
+                </span>` : ''}
+            </div>
+            <div class="pl-item-note">
+                Thực hiện: ${formatTien(bd.thucHien)} · Tạm tính: ${formatTien(bd.tamTinh)} · VAT (${bd.vatRate}%): ${formatTien(bd.thueGTGT)}<br>
+                Thu hồi tạm ứng HĐ: ${formatTien(r.thuHoiTamUngHopDong)} · TC: ${formatTien(r.thuHoiTamUngThiCong)} · Khấu trừ khác: ${formatTien(r.khauTruKhac)}
+            </div>
+            <div class="pl-item-note"><b>Giá trị thanh toán kỳ này: ${formatTien(bd.finalValue)}</b></div>
+        </div>`;
+    }).join('');
+}
+
+// Thuế GTGT tính trên Giá trị tạm tính (trước thuế), CỘNG vào rồi mới trừ tạm ứng/khấu trừ khác —
+// đúng thứ tự Bảng xác định giá trị khối lượng hoàn thành (Mẫu 03.a/TT), port từ app cũ.
+function getPaymentRoundBreakdown(round) {
+    const chiTiet = dotThanhToanChiTiet.filter(c => c.maDotThanhToan === round.maDotThanhToan);
+    let thucHien = 0;
+    chiTiet.forEach(ct => {
+        const b = boq.find(x => x.maBOQ === ct.maBOQ);
+        if (b) thucHien += ct.khoiLuong * b.donGiaHieuLuc;
+    });
+    thucHien = Math.round(thucHien);
+    const tamTinh = Math.round(thucHien * (round.phanTramThanhToan || 100) / 100);
+    const hd = hopDong.find(h => h.maHopDong === round.maHopDong);
+    const vatRate = (hd && hd.thueVAT) || 0;
+    const thueGTGT = Math.round(tamTinh * vatRate / 100);
+    const tamTinhSauThue = tamTinh + thueGTGT;
+    const finalValue = tamTinhSauThue - round.thuHoiTamUngHopDong - round.thuHoiTamUngThiCong - round.khauTruKhac;
+    return { thucHien, tamTinh, vatRate, thueGTGT, tamTinhSauThue, finalValue };
+}
+
+function openPaymentModal() {
+    if (!currentHopDongId) return;
+    document.getElementById('ttCode').value = '';
+    document.getElementById('ttDate').value = formatVN(getTodayDate());
+    document.getElementById('ttPercent').value = 100;
+    document.getElementById('ttNote').value = '';
+    document.getElementById('ttAdvHD').value = 0;
+    document.getElementById('ttAdvTC').value = 0;
+    document.getElementById('ttOther').value = 0;
+    document.getElementById('ttOtherNote').value = '';
+
+    const items = boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader);
+    document.getElementById('ttItemsBox').innerHTML = items.length === 0
+        ? '<div class="thongbao-empty">Hợp đồng chưa có hạng mục BOQ.</div>'
+        : items.map(b => `
+            <div class="tt-item-row">
+                <span>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc} <small>(${b.donVi || ''})</small></span>
+                <input type="number" step="any" min="0" class="js-tt-qty" data-boq="${b.maBOQ}" placeholder="0">
+            </div>`).join('');
+
+    document.getElementById('paymentModal').classList.add('active');
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr !== 'undefined') {
+                const el = document.getElementById('ttDate');
+                if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
+            }
+        } catch (e) { console.warn(e); }
+    }, 100);
+}
+function closePaymentModal() { document.getElementById('paymentModal').classList.remove('active'); }
+
+function timDsChiTietTamThoi_() {
+    return Array.from(document.querySelectorAll('.js-tt-qty'))
+        .map(el => ({ maBOQ: el.getAttribute('data-boq'), khoiLuong: parseNumberSafely(el.value) }))
+        .filter(x => !isNaN(x.khoiLuong) && x.khoiLuong > 0);
+}
+
+function goiYThuHoi_(loai) {
+    const chiTiet = timDsChiTietTamThoi_();
+    if (chiTiet.length === 0) { showCustomAlert('Nhập khối lượng dự kiến trước khi gợi ý!', 'error'); return; }
+    gsRun('goiYThuHoiTamUng', currentHopDongId, chiTiet, loai)
+        .then(val => { document.getElementById(loai === 'thiCong' ? 'ttAdvTC' : 'ttAdvHD').value = val; })
+        .catch(handleBackendError);
+}
+
+function createPaymentRound() {
+    const tenDot = document.getElementById('ttCode').value.trim();
+    if (!tenDot) { showCustomAlert('Vui lòng nhập Tên/Số hiệu Đợt thanh toán!', 'error'); return; }
+    const chiTiet = timDsChiTietTamThoi_();
+    if (chiTiet.length === 0) { showCustomAlert('Vui lòng nhập khối lượng cho ít nhất 1 hạng mục!', 'error'); return; }
+
+    const payload = {
+        maHopDong: currentHopDongId, tenDot,
+        ngayThanhToan: convertDMYtoISO(document.getElementById('ttDate').value.trim()) || '',
+        phanTramThanhToan: parseNumberSafely(document.getElementById('ttPercent').value),
+        ghiChu: document.getElementById('ttNote').value.trim(),
+        thuHoiTamUngHopDong: parseNumberSafely(document.getElementById('ttAdvHD').value) || 0,
+        thuHoiTamUngThiCong: parseNumberSafely(document.getElementById('ttAdvTC').value) || 0,
+        khauTruKhac: parseNumberSafely(document.getElementById('ttOther').value) || 0,
+        ghiChuKhauTru: document.getElementById('ttOtherNote').value.trim(),
+        chiTiet
+    };
+    gsRun('adminTaoDotThanhToan', myUserId, myPassword, payload)
+        .then(() => { showCustomAlert('Đã tạo Đợt thanh toán.', 'success'); closePaymentModal(); reloadData(); })
+        .catch(handleBackendError);
+}
+
+function deleteDotThanhToan(maDotThanhToan) {
+    if (!confirm('Xác nhận XÓA Đợt thanh toán này?')) return;
+    gsRun('adminXoaDotThanhToan', myUserId, myPassword, maDotThanhToan)
+        .then(() => { showCustomAlert('Đã xóa Đợt thanh toán.', 'success'); reloadData(); })
+        .catch(handleBackendError);
+}
+
+let dieuChinhId_ = '';
+function openDieuChinhModal(maDotThanhToan) {
+    const r = dotThanhToan.find(d => d.maDotThanhToan === maDotThanhToan);
+    if (!r) return;
+    dieuChinhId_ = maDotThanhToan;
+    document.getElementById('dcAdvHD').value = r.thuHoiTamUngHopDong;
+    document.getElementById('dcAdvTC').value = r.thuHoiTamUngThiCong;
+    document.getElementById('dcOther').value = r.khauTruKhac;
+    document.getElementById('dcOtherNote').value = r.ghiChuKhauTru;
+    document.getElementById('dieuChinhModal').classList.add('active');
+}
+function closeDieuChinhModal() { document.getElementById('dieuChinhModal').classList.remove('active'); }
+
+function saveDieuChinh() {
+    const payload = {
+        thuHoiTamUngHopDong: parseNumberSafely(document.getElementById('dcAdvHD').value) || 0,
+        thuHoiTamUngThiCong: parseNumberSafely(document.getElementById('dcAdvTC').value) || 0,
+        khauTruKhac: parseNumberSafely(document.getElementById('dcOther').value) || 0,
+        ghiChuKhauTru: document.getElementById('dcOtherNote').value.trim()
+    };
+    gsRun('adminSuaDieuChinhThanhToan', myUserId, myPassword, dieuChinhId_, payload)
+        .then(() => { showCustomAlert('Đã lưu điều chỉnh.', 'success'); closeDieuChinhModal(); reloadData(); })
+        .catch(handleBackendError);
+}
+</script>

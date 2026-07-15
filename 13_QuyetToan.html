@@ -1,0 +1,85 @@
+<script>
+/* ================================================================
+   FILE 13: 13_QuyetToan.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Quyết toán" — bảng tổng hợp TỰ TÍNH của Hợp đồng đang
+   chọn (currentHopDongId): giá trị sau Phụ lục, thuế GTGT, đã/còn phải
+   thanh toán, tỷ lệ hoàn thành khối lượng. Chưa "Xác nhận Quyết toán"
+   thì vẫn hiện số liệu (dạng tạm tính, tính lại mỗi lần vào xem); sau
+   khi xác nhận thì chốt lại mốc ngày (số liệu vẫn tính lại như cũ,
+   theo đúng quyết định đã chốt với người dùng — có thể đổi sang chốt
+   cứng số liệu tại thời điểm xác nhận nếu cần sau khi xem demo).
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderQuyetToan()         : Vẽ bảng tổng hợp (đã chốt hoặc tạm tính)
+   - tinhQuyetToanPreview_()   : Bản JS song song với tinhQuyetToanHopDong_ ở Code.js,
+                                 dùng khi CHƯA có Quyết toán chính thức (chỉ xem trước)
+   - xacNhanQuyetToan()        : Gọi adminTaoQuyetToan()
+   ================================================================ */
+
+function tinhQuyetToanPreview_(maHopDong) {
+    const boqOfHD = boq.filter(b => b.maHopDong === maHopDong && !b.isHeader);
+    const hd = hopDong.find(h => h.maHopDong === maHopDong);
+    const giaTriSauPhuLuc = Math.round(boqOfHD.reduce((s, b) => s + b.khoiLuongHieuLuc * b.donGiaHieuLuc, 0));
+    const giaTriTruocThue = Math.max(0, giaTriSauPhuLuc - ((hd && hd.giamGia) || 0));
+    const vatRate = (hd && hd.thueVAT) || 0;
+    const thueGTGT = Math.round(giaTriTruocThue * vatRate / 100);
+    const giaTriSauThue = giaTriTruocThue + thueGTGT;
+
+    const rounds = dotThanhToan.filter(d => d.maHopDong === maHopDong);
+    const tongDaThanhToan = Math.round(rounds.reduce((s, r) => s + getPaymentRoundBreakdown(r).finalValue, 0));
+
+    const tongGiaTriHieuLuc = boqOfHD.reduce((s, b) => s + b.khoiLuongHieuLuc * b.donGiaHieuLuc, 0);
+    const tongGiaTriDaNghiemThu = boqOfHD.reduce((s, b) => s + b.khoiLuongDaNghiemThu * b.donGiaHieuLuc, 0);
+    const tyLeHoanThanhKhoiLuong = tongGiaTriHieuLuc > 0 ? Math.round((tongGiaTriDaNghiemThu / tongGiaTriHieuLuc) * 1000) / 10 : 0;
+
+    return { giaTriSauPhuLuc, giaTriTruocThue, thueGTGT, giaTriSauThue, tongDaThanhToan, conPhaiThanhToan: giaTriSauThue - tongDaThanhToan, tyLeHoanThanhKhoiLuong };
+}
+
+function renderQuyetToan() {
+    const emptyBox = document.getElementById('qtNoHopDong');
+    const content = document.getElementById('qtContent');
+    const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    if (!hd) {
+        if (emptyBox) emptyBox.style.display = '';
+        if (content) content.style.display = 'none';
+        return;
+    }
+    if (emptyBox) emptyBox.style.display = 'none';
+    if (content) content.style.display = '';
+
+    const qt = quyetToan.find(q => q.maHopDong === currentHopDongId);
+    const so = qt || tinhQuyetToanPreview_(currentHopDongId);
+
+    document.getElementById('qtInfo').innerHTML = `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'}
+        ${qt ? `<span class="bc-badge done">Đã Quyết toán ngày ${formatVN(qt.ngayQuyetToan)}</span>` : '<span class="bc-badge pending">Chưa Quyết toán (số liệu tạm tính)</span>'}`;
+
+    document.getElementById('qtBody').innerHTML = `
+        <div class="kpi-mini"><span>Giá trị sau Phụ lục</span><b>${formatTien(so.giaTriSauPhuLuc)}</b></div>
+        <div class="kpi-mini"><span>Giá trị trước thuế (đã trừ giảm giá)</span><b>${formatTien(so.giaTriTruocThue)}</b></div>
+        <div class="kpi-mini"><span>Thuế GTGT</span><b>${formatTien(so.thueGTGT)}</b></div>
+        <div class="kpi-mini"><span>Giá trị sau thuế</span><b>${formatTien(so.giaTriSauThue)}</b></div>
+        <div class="kpi-mini"><span>Đã thanh toán</span><b>${formatTien(so.tongDaThanhToan)}</b></div>
+        <div class="kpi-mini"><span>Còn phải thanh toán</span><b>${formatTien(so.conPhaiThanhToan)}</b></div>
+        <div class="kpi-mini"><span>Tỷ lệ hoàn thành khối lượng</span><b>${so.tyLeHoanThanhKhoiLuong}%</b></div>`;
+
+    document.getElementById('qtActions').innerHTML = !canEditHopDong() ? '' : (qt
+        ? `<button class="btn btn-danger" onclick="huyQuyetToan('${qt.maQuyetToan}')"><i class="fa-solid fa-rotate-left"></i> Hủy Quyết toán</button>`
+        : `<button class="btn" style="background:var(--success);" onclick="xacNhanQuyetToan()"><i class="fa-solid fa-check"></i> Xác nhận Quyết toán</button>`);
+}
+
+function xacNhanQuyetToan() {
+    if (!confirm('Xác nhận CHỐT Quyết toán Hợp đồng này?')) return;
+    const ghiChu = prompt('Ghi chú (không bắt buộc):', '') || '';
+    gsRun('adminTaoQuyetToan', myUserId, myPassword, currentHopDongId, ghiChu)
+        .then(() => { showCustomAlert('Đã xác nhận Quyết toán.', 'success'); reloadData(); })
+        .catch(handleBackendError);
+}
+
+function huyQuyetToan(maQuyetToan) {
+    if (!confirm('Xác nhận HỦY Quyết toán này? Số liệu sẽ quay về dạng tạm tính.')) return;
+    gsRun('adminXoaQuyetToan', myUserId, myPassword, maQuyetToan)
+        .then(() => { showCustomAlert('Đã hủy Quyết toán.', 'success'); reloadData(); })
+        .catch(handleBackendError);
+}
+</script>

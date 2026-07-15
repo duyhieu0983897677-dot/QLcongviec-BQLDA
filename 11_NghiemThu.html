@@ -1,0 +1,86 @@
+<script>
+/* ================================================================
+   FILE 11: 11_NghiemThu.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Nghiệm thu" — ghi khối lượng thi công đã xác nhận
+   theo ngày cho từng hạng mục BOQ của Hợp đồng đang chọn
+   (currentHopDongId). Bố cục theo mẫu "Báo cáo" ở 4_ViecCuaToi.html
+   (thanh Đã đạt/Sắp nhập) nhưng cho khối lượng BOQ thay vì % Công việc.
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderNghiemThu()     : Vẽ form chọn hạng mục + danh sách gần đây
+   - selectNghiemThuBOQ()  : Chọn 1 hạng mục, cập nhật thanh khối lượng
+   - submitNghiemThu()     : Gửi themNghiemThu()
+   ================================================================ */
+
+let ntState_ = { boq: null };
+
+function renderNghiemThu() {
+    const emptyBox = document.getElementById('ntNoHopDong');
+    const content = document.getElementById('ntContent');
+    const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    if (!hd) {
+        if (emptyBox) emptyBox.style.display = '';
+        if (content) content.style.display = 'none';
+        return;
+    }
+    if (emptyBox) emptyBox.style.display = 'none';
+    if (content) content.style.display = '';
+    document.getElementById('ntHopDongInfo').innerHTML = `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'}`;
+
+    const sel = document.getElementById('ntBOQ');
+    const currentVal = sel.value;
+    const items = boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader);
+    sel.innerHTML = '<option value="">-- Chọn hạng mục --</option>' +
+        items.map(b => `<option value="${b.maBOQ}">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</option>`).join('');
+    if (currentVal && items.some(b => b.maBOQ === currentVal)) sel.value = currentVal;
+
+    document.getElementById('ntNgay').value = formatVN(getTodayDate());
+    selectNghiemThuBOQ(sel.value);
+}
+
+function selectNghiemThuBOQ(maBOQ) {
+    ntState_.boq = maBOQ ? boq.find(b => b.maBOQ === maBOQ) : null;
+    const meta = document.getElementById('ntMeta');
+    const btn = document.getElementById('ntSubmit');
+    if (!ntState_.boq) {
+        meta.innerHTML = '';
+        document.getElementById('ntRecent').innerHTML = '';
+        btn.disabled = true;
+        return;
+    }
+    const b = ntState_.boq;
+    const conLai = Math.max(0, Math.round((b.khoiLuongHieuLuc - b.khoiLuongDaNghiemThu) * 1000) / 1000);
+    meta.innerHTML = `<span>ĐVT: <b>${b.donVi || '--'}</b></span>
+        <span>Khối lượng hiệu lực: <b>${formatTien(b.khoiLuongHieuLuc)}</b></span>
+        <span>Đã nghiệm thu: <b>${formatTien(b.khoiLuongDaNghiemThu)}</b></span>
+        <span>Còn lại: <b>${formatTien(conLai)}</b></span>`;
+    btn.disabled = false;
+
+    const logs = nghiemThu.filter(n => n.maBOQ === maBOQ).slice().sort((a, b2) => b2.maNghiemThu.localeCompare(a.maNghiemThu)).slice(0, 5);
+    document.getElementById('ntRecent').innerHTML = logs.length === 0
+        ? '<div style="color:var(--text-muted); padding:6px 0;">Chưa có dữ liệu</div>'
+        : logs.map(l => `<div class="ntd-recent-item">
+            <span class="ndays">${formatVN(l.ngayNghiemThu)} · ${l.nguoiNhapTen}</span>
+            <span class="npct">+${formatTien(l.khoiLuong)} ${b.donVi || ''}</span>
+        </div>`).join('');
+}
+
+function submitNghiemThu() {
+    if (!ntState_.boq) return;
+    const ngay = convertDMYtoISO(document.getElementById('ntNgay').value.trim());
+    const khoiLuong = document.getElementById('ntKhoiLuong').value;
+    const ghiChu = document.getElementById('ntGhiChu').value.trim();
+    const btn = document.getElementById('ntSubmit');
+    btn.disabled = true;
+
+    gsRun('themNghiemThu', myUserId, myPassword, ntState_.boq.maBOQ, ngay, khoiLuong, ghiChu)
+        .then(() => {
+            showCustomAlert('Đã ghi Nghiệm thu.', 'success');
+            document.getElementById('ntKhoiLuong').value = '';
+            document.getElementById('ntGhiChu').value = '';
+            reloadData();
+        })
+        .catch(err => { handleBackendError(err); btn.disabled = false; });
+}
+</script>

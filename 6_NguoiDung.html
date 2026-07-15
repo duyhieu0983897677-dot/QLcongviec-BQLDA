@@ -2,7 +2,7 @@
 /* ================================================================
    FILE 6: 6_NguoiDung.html
    ------------------------------------------------------------------
-   PHẠM VI: Tab "Quản lý Giám sát" (chỉ Admin) — thêm/sửa/xóa tài
+   PHẠM VI: Tab "Quản lý nhân sự" (chỉ Admin) — thêm/sửa/xóa tài
    khoản Giám sát, đặt lại mật khẩu, gán Chức danh + Phần mặc định
    (I. Phần hồ sơ / II. Phần triển khai thi công). Phần mặc định quyết
    định Công việc do người này tự tạo sẽ tự rơi vào phần nào (xem
@@ -120,6 +120,16 @@ function deleteUser(userId) {
             showCustomAlert('Đã xóa tài khoản.', 'success');
             reloadData();
         })
+        .catch(handleBackendError);
+}
+
+// Công cụ 1 lần: đọc dữ liệu Hợp đồng/BOQ/Phụ lục/Nghiệm thu/Thanh toán từ app cũ và ghi vào các
+// sheet Hợp đồng của dự án này (xem migrateHopDongTuAppCu() ở Code.js) — CHẠY LẠI SẼ TẠO TRÙNG DỮ
+// LIỆU, chỉ bấm khi chắc chắn chưa di trú lần nào.
+function chayDiTruHopDong() {
+    if (!confirm('Chạy di trú dữ liệu Hợp đồng từ app cũ? CHỈ chạy 1 lần duy nhất — chạy lại sẽ tạo trùng dữ liệu.')) return;
+    gsRun('migrateHopDongTuAppCu', myUserId, myPassword)
+        .then(msg => { showCustomAlert(msg, 'success'); reloadData(); })
         .catch(handleBackendError);
 }
 </script>

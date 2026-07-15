@@ -78,7 +78,33 @@ function renderDashboard() {
     fillBcDetailSelect();
     renderBcColToggle();
     renderBcDetail();
+    renderBcHopDongSummary();
     document.getElementById('bcUpdatedAt').textContent = new Date().toLocaleString('vi-VN');
+}
+
+// Khối "Tổng quan Hợp đồng" — tổng số Hợp đồng + tổng giá trị hiện hành + tổng đã/còn phải thanh
+// toán, cộng dồn qua mọi Hợp đồng (dùng lại giaTriHienHanhHopDong()/getPaymentRoundBreakdown() đã
+// có ở 9_HopDong.html/12_ThanhToan.html, không tính lại công thức riêng ở đây).
+function renderBcHopDongSummary() {
+    const box = document.getElementById('bcHopDongSummary');
+    if (!box) return;
+    if (!hopDong || hopDong.length === 0) {
+        box.innerHTML = `<div class="thongbao-empty">Chưa có Hợp đồng nào. Vào "Quản lý hợp đồng" để thêm.</div>`;
+        return;
+    }
+    let tongGiaTri = 0, tongDaThanhToan = 0;
+    hopDong.forEach(hd => {
+        tongGiaTri += giaTriHienHanhHopDong(hd.maHopDong);
+        (dotThanhToan || []).filter(d => d.maHopDong === hd.maHopDong)
+            .forEach(r => { tongDaThanhToan += getPaymentRoundBreakdown(r).finalValue; });
+    });
+    tongDaThanhToan = Math.round(tongDaThanhToan);
+    // Không cộng "còn phải thanh toán" ở đây vì tongGiaTri (trước thuế) và tongDaThanhToan (đã gồm
+    // thuế từng đợt) không cùng cơ sở so sánh — số chính xác từng Hợp đồng xem ở tab Quyết toán.
+    box.innerHTML = `
+        <div class="kpi-mini"><span>Tổng số Hợp đồng</span><b>${hopDong.length}</b></div>
+        <div class="kpi-mini"><span>Tổng giá trị hiện hành (trước thuế)</span><b>${formatTien(tongGiaTri)}</b></div>
+        <div class="kpi-mini"><span>Tổng đã thanh toán</span><b>${formatTien(tongDaThanhToan)}</b></div>`;
 }
 
 function renderBcCharts() {

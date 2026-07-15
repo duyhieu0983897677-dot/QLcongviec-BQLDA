@@ -1,0 +1,53 @@
+<script>
+/* ================================================================
+   FILE 14: 14_TienDoThiCong.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Tiến độ" trong nhóm "Quản lý thi công" — tiến độ thực
+   tế theo từng Gói thầu, gộp 2 nguồn: % Công việc (trung bình luyKe
+   của Công việc thuộc Gói thầu, đã có sẵn từ getData()) và % khối
+   lượng BOQ đã nghiệm thu (khi HopDong.maGoiThau khớp Gói thầu đó).
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderTienDoThiCong() : Vẽ bảng tiến độ theo từng Gói thầu
+   ================================================================ */
+
+function renderTienDoThiCong() {
+    const tbody = document.getElementById('tdtcBody');
+    if (goiThau.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = goiThau.map(g => {
+        const cvOfGT = congViec.filter(cv => cv.maGoiThau === g.maGoiThau && cv.active !== false);
+        const pctCV = cvOfGT.length ? Math.round(cvOfGT.reduce((s, cv) => s + (cv.luyKe || 0), 0) / cvOfGT.length * 10) / 10 : null;
+
+        const hdOfGT = hopDong.filter(h => h.maGoiThau === g.maGoiThau);
+        let pctBOQ = null;
+        if (hdOfGT.length) {
+            let tongHieuLuc = 0, tongDaNT = 0;
+            hdOfGT.forEach(hd => {
+                boq.filter(b => b.maHopDong === hd.maHopDong && !b.isHeader).forEach(b => {
+                    tongHieuLuc += (b.khoiLuongHieuLuc || 0) * (b.donGiaHieuLuc || 0);
+                    tongDaNT += (b.khoiLuongDaNghiemThu || 0) * (b.donGiaHieuLuc || 0);
+                });
+            });
+            pctBOQ = tongHieuLuc > 0 ? Math.round((tongDaNT / tongHieuLuc) * 1000) / 10 : 0;
+        }
+
+        return `<tr>
+            <td>${g.tenGoiThau}</td>
+            <td>${pctCV === null ? '<span class="text-muted">Chưa có Công việc</span>' : `
+                <div class="gantt-bar-wrap">
+                    <div class="gantt-track"><div class="gantt-fill" style="width:${Math.min(100, pctCV)}%;"></div></div>
+                    <span class="gantt-pct">${pctCV}%</span>
+                </div>`}</td>
+            <td>${pctBOQ === null ? '<span class="text-muted">Chưa gắn Hợp đồng</span>' : `
+                <div class="gantt-bar-wrap">
+                    <div class="gantt-track"><div class="gantt-fill status-inprogress" style="width:${Math.min(100, pctBOQ)}%;"></div></div>
+                    <span class="gantt-pct">${pctBOQ}%</span>
+                </div>`}</td>
+            <td class="text-center">${hdOfGT.length ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="chonHopDong('${hdOfGT[0].maHopDong}', 'boq')">Xem BOQ</button>` : '--'}</td>
+        </tr>`;
+    }).join('');
+}
+</script>
