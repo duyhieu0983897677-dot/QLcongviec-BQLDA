@@ -22,6 +22,7 @@ function renderNghiemThu() {
     const emptyBox = document.getElementById('ntNoHopDong');
     const content = document.getElementById('ntContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    renderHopDongSoLine_('ntHopDongLine', hd);
     if (!hd) {
         if (emptyBox) emptyBox.style.display = '';
         if (content) content.style.display = 'none';
@@ -29,7 +30,6 @@ function renderNghiemThu() {
     }
     if (emptyBox) emptyBox.style.display = 'none';
     if (content) content.style.display = '';
-    document.getElementById('ntHopDongInfo').innerHTML = `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'}`;
 
     const editable = canEditHopDong();
     document.getElementById('ntNoPerm').style.display = editable ? 'none' : '';

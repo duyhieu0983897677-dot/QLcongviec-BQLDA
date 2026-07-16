@@ -41,6 +41,7 @@ function renderQuyetToan() {
     const emptyBox = document.getElementById('qtNoHopDong');
     const content = document.getElementById('qtContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    renderHopDongSoLine_('qtHopDongLine', hd);
     if (!hd) {
         if (emptyBox) emptyBox.style.display = '';
         if (content) content.style.display = 'none';
@@ -52,8 +53,8 @@ function renderQuyetToan() {
     const qt = quyetToan.find(q => q.maHopDong === currentHopDongId);
     const so = qt || tinhQuyetToanPreview_(currentHopDongId);
 
-    document.getElementById('qtInfo').innerHTML = `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'}
-        ${qt ? `<span class="bc-badge done">Đã Quyết toán ngày ${formatVN(qt.ngayQuyetToan)}</span>` : '<span class="bc-badge pending">Chưa Quyết toán (số liệu tạm tính)</span>'}`;
+    document.getElementById('qtInfo').innerHTML =
+        qt ? `<span class="bc-badge done">Đã Quyết toán ngày ${formatVN(qt.ngayQuyetToan)}</span>` : '<span class="bc-badge pending">Chưa Quyết toán (số liệu tạm tính)</span>';
 
     document.getElementById('qtBody').innerHTML = `
         <div class="kpi-mini"><span>Giá trị sau Phụ lục</span><b>${tienHienThi_(so.giaTriSauPhuLuc)}</b></div>

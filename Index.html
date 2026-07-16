@@ -172,7 +172,8 @@
                     <div class="bc-charts-grid">
                         <div>
                             <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Tỷ lệ trạng thái công việc</div>
-                            <div style="max-width:380px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
+                            <div style="max-width:300px; margin:0 auto;"><canvas id="bcPieChart"></canvas></div>
+                            <div id="bcPieLegend" style="display:flex; flex-direction:row; flex-wrap:wrap; justify-content:center; gap:10px 16px; margin-top:8px;"></div>
                         </div>
                         <div>
                             <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Số công việc theo Người phụ trách</div>
@@ -185,12 +186,12 @@
 
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-magnifying-glass-chart"></i> Báo cáo chi tiết</div>
-                    <div class="filter-bar">
-                        <select id="bcDetailType" onchange="onBcDetailTypeChange()">
+                    <div class="filter-bar" style="justify-content:flex-end;">
+                        <select id="bcDetailType" class="hd-select" onchange="onBcDetailTypeChange()">
                             <option value="goithau">Xem theo Gói thầu</option>
                             <option value="hangmuc">Xem theo Hạng mục</option>
                         </select>
-                        <select id="bcDetailSelect" onchange="renderBcDetail()" style="flex:1; min-width:200px;"></select>
+                        <select id="bcDetailSelect" class="hd-select" onchange="renderBcDetail()"></select>
                         <div class="col-toggle-wrap">
                             <button type="button" class="btn btn-sm col-toggle-btn" onclick="toggleBcColPanel()"><i class="fa-solid fa-table-columns"></i> Cột hiển thị</button>
                             <div id="bcColTogglePanel" class="col-toggle-panel">
@@ -220,7 +221,8 @@
 
             <div id="bcPanelChiPhi" class="bc-panel">
                 <div class="card">
-                    <div class="filter-bar">
+                    <div class="card-header-row">
+                        <div class="card-title"><i class="fa-solid fa-file-contract"></i> Hợp đồng đang xem</div>
                         <select id="bcChiPhiHopDongSelect" class="hd-select" onchange="renderBcChiPhi()"></select>
                     </div>
                     <div class="kpi-row">
@@ -235,8 +237,8 @@
                     <div class="bc-charts-grid">
                         <div>
                             <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-pie"></i> Sản lượng đã thực hiện</div>
-                            <div style="max-width:340px; margin:0 auto;"><canvas id="cpPieChart"></canvas></div>
-                            <div id="cpPieLegend" style="margin-top:10px; display:flex; flex-direction:column; gap:10px;"></div>
+                            <div style="max-width:300px; margin:0 auto;"><canvas id="cpPieChart"></canvas></div>
+                            <div id="cpPieLegend" style="display:flex; flex-direction:row; flex-wrap:wrap; justify-content:center; gap:10px 16px; margin-top:8px;"></div>
                         </div>
                         <div>
                             <div class="card-title" style="font-size:0.95rem;"><i class="fa-solid fa-chart-column"></i> Sản lượng thực hiện 6 tháng gần nhất</div>
@@ -260,8 +262,8 @@
         <!-- TAB: HỢP ĐỒNG -->
         <section id="hopdong" class="tab-content">
             <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-file-contract"></i> Danh sách Hợp đồng</div>
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-file-contract"></i> Danh sách Hợp đồng</div>
                     <button id="btnThemHopDong" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openHopDongModal()"><i class="fa-solid fa-plus"></i> Thêm Hợp đồng</button>
                 </div>
                 <div class="table-responsive">
@@ -283,7 +285,11 @@
         <!-- TAB: BOQ -->
         <section id="boq" class="tab-content">
             <div class="card">
-                <div class="filter-bar" style="margin-bottom:0;">
+                <div class="card-header-row">
+                    <div>
+                        <div class="card-title"><i class="fa-solid fa-list-check"></i> Bảng danh mục khối lượng công việc (BoQ)</div>
+                        <div id="boqHopDongLine" class="hd-line"></div>
+                    </div>
                     <select id="boqHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderBOQ();"></select>
                 </div>
             </div>
@@ -292,9 +298,8 @@
             </div>
             <div id="boqContent">
                 <div class="card">
-                    <div id="boqHopDongInfo" style="margin-bottom:10px; font-size:0.9rem;"></div>
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                        <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Bảng khối lượng (BOQ)</div>
+                    <div class="card-header-row">
+                        <div id="boqHopDongInfo" style="font-size:0.9rem;"></div>
                         <button id="btnThemBOQItem" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openBOQItemModal()"><i class="fa-solid fa-plus"></i> Thêm hạng mục</button>
                     </div>
                     <div class="table-responsive">
@@ -324,8 +329,8 @@
                 </div>
 
                 <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-file-pen"></i> Phụ lục Hợp đồng</div>
+                    <div class="card-header-row">
+                        <div class="card-title"><i class="fa-solid fa-file-pen"></i> Phụ lục Hợp đồng</div>
                         <button id="btnThemPhuLuc" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openPhuLucModal()"><i class="fa-solid fa-plus"></i> Thêm Phụ lục</button>
                     </div>
                     <div id="phuLucList"></div>
@@ -336,7 +341,11 @@
         <!-- TAB: NGHIỆM THU -->
         <section id="nghiemthu" class="tab-content">
             <div class="card">
-                <div class="filter-bar" style="margin-bottom:0;">
+                <div class="card-header-row">
+                    <div>
+                        <div class="card-title"><i class="fa-solid fa-clipboard-check"></i> Bảng ghi nhận KL nghiệm thu</div>
+                        <div id="ntHopDongLine" class="hd-line"></div>
+                    </div>
                     <select id="ntHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderNghiemThu();"></select>
                 </div>
             </div>
@@ -345,8 +354,7 @@
             </div>
             <div id="ntContent">
                 <div class="card">
-                    <div id="ntHopDongInfo" style="margin-bottom:10px; font-size:0.9rem;"></div>
-                    <div class="card-title"><i class="fa-solid fa-clipboard-check"></i> Ghi nhận khối lượng nghiệm thu</div>
+                    <div class="card-title"><i class="fa-solid fa-pen-to-square"></i> Ghi nhận khối lượng nghiệm thu</div>
                     <div class="form-group" style="margin-bottom:10px; max-width:380px;">
                         <label>Hạng mục BOQ</label>
                         <select id="ntBOQ" class="form-control" onchange="selectNghiemThuBOQ(this.value)"></select>
@@ -393,7 +401,11 @@
         <!-- TAB: THANH TOÁN -->
         <section id="thanhtoan" class="tab-content">
             <div class="card">
-                <div class="filter-bar" style="margin-bottom:0;">
+                <div class="card-header-row">
+                    <div>
+                        <div class="card-title"><i class="fa-solid fa-money-check-dollar"></i> Bảng tổng hợp Thanh toán</div>
+                        <div id="ttHopDongLine" class="hd-line"></div>
+                    </div>
                     <select id="ttHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderThanhToan();"></select>
                 </div>
             </div>
@@ -424,8 +436,8 @@
                     </div>
                 </div>
                 <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                        <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-money-check-dollar"></i> Các Đợt thanh toán</div>
+                    <div class="card-header-row">
+                        <div class="card-title"><i class="fa-solid fa-money-check-dollar"></i> Các Đợt thanh toán</div>
                         <button id="btnThemDotTT" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openPaymentModal()"><i class="fa-solid fa-plus"></i> Thêm Đợt thanh toán</button>
                     </div>
                     <div id="ttList"></div>
@@ -436,7 +448,11 @@
         <!-- TAB: QUYẾT TOÁN -->
         <section id="quyettoan" class="tab-content">
             <div class="card">
-                <div class="filter-bar" style="margin-bottom:0;">
+                <div class="card-header-row">
+                    <div>
+                        <div class="card-title"><i class="fa-solid fa-file-invoice-dollar"></i> Bảng tổng hợp Quyết toán</div>
+                        <div id="qtHopDongLine" class="hd-line"></div>
+                    </div>
                     <select id="qtHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderQuyetToan();"></select>
                 </div>
             </div>
@@ -446,7 +462,6 @@
             <div id="qtContent">
                 <div class="card">
                     <div id="qtInfo" style="margin-bottom:10px; font-size:0.9rem;"></div>
-                    <div class="card-title"><i class="fa-solid fa-file-invoice-dollar"></i> Bảng tổng hợp Quyết toán</div>
                     <div id="qtBody" class="kpi-row"></div>
                     <div id="qtActions" style="margin-top:14px;"></div>
                 </div>
@@ -459,8 +474,8 @@
              chọn đúng dòng cần sửa/xóa). -->
         <section id="danhsach" class="tab-content">
             <div class="card admin-only">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-layer-group"></i> Danh sách Gói thầu</div>
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-layer-group"></i> Danh sách Gói thầu</div>
                     <div class="action-cell">
                         <button class="btn btn-sm" style="background:var(--accent);" onclick="openGoiThauModal()"><i class="fa-solid fa-plus"></i> Thêm Gói thầu</button>
                         <button class="btn btn-sm" style="background:var(--primary);" onclick="openGoiThauModal('manage')"><i class="fa-solid fa-pen"></i> Chỉnh sửa</button>
@@ -476,8 +491,8 @@
             </div>
 
             <div class="card admin-only">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-sitemap"></i> Quản lý Hạng mục <span style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">(mã tham chiếu để lọc, không nhập %)</span></div>
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-sitemap"></i> Quản lý Hạng mục <span style="font-weight:400; font-size:0.8rem; color:var(--text-muted);">(mã tham chiếu để lọc, không nhập %)</span></div>
                     <div class="action-cell">
                         <button class="btn btn-sm" style="background:var(--accent);" onclick="openHangMucModal()"><i class="fa-solid fa-plus"></i> Thêm Hạng mục</button>
                         <button class="btn btn-sm" style="background:var(--primary);" onclick="openHangMucModal('manage')"><i class="fa-solid fa-pen"></i> Chỉnh sửa</button>
@@ -496,26 +511,26 @@
         <!-- TAB: CÔNG VIỆC CÁ NHÂN (nhóm Quản lý thi công) — danh sách Công việc + thêm/báo cáo -->
         <section id="congviectoi" class="tab-content">
             <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Công việc cá nhân</div>
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-list-check"></i> Công việc cá nhân</div>
                     <div class="action-cell">
                         <button class="btn btn-sm" style="background:var(--accent);" onclick="openThemCongViecHangLoatModal()"><i class="fa-solid fa-plus"></i> Thêm công việc</button>
                         <button class="btn btn-sm" style="background:var(--primary);" onclick="openBaoCaoModal()"><i class="fa-solid fa-clipboard-list"></i> Báo cáo</button>
                     </div>
                 </div>
                 <div class="filter-bar">
-                    <select id="filterGoiThau" onchange="renderCongViecCaNhan()">
+                    <select id="filterGoiThau" class="hd-select" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả Gói thầu --</option>
                     </select>
-                    <select id="filterPhanLoai" onchange="renderCongViecCaNhan()">
+                    <select id="filterPhanLoai" class="hd-select" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả Phần --</option>
                         <option value="ho_so">I. Phần hồ sơ</option>
                         <option value="thi_cong">II. Phần triển khai thi công</option>
                     </select>
-                    <select id="filterGS" onchange="renderCongViecCaNhan()">
+                    <select id="filterGS" class="hd-select" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả người phụ trách --</option>
                     </select>
-                    <select id="filterTrangThaiMau" onchange="renderCongViecCaNhan()">
+                    <select id="filterTrangThaiMau" class="hd-select" onchange="renderCongViecCaNhan()">
                         <option value="">-- Tất cả trạng thái --</option>
                         <option value="pending">Chờ thực hiện</option>
                         <option value="inprogress">Đang thực hiện</option>
@@ -565,8 +580,8 @@
         <!-- TAB: ĐIỂM DANH & PHÉP — ai cũng xem được, chỉ Admin/Thư ký BQLDA sửa được -->
         <section id="diemdanh" class="tab-content">
             <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-calendar-check"></i> Điểm danh Thứ 7/CN &amp; Sổ phép</div>
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-calendar-check"></i> Điểm danh Thứ 7/CN &amp; Sổ phép</div>
                     <input type="month" id="ddThangPicker" class="ntd-input" style="width:auto;">
                 </div>
                 <p style="font-size:0.8rem; color:var(--text-muted); margin:-4px 0 10px;">
@@ -584,8 +599,8 @@
         <!-- TAB: QUẢN LÝ NHÂN SỰ (Admin) -->
         <section id="nguoidung" class="tab-content">
             <div class="card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                    <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-users-gear"></i> Quản lý nhân sự</div>
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-users-gear"></i> Quản lý nhân sự</div>
                     <button class="btn btn-sm" style="background:var(--accent);" onclick="openUserModal()"><i class="fa-solid fa-plus"></i> Thêm nhân sự</button>
                 </div>
                 <div class="table-responsive">

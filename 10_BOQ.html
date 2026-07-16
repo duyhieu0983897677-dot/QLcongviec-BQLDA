@@ -20,6 +20,7 @@ function renderBOQ() {
     const emptyBox = document.getElementById('boqNoHopDong');
     const content = document.getElementById('boqContent');
     const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    renderHopDongSoLine_('boqHopDongLine', hd);
     if (!hd) {
         if (emptyBox) emptyBox.style.display = '';
         if (content) content.style.display = 'none';
@@ -28,7 +29,7 @@ function renderBOQ() {
     if (emptyBox) emptyBox.style.display = 'none';
     if (content) content.style.display = '';
     document.getElementById('boqHopDongInfo').innerHTML =
-        `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'} · Giá trị hiện hành: <b>${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
+        `Giá trị hiện hành: <b>${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
     const editable = canEditHopDong();
     const btnThem = document.getElementById('btnThemBOQItem');
     if (btnThem) btnThem.style.display = editable ? '' : 'none';

@@ -81,6 +81,14 @@ function fillHopDongSelect_(selectId) {
     sel.value = currentHopDongId || '';
 }
 
+// Dòng "Hợp đồng số: ..." đặt ngay dưới tiêu đề bảng ở BOQ/Nghiệm thu/Thanh toán/Quyết toán — dùng
+// chung để khỏi lặp lại ở info riêng của từng tab (giá trị hiện hành/trạng thái Quyết toán...).
+function renderHopDongSoLine_(elId, hd) {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.textContent = hd ? `Hợp đồng số: ${hd.tenHopDong} - ${hd.nhaThau || '--'}` : '';
+}
+
 function renderHopDongList() {
     const tbody = document.getElementById('hopDongBody');
     if (!tbody) return;

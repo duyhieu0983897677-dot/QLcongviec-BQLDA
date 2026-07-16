@@ -138,7 +138,14 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1.5rem;}
-        .card-title { font-size: 1.1rem; margin-bottom: 1rem; color: #0369a1; display: flex; align-items: center; gap: 8px;}
+        .card-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: #0369a1; display: flex; align-items: center; gap: 8px;}
+        /* Hàng tiêu đề bảng + dropdown/nút hành động dùng chung khắp app — tiêu đề luôn ghim góc
+           trên-trái (align-items:flex-start, không phải center) để không bị lệch khi tiêu đề xuống
+           dòng dài hơn nút/dropdown bên cạnh. */
+        .card-header-row { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+        .card-header-row .card-title { margin-bottom: 0; }
+        /* Dòng "Hợp đồng số: ..." dưới tiêu đề bảng ở BOQ/Nghiệm thu/Thanh toán/Quyết toán. */
+        .hd-line { font-size: 0.85rem; color: var(--text-muted); margin-top: 2px; }
 
         .kpi-row { display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px; }
         .bc-charts-grid { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
@@ -215,7 +222,10 @@
         .table-responsive { width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); margin-top: 10px;}
         .data-table { width: 100%; border-collapse: collapse; min-width: 750px; font-size: 0.9rem; }
         .data-table th, .data-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 0.75rem 0.6rem; }
-        .data-table th { background-color: #f8fafc; color: #0369a1; font-weight: 600; text-align: center; }
+        /* Tiêu đề cột luôn nhỏ hơn + in hoa để phân biệt rõ với nội dung bảng — trước đây dùng
+           chung font-size với td (chỉ khác màu/đậm) nên nhìn như 1 khối chữ đồng cỡ, dễ nhầm. */
+        .data-table th { background-color: #f8fafc; color: #0369a1; font-weight: 700; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.3px; text-align: center; }
+        .data-table td { font-size: 0.88rem; }
         .text-center { text-align: center !important; }
         .text-right { text-align: right !important; }
 
@@ -277,8 +287,10 @@
 
         .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: flex-end; }
         .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }
-        /* Dropdown "Hợp đồng đang xem" — dùng chung ở BOQ/Nghiệm thu/Thanh toán/Quyết toán. */
-        .hd-select { width: auto; min-width: 220px; max-width: 320px; }
+        /* Dropdown "Hợp đồng đang xem" — dùng chung ở BOQ/Nghiệm thu/Thanh toán/Quyết toán, cũng
+           dùng cho các dropdown lọc khác cần đồng bộ kích thước. width cố định (không phải flex:1)
+           + ellipsis để lựa chọn dài không làm hộp phình to hay lệch với các dropdown khác. */
+        .hd-select { width: auto; min-width: 220px; max-width: 320px; flex: 0 0 auto; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; }
 
         /* Dropdown chọn cột hiển thị cho bảng "Báo cáo chi tiết" — cùng phong cách .thongbao-panel. */
         .col-toggle-wrap { position: relative; }
