@@ -21,8 +21,15 @@
 
 let currentHopDongId = '';
 
+// Đơn giá/Thành tiền/Giá trị (tiền tệ) — làm tròn về số nguyên (đồng).
 function formatTien(n) {
     return Math.round(n || 0).toLocaleString('vi-VN');
+}
+
+// Khối lượng — làm tròn 3 chữ số thập phân, không hiện số 0 thừa (VD: 12 thay vì 12.000).
+function khoiLuongHienThi_(n) {
+    const num = Math.round((n || 0) * 1000) / 1000;
+    return num.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
 }
 
 function tenHopDong(maHopDong) {

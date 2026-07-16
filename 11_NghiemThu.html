@@ -69,9 +69,9 @@ function selectNghiemThuBOQ(maBOQ) {
     const b = ntState_.boq;
     const conLai = Math.max(0, Math.round((b.khoiLuongHieuLuc - b.khoiLuongDaNghiemThu) * 1000) / 1000);
     meta.innerHTML = `<span>ĐVT: <b>${b.donVi || '--'}</b></span>
-        <span>Khối lượng hiệu lực: <b>${formatTien(b.khoiLuongHieuLuc)}</b></span>
-        <span>Đã nghiệm thu: <b>${formatTien(b.khoiLuongDaNghiemThu)}</b></span>
-        <span>Còn lại: <b>${formatTien(conLai)}</b></span>`;
+        <span>Khối lượng hiệu lực: <b>${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</b></span>
+        <span>Đã nghiệm thu: <b>${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</b></span>
+        <span>Còn lại: <b>${khoiLuongHienThi_(conLai)}</b></span>`;
     btn.disabled = false;
 
     const logs = nghiemThu.filter(n => n.maBOQ === maBOQ).slice().sort((a, b2) => b2.maNghiemThu.localeCompare(a.maNghiemThu)).slice(0, 5);
@@ -79,7 +79,7 @@ function selectNghiemThuBOQ(maBOQ) {
         ? '<div style="color:var(--text-muted); padding:6px 0;">Chưa có dữ liệu</div>'
         : logs.map(l => `<div class="ntd-recent-item">
             <span class="ndays">${formatVN(l.ngayNghiemThu)} · ${l.nguoiNhapTen}</span>
-            <span class="npct">+${formatTien(l.khoiLuong)} ${b.donVi || ''}</span>
+            <span class="npct">+${khoiLuongHienThi_(l.khoiLuong)} ${b.donVi || ''}</span>
         </div>`).join('');
 }
 

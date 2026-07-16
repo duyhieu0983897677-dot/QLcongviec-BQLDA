@@ -1411,6 +1411,13 @@ function kiemTraQuyenHopDong_(userId, password) {
   return user;
 }
 
+// Quy ước làm tròn dùng thống nhất toàn module Hợp đồng: mọi KHỐI LƯỢNG làm tròn 3 chữ số thập
+// phân (tránh sai số cộng dồn khi cộng nhiều lượt Nghiệm thu/điều chỉnh Phụ lục), mọi ĐƠN GIÁ/THÀNH
+// TIỀN/GIÁ TRỊ tiền tệ làm tròn về số nguyên (đồng) — áp dụng cả khi ĐỌC (chuẩn hóa dữ liệu cũ/nhập
+// Excel) lẫn khi GHI (chặn ngay từ đầu, không đợi tính lại mới đúng).
+function round3_(n) { return Math.round((Number(n) || 0) * 1000) / 1000; }
+function round0_(n) { return Math.round(Number(n) || 0); }
+
 function readHopDongRows_(sheet) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
@@ -1424,8 +1431,8 @@ function readHopDongRows_(sheet) {
     result.push({
       maHopDong, tenHopDong: String(r[1] || '').trim(), maGoiThau: String(r[2] || '').trim(),
       nhaThau: String(r[3] || '').trim(), ngayKy: formatDateCell_(r[4]),
-      tamUngHopDong: Number(r[5]) || 0, tamUngThiCong: Number(r[6]) || 0,
-      thueVAT: Number(r[7]) || 0, giamGia: Number(r[8]) || 0
+      tamUngHopDong: round0_(r[5]), tamUngThiCong: round0_(r[6]),
+      thueVAT: Number(r[7]) || 0, giamGia: round0_(r[8])
     });
   });
   return result;
@@ -1445,8 +1452,8 @@ function readBOQRows_(sheet) {
       maBOQ, maHopDong: String(r[1] || '').trim(), stt: String(r[2] || '').trim(),
       tenHangMuc: String(r[3] || '').trim(),
       isHeader: r[4] === true || String(r[4]).trim().toUpperCase() === 'TRUE',
-      donVi: String(r[5] || '').trim(), khoiLuongHopDong: Number(r[6]) || 0,
-      donGia: Number(r[7]) || 0, cap: parseInt(r[8], 10) || 0,
+      donVi: String(r[5] || '').trim(), khoiLuongHopDong: round3_(r[6]),
+      donGia: round0_(r[7]), cap: parseInt(r[8], 10) || 0,
       ngayBatDauKH: formatDateCell_(r[9]), ngayKetThucKH: formatDateCell_(r[10]),
       maPhuLucTao: String(r[11] || '').trim()
     });
@@ -1454,7 +1461,9 @@ function readBOQRows_(sheet) {
   return result;
 }
 
-function readPhuLucRows_(sheet) {
+// includeInactive: true để lấy cả Phụ lục đã Vô hiệu hóa (active=false) — KHÔNG hard-delete Phụ
+// lục bao giờ, chỉ tạm ngừng áp dụng (xem adminToggleTrangThaiPhuLuc), vẫn hiển thị để tra cứu.
+function readPhuLucRows_(sheet, includeInactive) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
@@ -1463,10 +1472,11 @@ function readPhuLucRows_(sheet) {
   values.forEach(r => {
     const maPhuLuc = String(r[0] || '').trim();
     if (!maPhuLuc) return;
-    if (!isActiveVal_(r[5])) return;
+    const active = isActiveVal_(r[5]);
+    if (!active && !includeInactive) return;
     result.push({
       maPhuLuc, maHopDong: String(r[1] || '').trim(), soHieu: String(r[2] || '').trim(),
-      ngayPhuLuc: formatDateCell_(r[3]), ghiChu: String(r[4] || '').trim()
+      ngayPhuLuc: formatDateCell_(r[3]), ghiChu: String(r[4] || '').trim(), active
     });
   });
   return result;
@@ -1485,9 +1495,9 @@ function readPhuLucThayDoiRows_(sheet) {
     result.push({
       id, maPhuLuc: String(r[1] || '').trim(), maBOQ: String(r[2] || '').trim(),
       loaiThayDoi: String(r[3] || '').trim(),
-      khoiLuongMoi: (r[4] === '' || r[4] === null) ? null : Number(r[4]),
-      khoiLuongDieuChinh: (r[5] === '' || r[5] === null) ? null : Number(r[5]),
-      donGiaMoi: (r[6] === '' || r[6] === null) ? null : Number(r[6])
+      khoiLuongMoi: (r[4] === '' || r[4] === null) ? null : round3_(r[4]),
+      khoiLuongDieuChinh: (r[5] === '' || r[5] === null) ? null : round3_(r[5]),
+      donGiaMoi: (r[6] === '' || r[6] === null) ? null : round0_(r[6])
     });
   });
   return result;
@@ -1505,7 +1515,7 @@ function readNghiemThuRows_(sheet) {
     if (!isActiveVal_(r[8])) return;
     result.push({
       maNghiemThu, maBOQ: String(r[1] || '').trim(), ngayNghiemThu: formatDateCell_(r[2]),
-      khoiLuong: Number(r[3]) || 0, ghiChu: String(r[4] || '').trim(),
+      khoiLuong: round3_(r[3]), ghiChu: String(r[4] || '').trim(),
       nguoiNhapId: String(r[5] || '').trim(), nguoiNhapTen: String(r[6] || '').trim(),
       thoiGianNhap: formatDateTimeCell_(r[7])
     });
@@ -1526,8 +1536,8 @@ function readDotThanhToanRows_(sheet) {
     result.push({
       maDotThanhToan, maHopDong: String(r[1] || '').trim(), tenDot: String(r[2] || '').trim(),
       ngayThanhToan: formatDateCell_(r[3]), phanTramThanhToan: Number(r[4]) || 0,
-      ghiChu: String(r[5] || '').trim(), thuHoiTamUngHopDong: Number(r[6]) || 0,
-      thuHoiTamUngThiCong: Number(r[7]) || 0, khauTruKhac: Number(r[8]) || 0,
+      ghiChu: String(r[5] || '').trim(), thuHoiTamUngHopDong: round0_(r[6]),
+      thuHoiTamUngThiCong: round0_(r[7]), khauTruKhac: round0_(r[8]),
       ghiChuKhauTru: String(r[9] || '').trim()
     });
   });
@@ -1546,7 +1556,7 @@ function readDotThanhToanChiTietRows_(sheet) {
     if (!isActiveVal_(r[4])) return;
     result.push({
       id, maDotThanhToan: String(r[1] || '').trim(), maBOQ: String(r[2] || '').trim(),
-      khoiLuong: Number(r[3]) || 0
+      khoiLuong: round3_(r[3])
     });
   });
   return result;
@@ -1640,15 +1650,20 @@ function getHopDongData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const hopDong = readHopDongRows_(ss.getSheetByName('HopDong'));
   const boq = readBOQRows_(ss.getSheetByName('BOQHangMuc'));
-  const phuLuc = readPhuLucRows_(ss.getSheetByName('PhuLucHopDong'));
+  // Lấy cả Phụ lục đã Vô hiệu hóa để hiển thị (giữ lại tra cứu), nhưng CHỈ áp dụng thay đổi khối
+  // lượng/đơn giá của Phụ lục CÒN HIỆU LỰC vào phần tính toán bên dưới — đúng rule app cũ
+  // (recalcEffectiveQty/recalcCurrentPrices chỉ chạy qua addendums.filter(active !== false)).
+  const phuLuc = readPhuLucRows_(ss.getSheetByName('PhuLucHopDong'), true);
   const phuLucThayDoi = readPhuLucThayDoiRows_(ss.getSheetByName('PhuLucThayDoi'));
   const nghiemThu = readNghiemThuRows_(ss.getSheetByName('NghiemThu'));
   const dotThanhToan = readDotThanhToanRows_(ss.getSheetByName('DotThanhToan'));
   const dotThanhToanChiTiet = readDotThanhToanChiTietRows_(ss.getSheetByName('DotThanhToanChiTiet'));
   const quyetToan = readQuyetToanRows_(ss.getSheetByName('QuyetToan'));
 
-  const effectiveQtyMap = tinhKhoiLuongHieuLuc_(boq, phuLucThayDoi);
-  const donGiaHieuLucMap = tinhDonGiaHieuLuc_(boq, phuLucThayDoi);
+  const activePhuLucIds_ = new Set(phuLuc.filter(p => p.active).map(p => p.maPhuLuc));
+  const phuLucThayDoiHieuLuc_ = phuLucThayDoi.filter(ch => activePhuLucIds_.has(ch.maPhuLuc));
+  const effectiveQtyMap = tinhKhoiLuongHieuLuc_(boq, phuLucThayDoiHieuLuc_);
+  const donGiaHieuLucMap = tinhDonGiaHieuLuc_(boq, phuLucThayDoiHieuLuc_);
   const executedByBOQ = {};
   nghiemThu.forEach(n => { executedByBOQ[n.maBOQ] = Math.round(((executedByBOQ[n.maBOQ] || 0) + n.khoiLuong) * 1000) / 1000; });
 
@@ -1675,8 +1690,8 @@ function adminSaveHopDong(userId, password, hopDong) {
   const maHopDong = String(hopDong.maHopDong || '').trim();
   const row = [
     '', tenHopDong, String(hopDong.maGoiThau || '').trim(), String(hopDong.nhaThau || '').trim(),
-    hopDong.ngayKy || '', Number(hopDong.tamUngHopDong) || 0, Number(hopDong.tamUngThiCong) || 0,
-    Number(hopDong.thueVAT) || 0, Number(hopDong.giamGia) || 0, true
+    hopDong.ngayKy || '', round0_(hopDong.tamUngHopDong), round0_(hopDong.tamUngThiCong),
+    Number(hopDong.thueVAT) || 0, round0_(hopDong.giamGia), true
   ];
 
   if (maHopDong) {
@@ -1726,7 +1741,7 @@ function adminSaveBOQItem(userId, password, item) {
   const maBOQ = String(item.maBOQ || '').trim();
   const row = [
     '', maHopDong, String(item.stt || '').trim(), tenHangMuc, !!item.isHeader,
-    String(item.donVi || '').trim(), Number(item.khoiLuongHopDong) || 0, Number(item.donGia) || 0,
+    String(item.donVi || '').trim(), round3_(item.khoiLuongHopDong), round0_(item.donGia),
     parseInt(item.cap, 10) || 0, item.ngayBatDauKH || '', item.ngayKetThucKH || '',
     String(item.maPhuLucTao || '').trim(), true
   ];
@@ -1779,6 +1794,44 @@ function adminTaoPhuLuc(userId, password, maHopDong, soHieu, ngayPhuLuc, ghiChu)
   return newId;
 }
 
+// Sửa thông tin (Số hiệu/Ngày/Ghi chú) 1 Phụ lục đã tạo — KHÔNG đổi các dòng "thay đổi" bên trong.
+function adminSuaPhuLuc(userId, password, maPhuLuc, soHieu, ngayPhuLuc, ghiChu) {
+  const user = kiemTraQuyenHopDong_(userId, password);
+  const soHieuTrim = String(soHieu || '').trim();
+  if (!soHieuTrim) throw new Error('Vui lòng nhập Số hiệu Phụ lục!');
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('PhuLucHopDong');
+  if (!sheet) throw new Error('Chưa cấu hình Tab PhuLucHopDong trên Google Sheet!');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(maPhuLuc).trim()) {
+      sheet.getRange(i + 1, 3, 1, 2).setValues([[soHieuTrim, ngayPhuLuc || '']]);
+      sheet.getRange(i + 1, 5).setValue(String(ghiChu || '').trim());
+      logActivity(userId, user.name, 'Sửa Phụ lục Hợp đồng', `${maPhuLuc} - ${soHieuTrim}`);
+      return 'Success';
+    }
+  }
+  throw new Error('Không tìm thấy Phụ lục!');
+}
+
+// Vô hiệu hóa/Khôi phục 1 Phụ lục — KHÔNG xóa hẳn (đúng rule app cũ, toggleAddendumActive): chỉ tạm
+// ngừng/áp dụng lại toàn bộ thay đổi khối lượng/đơn giá của Phụ lục này (xem getHopDongData()),
+// dữ liệu Phụ lục và các dòng thay đổi vẫn giữ nguyên để tra cứu lịch sử. Trả về trạng thái MỚI.
+function adminToggleTrangThaiPhuLuc(userId, password, maPhuLuc) {
+  const user = kiemTraQuyenHopDong_(userId, password);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('PhuLucHopDong');
+  if (!sheet) throw new Error('Chưa cấu hình Tab PhuLucHopDong trên Google Sheet!');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(maPhuLuc).trim()) {
+      const dangActive = isActiveVal_(data[i][5]);
+      sheet.getRange(i + 1, 6).setValue(!dangActive);
+      logActivity(userId, user.name, dangActive ? 'Vô hiệu hóa Phụ lục' : 'Khôi phục Phụ lục', maPhuLuc);
+      return !dangActive;
+    }
+  }
+  throw new Error('Không tìm thấy Phụ lục!');
+}
+
 // thayDoi: { maBOQ, loaiThayDoi, khoiLuongMoi?, khoiLuongDieuChinh?, donGiaMoi?, boqMoi? } — boqMoi
 // (object hạng mục mới) bắt buộc khi loaiThayDoi = 'MOI'.
 function adminThemThayDoiPhuLuc(userId, password, maPhuLuc, thayDoi) {
@@ -1789,7 +1842,7 @@ function adminThemThayDoiPhuLuc(userId, password, maPhuLuc, thayDoi) {
   let maBOQ = String(thayDoi.maBOQ || '').trim();
   if (loai === 'MOI') {
     if (!thayDoi.boqMoi) throw new Error('Thiếu thông tin Hạng mục mới!');
-    const pl = readPhuLucRows_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('PhuLucHopDong')).find(p => p.maPhuLuc === maPhuLuc);
+    const pl = readPhuLucRows_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('PhuLucHopDong'), true).find(p => p.maPhuLuc === maPhuLuc);
     if (!pl) throw new Error('Không tìm thấy Phụ lục!');
     maBOQ = adminSaveBOQItem(userId, password, Object.assign({}, thayDoi.boqMoi, {
       maHopDong: pl.maHopDong, maPhuLucTao: maPhuLuc
@@ -1802,9 +1855,9 @@ function adminThemThayDoiPhuLuc(userId, password, maPhuLuc, thayDoi) {
   const newId = sinhMaTuTang_(sheet, 'PLTD', new Date());
   sheet.appendRow([
     newId, maPhuLuc, maBOQ, loai,
-    thayDoi.khoiLuongMoi != null ? Number(thayDoi.khoiLuongMoi) : '',
-    thayDoi.khoiLuongDieuChinh != null ? Number(thayDoi.khoiLuongDieuChinh) : '',
-    thayDoi.donGiaMoi != null ? Number(thayDoi.donGiaMoi) : '', true
+    thayDoi.khoiLuongMoi != null ? round3_(thayDoi.khoiLuongMoi) : '',
+    thayDoi.khoiLuongDieuChinh != null ? round3_(thayDoi.khoiLuongDieuChinh) : '',
+    thayDoi.donGiaMoi != null ? round0_(thayDoi.donGiaMoi) : '', true
   ]);
   logActivity(userId, user.name, 'Thêm thay đổi Phụ lục', `${maPhuLuc}: ${loai} - ${maBOQ}`);
   return newId;
@@ -1827,7 +1880,7 @@ function themNghiemThu(userId, password, maBOQ, ngayNghiemThu, khoiLuong, ghiChu
     const sheet = layHoacTaoSheet_('NghiemThu', NGHIEMTHU_HEADERS_);
     const newId = sinhMaTuTang_(sheet, 'NT', new Date());
     sheet.appendRow([
-      newId, maBOQ, ngayNghiemThu || '', klNum, String(ghiChu || '').trim(),
+      newId, maBOQ, ngayNghiemThu || '', round3_(klNum), String(ghiChu || '').trim(),
       user.supervisorId, user.name, new Date(), true
     ]);
     logActivity(userId, user.name, 'Nghiệm thu khối lượng', `${maBOQ}: +${klNum} ${item.donVi}`);
@@ -1867,8 +1920,8 @@ function adminTaoDotThanhToan(userId, password, dotThanhToan) {
   sheet.appendRow([
     newId, maHopDong, tenDot, dotThanhToan.ngayThanhToan || '',
     dotThanhToan.phanTramThanhToan != null ? Number(dotThanhToan.phanTramThanhToan) : 100,
-    String(dotThanhToan.ghiChu || '').trim(), Number(dotThanhToan.thuHoiTamUngHopDong) || 0,
-    Number(dotThanhToan.thuHoiTamUngThiCong) || 0, Number(dotThanhToan.khauTruKhac) || 0,
+    String(dotThanhToan.ghiChu || '').trim(), round0_(dotThanhToan.thuHoiTamUngHopDong),
+    round0_(dotThanhToan.thuHoiTamUngThiCong), round0_(dotThanhToan.khauTruKhac),
     String(dotThanhToan.ghiChuKhauTru || '').trim(), true
   ]);
 
@@ -1877,7 +1930,7 @@ function adminTaoDotThanhToan(userId, password, dotThanhToan) {
     const klNum = parseFloat(ct.khoiLuong);
     if (!ct.maBOQ || isNaN(klNum) || klNum <= 0) return;
     const ctId = sinhMaTuTang_(chiTietSheet, 'TTCT', new Date());
-    chiTietSheet.appendRow([ctId, newId, ct.maBOQ, klNum, true]);
+    chiTietSheet.appendRow([ctId, newId, ct.maBOQ, round3_(klNum), true]);
   });
 
   logActivity(userId, user.name, 'Thêm Đợt thanh toán', `${newId} - ${tenDot}`);
@@ -1894,8 +1947,8 @@ function adminSuaDieuChinhThanhToan(userId, password, maDotThanhToan, dieuChinh)
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === String(maDotThanhToan).trim()) {
       sheet.getRange(i + 1, 7, 1, 4).setValues([[
-        Number(dieuChinh.thuHoiTamUngHopDong) || 0, Number(dieuChinh.thuHoiTamUngThiCong) || 0,
-        Number(dieuChinh.khauTruKhac) || 0, String(dieuChinh.ghiChuKhauTru || '').trim()
+        round0_(dieuChinh.thuHoiTamUngHopDong), round0_(dieuChinh.thuHoiTamUngThiCong),
+        round0_(dieuChinh.khauTruKhac), String(dieuChinh.ghiChuKhauTru || '').trim()
       ]]);
       logActivity(userId, user.name, 'Sửa điều chỉnh Thanh toán', maDotThanhToan);
       return 'Success';

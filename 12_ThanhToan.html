@@ -33,12 +33,19 @@ function renderThanhToan() {
     const rounds = dotThanhToan.filter(d => d.maHopDong === currentHopDongId);
     const giaTriHD = giaTriHienHanhHopDong(currentHopDongId);
     const tongDaTT = Math.round(rounds.reduce((s, r) => s + getPaymentRoundBreakdown(r).finalValue, 0));
+    const daThuHoiHD = rounds.reduce((s, r) => s + (r.thuHoiTamUngHopDong || 0), 0);
+    const daThuHoiTC = rounds.reduce((s, r) => s + (r.thuHoiTamUngThiCong || 0), 0);
 
-    document.getElementById('ttSummary').innerHTML = `
-        <div class="kpi-mini"><span>Giá trị HĐ hiện hành</span><b>${tienHienThi_(giaTriHD)}</b></div>
-        <div class="kpi-mini"><span>Tạm ứng hợp đồng</span><b>${tienHienThi_(hd.tamUngHopDong)}</b></div>
-        <div class="kpi-mini"><span>Tạm ứng thi công</span><b>${tienHienThi_(hd.tamUngThiCong)}</b></div>
-        <div class="kpi-mini"><span>Tổng đã thanh toán</span><b>${tienHienThi_(tongDaTT)}</b></div>`;
+    document.getElementById('ttHopDongTitle').textContent = hd.tenHopDong;
+    document.getElementById('ttHopDongSub').textContent =
+        `Giá trị HĐ hiện hành (trước thuế): ${tienHienThi_(giaTriHD)}đ · VAT ${hd.thueVAT || 0}%`;
+    document.getElementById('ttAdvHDGiven').textContent = tienHienThi_(hd.tamUngHopDong) + 'đ';
+    document.getElementById('ttAdvHDRecovered').textContent = tienHienThi_(daThuHoiHD) + 'đ';
+    document.getElementById('ttAdvHDRemaining').textContent = tienHienThi_(Math.max(0, hd.tamUngHopDong - daThuHoiHD)) + 'đ';
+    document.getElementById('ttAdvTCGiven').textContent = tienHienThi_(hd.tamUngThiCong) + 'đ';
+    document.getElementById('ttAdvTCRecovered').textContent = tienHienThi_(daThuHoiTC) + 'đ';
+    document.getElementById('ttAdvTCRemaining').textContent = tienHienThi_(Math.max(0, hd.tamUngThiCong - daThuHoiTC)) + 'đ';
+    document.getElementById('ttKpiThanhToan').textContent = tienHienThi_(tongDaTT) + 'đ';
 
     const box = document.getElementById('ttList');
     if (rounds.length === 0) {

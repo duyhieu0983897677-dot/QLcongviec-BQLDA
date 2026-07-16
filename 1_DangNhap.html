@@ -13,9 +13,12 @@
    TẤT CẢ bản sao cùng lúc.
 
    DANH SÁCH HÀM CHÍNH:
-   - toggleAdmin()          : Mở khóa / khóa quyền chỉnh sửa
-   - confirmPassword()      : Xử lý khi bấm nút Đăng nhập
-   - submitChangePassword() : Xử lý khi bấm nút Đổi mật khẩu
+   - toggleAdmin()             : Mở khóa / khóa quyền chỉnh sửa
+   - confirmPassword()         : Xử lý khi bấm nút Đăng nhập
+   - submitChangePassword()    : Xử lý khi bấm nút Đổi mật khẩu
+   - khoiPhucPhienDangNhap_()  : Tự đăng nhập lại khi tải/load lại trang, nếu trước đó đã đăng nhập
+                                 (xem SESSION_KEY_ — dùng sessionStorage nên mất khi đóng hẳn tab/
+                                 trình duyệt, chỉ sống sót qua F5/tải lại trang như đã yêu cầu)
    ================================================================ */
 
 let myUserId = "";
@@ -24,6 +27,17 @@ let myUserName = "";
 let mySupervisorId = "";
 let myChucDanh = "";
 let currentRole = "VIEW";
+
+const SESSION_KEY_ = 'qlcv_phien_dangnhap';
+
+function luuPhienDangNhap_() {
+    try { sessionStorage.setItem(SESSION_KEY_, JSON.stringify({ userId: myUserId, password: myPassword })); }
+    catch (e) { /* sessionStorage có thể bị chặn (ẩn danh nghiêm ngặt...) — bỏ qua, không chặn đăng nhập */ }
+}
+
+function xoaPhienDangNhap_() {
+    try { sessionStorage.removeItem(SESSION_KEY_); } catch (e) { /* bỏ qua */ }
+}
 
 // LƯU Ý: phải giữ lại class "js-lock-btn" trong mỗi lần gán lại className, nếu không lần gọi
 // TIẾP THEO sẽ không còn tìm thấy nút qua querySelectorAll('.js-lock-btn') nữa (nút bị "đứng hình"
@@ -65,6 +79,7 @@ function toggleAdmin() {
     } else {
         myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = ""; myChucDanh = "";
         currentRole = "VIEW";
+        xoaPhienDangNhap_();
 
         body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
@@ -115,6 +130,7 @@ function confirmPassword() {
             setUserInfoState(true, myUserName);
             setBellVisibleState(true);
             loadThongBao();
+            luuPhienDangNhap_();
 
             btnSubmit.innerHTML = originalText;
             btnSubmit.disabled = false;
@@ -163,6 +179,7 @@ function submitChangePassword() {
         .withSuccessHandler(function() {
             btn.innerHTML = origText; btn.disabled = false;
             myPassword = newP;
+            luuPhienDangNhap_();
             closeChangePassModal();
             showCustomAlert("Đã đổi mật khẩu thành công!", "success");
         })
@@ -183,10 +200,48 @@ function handleBackendError(error) {
     if (String(errorMsg).includes("Xác thực thất bại") || String(errorMsg).includes("Tài khoản không tồn tại") || String(errorMsg).includes("Sai Tên đăng nhập")) {
         myUserId = ""; myPassword = ""; myUserName = ""; mySupervisorId = ""; myChucDanh = "";
         currentRole = "VIEW";
+        xoaPhienDangNhap_();
         document.body.className = 'view-only-mode role-view';
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
         setBellVisibleState(false);
     }
 }
+
+// Tự đăng nhập lại khi tải/load lại trang nếu trước đó đã đăng nhập trong CÙNG tab (sessionStorage
+// mất khi đóng hẳn tab/trình duyệt — chỉ sống sót qua F5/tải lại trang, không phải "ghi nhớ đăng
+// nhập" vĩnh viễn). LUÔN xác thực lại qua login() thay vì tin thẳng dữ liệu cũ, phòng trường hợp
+// mật khẩu/tài khoản đã đổi ở nơi khác trong lúc trang đang đóng.
+function khoiPhucPhienDangNhap_() {
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(SESSION_KEY_) || 'null'); } catch (e) { saved = null; }
+    if (!saved || !saved.userId || !saved.password || typeof google === 'undefined') return;
+
+    google.script.run
+        .withSuccessHandler(function (res) {
+            myUserId = saved.userId;
+            myPassword = saved.password;
+            currentRole = res.role;
+            myUserName = res.name;
+            mySupervisorId = res.supervisorId;
+            myChucDanh = res.chucDanh || '';
+
+            document.body.className = '';
+            if (currentRole === 'ADMIN') {
+                document.body.classList.add('role-admin');
+                setLockBtnState('admin-btn unlocked-admin', '<i class="fa-solid fa-unlock"></i> Quản trị');
+            } else {
+                document.body.classList.add('role-supervisor');
+                setLockBtnState('admin-btn unlocked-staff', '<i class="fa-solid fa-unlock"></i> Giám sát');
+            }
+            setUserInfoState(true, myUserName);
+            setBellVisibleState(true);
+            loadThongBao();
+            updateUI();
+        })
+        .withFailureHandler(function () { xoaPhienDangNhap_(); })
+        .login(saved.userId, saved.password);
+}
+
+khoiPhucPhienDangNhap_();
 </script>

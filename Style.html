@@ -307,6 +307,7 @@
             body { padding-bottom: 0; }
             .kpi-row { grid-template-columns: repeat(4, 1fr); }
             .bc-charts-grid { grid-template-columns: 1fr 1fr; }
+            .tt-advance-grid { grid-template-columns: 1fr 1fr; }
             .form-row-3 { grid-template-columns: 1fr 1fr 1fr; display: grid; gap: 1rem;}
             .btn { width: auto; }
 
@@ -528,6 +529,17 @@
         .tt-item-row:last-child { border-bottom: none; }
         .tt-item-row span { font-size: 0.85rem; color: var(--text-main); }
         .tt-item-row input { width: 110px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
+
+        /* Bảng thống kê tổng hợp 1 Hợp đồng — đặt trên "Các Đợt thanh toán". */
+        .tt-summary-card { background: linear-gradient(135deg, var(--navy), var(--navy-light)); color: white; border-radius: 12px; padding: 16px 18px; margin-bottom: 15px; }
+        .tt-summary-card h3 { margin: 0 0 4px; font-size: 1rem; }
+        .tt-summary-sub { margin: 0 0 14px; font-size: 0.8rem; color: #cbd5e1; }
+        .tt-advance-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 14px; }
+        .tt-advance-box { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 14px; }
+        .tt-advance-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 8px; }
+        .tt-advance-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.85rem; padding: 3px 0; }
+        .tt-advance-row.tt-highlight b { color: var(--safety, #FBBF24); }
+        .tt-total-box { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 14px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; }
 
         /* Chuyển đổi 2 báo cáo trong tab Tổng quan: "Báo cáo Công việc" / "Báo cáo Chi phí". */
         .bc-pill-switch { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }

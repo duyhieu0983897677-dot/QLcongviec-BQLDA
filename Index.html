@@ -400,8 +400,27 @@
                 <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
             </div>
             <div id="ttContent">
-                <div class="card">
-                    <div id="ttSummary" class="kpi-row"></div>
+                <div class="tt-summary-card">
+                    <h3 id="ttHopDongTitle">--</h3>
+                    <p class="tt-summary-sub" id="ttHopDongSub"></p>
+                    <div class="tt-advance-grid">
+                        <div class="tt-advance-box">
+                            <div class="tt-advance-title">Tạm ứng hợp đồng</div>
+                            <div class="tt-advance-row"><span>Đã tạm ứng</span><b id="ttAdvHDGiven">0đ</b></div>
+                            <div class="tt-advance-row"><span>Đã thu hồi</span><b id="ttAdvHDRecovered">0đ</b></div>
+                            <div class="tt-advance-row tt-highlight"><span>Còn lại chưa thu hồi</span><b id="ttAdvHDRemaining">0đ</b></div>
+                        </div>
+                        <div class="tt-advance-box">
+                            <div class="tt-advance-title">Tạm ứng thi công</div>
+                            <div class="tt-advance-row"><span>Đã tạm ứng</span><b id="ttAdvTCGiven">0đ</b></div>
+                            <div class="tt-advance-row"><span>Đã thu hồi</span><b id="ttAdvTCRecovered">0đ</b></div>
+                            <div class="tt-advance-row tt-highlight"><span>Còn lại chưa thu hồi</span><b id="ttAdvTCRemaining">0đ</b></div>
+                        </div>
+                    </div>
+                    <div class="tt-total-box">
+                        <span>Tổng đã thanh toán (thực nhận, lũy kế)</span>
+                        <b id="ttKpiThanhToan">0đ</b>
+                    </div>
                 </div>
                 <div class="card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -909,7 +928,8 @@
     <!-- MODAL: THÊM PHỤ LỤC HỢP ĐỒNG -->
     <div id="phuLucModal" class="modal">
         <div class="modal-content" style="max-width:450px;">
-            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-file-pen"></i> Thêm Phụ lục Hợp đồng</h3>
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-file-pen"></i> <span id="phuLucModalTitle">Thêm Phụ lục Hợp đồng</span></h3>
+            <input type="hidden" id="plEditId">
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Số hiệu Phụ lục</label>
                 <input type="text" id="plSoHieu" class="form-control">
