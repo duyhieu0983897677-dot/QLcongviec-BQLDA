@@ -102,7 +102,7 @@ function saveUserModal() {
             btn.innerHTML = origText; btn.disabled = false;
             closeUserModal();
             showCustomAlert('Đã lưu thông tin Giám sát.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(err => {
             btn.innerHTML = origText; btn.disabled = false;
@@ -118,7 +118,7 @@ function deleteUser(userId) {
     gsRun('adminDeleteSupervisor', myUserId, myPassword, userId)
         .then(() => {
             showCustomAlert('Đã xóa tài khoản.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }

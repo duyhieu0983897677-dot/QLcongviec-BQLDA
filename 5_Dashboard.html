@@ -40,7 +40,10 @@ function switchBcPanel(name) {
 let bcAllCongViec = [];
 let bcPieChartInstance = null;
 let bcBarChartInstance = null;
-const BC_STATUS_COLORS = { pending: '#94A3B8', inprogress: '#60A5FA', done: '#34D399', late_done: '#FBBF24', overdue: '#F87171' };
+// pending giờ dùng màu hổ phách (trước là xám #94A3B8) — màu này thừa lại từ trạng thái "Trễ tiến
+// độ nhưng hoàn thành" đã gộp vào "overdue" (Trễ tiến độ), không còn tách riêng nữa (xem getData()
+// ở Code.js và TRANGTHAI_LABEL ở 0_TienIch.html).
+const BC_STATUS_COLORS = { pending: '#FBBF24', inprogress: '#60A5FA', done: '#34D399', overdue: '#F87171' };
 
 // Chart.js không có sẵn kiểu nhãn % kéo "râu" ra ngoài lát cắt (kiểu Excel/Google Sheets) — tự vẽ
 // bằng 1 plugin nhỏ, không cần thêm thư viện ngoài. Bỏ qua lát cắt = 0 (không có gì để chỉ vào).
@@ -105,7 +108,7 @@ function renderBcCongViecPanel() {
 }
 
 function renderBcCharts() {
-    const counts = { pending: 0, inprogress: 0, done: 0, late_done: 0, overdue: 0 };
+    const counts = { pending: 0, inprogress: 0, done: 0, overdue: 0 };
     bcAllCongViec.forEach(cv => { if (counts[cv.trangThaiMau] !== undefined) counts[cv.trangThaiMau]++; });
 
     const pieCanvas = document.getElementById('bcPieChart');
@@ -114,10 +117,10 @@ function renderBcCharts() {
         type: 'pie',
         plugins: [PIE_OUTSIDE_LABELS_PLUGIN],
         data: {
-            labels: ['Chờ thực hiện', 'Đang thực hiện', 'Hoàn thành', 'Trễ tiến độ nhưng hoàn thành', 'Trễ tiến độ không hoàn thành'],
+            labels: ['Chờ thực hiện', 'Đang thực hiện', 'Hoàn thành', 'Trễ tiến độ'],
             datasets: [{
-                data: [counts.pending, counts.inprogress, counts.done, counts.late_done, counts.overdue],
-                backgroundColor: [BC_STATUS_COLORS.pending, BC_STATUS_COLORS.inprogress, BC_STATUS_COLORS.done, BC_STATUS_COLORS.late_done, BC_STATUS_COLORS.overdue]
+                data: [counts.pending, counts.inprogress, counts.done, counts.overdue],
+                backgroundColor: [BC_STATUS_COLORS.pending, BC_STATUS_COLORS.inprogress, BC_STATUS_COLORS.done, BC_STATUS_COLORS.overdue]
             }]
         },
         options: {
@@ -132,9 +135,9 @@ function renderBcCharts() {
     // thành/trễ không hoàn thành) — rà chuột vào thanh sẽ liệt kê từng trạng thái + dòng cuối là
     // tổng số công việc.
     const countsByUserStatus = {};
-    users.filter(u => u.role !== 'ADMIN').forEach(u => { countsByUserStatus[u.id] = { pending: 0, inprogress: 0, done: 0, late_done: 0, overdue: 0 }; });
+    users.filter(u => u.role !== 'ADMIN').forEach(u => { countsByUserStatus[u.id] = { pending: 0, inprogress: 0, done: 0, overdue: 0 }; });
     bcAllCongViec.forEach(cv => {
-        if (!countsByUserStatus[cv.nguoiTaoId]) countsByUserStatus[cv.nguoiTaoId] = { pending: 0, inprogress: 0, done: 0, late_done: 0, overdue: 0 };
+        if (!countsByUserStatus[cv.nguoiTaoId]) countsByUserStatus[cv.nguoiTaoId] = { pending: 0, inprogress: 0, done: 0, overdue: 0 };
         if (countsByUserStatus[cv.nguoiTaoId][cv.trangThaiMau] !== undefined) countsByUserStatus[cv.nguoiTaoId][cv.trangThaiMau]++;
     });
     const tongCuaUser = id => Object.values(countsByUserStatus[id]).reduce((s, v) => s + v, 0);
@@ -152,8 +155,7 @@ function renderBcCharts() {
         { key: 'pending', label: 'Chờ thực hiện' },
         { key: 'inprogress', label: 'Đang thực hiện' },
         { key: 'done', label: 'Hoàn thành' },
-        { key: 'late_done', label: 'Trễ tiến độ nhưng hoàn thành' },
-        { key: 'overdue', label: 'Trễ tiến độ không hoàn thành' }
+        { key: 'overdue', label: 'Trễ tiến độ' }
     ];
 
     const barCanvas = document.getElementById('bcBarChart');
@@ -244,7 +246,7 @@ function renderBcDetail() {
         html += `<tr class="bc-group-row"><td colspan="${BC_DETAIL_COLSPAN}">${PHAN_LOAI_LABEL[phan] || phan}</td></tr>`;
         group.forEach((cv, idx) => {
             const note = lastNoteOf(cv);
-            const showNote = note && (cv.trangThaiMau === 'overdue' || cv.trangThaiMau === 'late_done');
+            const showNote = note && cv.trangThaiMau === 'overdue';
             const pct = Math.min(cv.luyKe || 0, 100);
             const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
             const mau = mauChucDanh(chucDanh);
@@ -506,7 +508,7 @@ function renderCpSCurveChart_(planMonthlyMap, monthlyMap) {
         data: {
             labels,
             datasets: [
-                { label: 'Kế hoạch lũy kế', data: planData, borderColor: BC_STATUS_COLORS.late_done, borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.late_done },
+                { label: 'Kế hoạch lũy kế', data: planData, borderColor: '#FBBF24', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#FBBF24' },
                 { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(52,211,153,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
             ]
         },

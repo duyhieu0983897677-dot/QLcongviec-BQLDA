@@ -29,6 +29,8 @@ function renderThanhToan() {
     }
     if (emptyBox) emptyBox.style.display = 'none';
     if (content) content.style.display = '';
+    const btnThem = document.getElementById('btnThemDotTT');
+    if (btnThem) btnThem.style.display = canEditHopDong() ? '' : 'none';
 
     const rounds = dotThanhToan.filter(d => d.maHopDong === currentHopDongId);
     const giaTriHD = giaTriHienHanhHopDong(currentHopDongId);
@@ -183,14 +185,14 @@ function createPaymentRound() {
         chiTiet
     };
     gsRun('adminTaoDotThanhToan', myUserId, myPassword, payload)
-        .then(() => { showCustomAlert('Đã tạo Đợt thanh toán.', 'success'); closePaymentModal(); reloadData(); })
+        .then(() => { showCustomAlert('Đã tạo Đợt thanh toán.', 'success'); closePaymentModal(); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
 function deleteDotThanhToan(maDotThanhToan) {
     if (!confirm('Xác nhận XÓA Đợt thanh toán này?')) return;
     gsRun('adminXoaDotThanhToan', myUserId, myPassword, maDotThanhToan)
-        .then(() => { showCustomAlert('Đã xóa Đợt thanh toán.', 'success'); reloadData(); })
+        .then(() => { showCustomAlert('Đã xóa Đợt thanh toán.', 'success'); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -215,7 +217,7 @@ function saveDieuChinh() {
         ghiChuKhauTru: document.getElementById('dcOtherNote').value.trim()
     };
     gsRun('adminSuaDieuChinhThanhToan', myUserId, myPassword, dieuChinhId_, payload)
-        .then(() => { showCustomAlert('Đã lưu điều chỉnh.', 'success'); closeDieuChinhModal(); reloadData(); })
+        .then(() => { showCustomAlert('Đã lưu điều chỉnh.', 'success'); closeDieuChinhModal(); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 </script>

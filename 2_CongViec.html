@@ -145,7 +145,7 @@ function saveCongViecModal() {
         .then(() => {
             closeCongViecModal();
             showCustomAlert('Đã lưu công việc.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }
@@ -159,7 +159,7 @@ function deleteCongViec(maCongViec) {
     gsRun('adminDeleteCongViec', myUserId, myPassword, maCongViec)
         .then(() => {
             showCustomAlert('Đã xoá công việc.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }

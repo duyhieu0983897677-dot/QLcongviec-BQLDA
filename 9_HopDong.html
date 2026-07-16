@@ -84,6 +84,8 @@ function fillHopDongSelect_(selectId) {
 function renderHopDongList() {
     const tbody = document.getElementById('hopDongBody');
     if (!tbody) return;
+    const btnThem = document.getElementById('btnThemHopDong');
+    if (btnThem) btnThem.style.display = canEditHopDong() ? '' : 'none';
     if (hopDong.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có Hợp đồng nào.</td></tr>`;
     } else {
@@ -160,7 +162,7 @@ function saveHopDongModal() {
         .then(() => {
             showCustomAlert('Đã lưu Hợp đồng.', 'success');
             closeHopDongModal();
-            reloadData();
+            reloadHopDongData();
         })
         .catch(handleBackendError);
 }
@@ -170,7 +172,7 @@ function deleteHopDong(maHopDong) {
     if (!hd) return;
     if (!confirm(`Xác nhận XÓA Hợp đồng "${hd.tenHopDong}"? (BOQ/Nghiệm thu/Thanh toán liên quan vẫn được giữ lại)`)) return;
     gsRun('adminXoaHopDong', myUserId, myPassword, maHopDong)
-        .then(() => { showCustomAlert('Đã xóa Hợp đồng.', 'success'); reloadData(); })
+        .then(() => { showCustomAlert('Đã xóa Hợp đồng.', 'success'); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 

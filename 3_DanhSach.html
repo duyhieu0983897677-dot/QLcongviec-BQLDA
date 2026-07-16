@@ -126,7 +126,7 @@ function saveHangMucModal() {
         .then(() => {
             closeHangMucModal();
             showCustomAlert('Đã lưu Hạng mục.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }
@@ -140,7 +140,7 @@ function deleteHangMuc(maHangMuc) {
     gsRun('adminDeleteHangMuc', myUserId, myPassword, maHangMuc)
         .then(() => {
             showCustomAlert('Đã xoá Hạng mục.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }
@@ -210,7 +210,7 @@ function saveGoiThauModal() {
         .then(() => {
             closeGoiThauModal();
             showCustomAlert('Đã lưu Gói thầu.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }
@@ -222,7 +222,7 @@ function deleteGoiThau(maGoiThau) {
     gsRun('adminDeleteGoiThau', myUserId, myPassword, maGoiThau)
         .then(() => {
             showCustomAlert('Đã xoá Gói thầu.', 'success');
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }

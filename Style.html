@@ -152,10 +152,9 @@
         .bc-bar-flex { display: flex; align-items: center; gap: 8px; }
         .bc-bar-track { flex: 1 1 auto; height: 7px; border-radius: 5px; background: var(--border); overflow: hidden; }
         .bc-bar-fill { height: 100%; border-radius: 5px; }
-        .bc-bar-fill.status-pending { background: var(--late); }
+        .bc-bar-fill.status-pending { background: var(--safety); }
         .bc-bar-fill.status-inprogress { background: var(--info); }
         .bc-bar-fill.status-done { background: var(--success); }
-        .bc-bar-fill.status-late_done { background: var(--safety); }
         .bc-bar-fill.status-overdue { background: var(--danger); }
         .bc-bar-pct { font-size: 12px; font-weight: 700; color: var(--text-main); white-space: nowrap; flex: 0 0 auto; }
         .bc-detail-note { font-size: 12px; color: var(--text-muted); max-width: 220px; }
@@ -199,6 +198,10 @@
         .kpi-amber { --kpi-accent: #b45309; --kpi-icon-bg: rgba(180, 83, 9, 0.12); }
 
         .form-row { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem; }
+        /* Base 1 cột cho di động — chuyển thành 3 cột từ 768px trở lên (xem @media bên dưới). Thiếu
+           rule này thì dưới 768px các ô .form-group dồn sát nhau vì .form-group tự nó không có
+           margin-bottom (chỉ label mới có). */
+        .form-row-3 { display: grid; grid-template-columns: 1fr; gap: 1rem; margin-bottom: 1rem; }
         .form-group label { display: block; margin-bottom: 0.5rem; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
         .form-control { width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-family: inherit; font-size: 1rem; transition: border-color 0.2s;}
         .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1); }
@@ -272,7 +275,7 @@
         .supervisor-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--text-main); }
         .supervisor-chip .avatar { width: 22px; height: 22px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 800; flex-shrink: 0; }
 
-        .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: center; }
+        .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; align-items: flex-end; }
         .filter-bar select, .filter-bar input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }
         /* Dropdown "Hợp đồng đang xem" — dùng chung ở BOQ/Nghiệm thu/Thanh toán/Quyết toán. */
         .hd-select { width: auto; min-width: 220px; max-width: 320px; }
@@ -308,7 +311,7 @@
             .kpi-row { grid-template-columns: repeat(4, 1fr); }
             .bc-charts-grid { grid-template-columns: 1fr 1fr; }
             .tt-advance-grid { grid-template-columns: 1fr 1fr; }
-            .form-row-3 { grid-template-columns: 1fr 1fr 1fr; display: grid; gap: 1rem;}
+            .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
             .btn { width: auto; }
 
             .app-layout { display: block; }
@@ -365,12 +368,21 @@
         :root {
             --ink: var(--text-main); --ink-soft: var(--text-muted);
             --paper: var(--bg); --card: var(--card-bg); --line: var(--border);
-            /* late_done tách riêng khỏi --primary (giờ là xanh dương, trùng --info) — dùng hổ
-               phách để phân biệt rõ với "đang thực hiện". */
+            /* --safety (hổ phách) trước dùng riêng cho trạng thái "Trễ tiến độ nhưng hoàn thành" —
+               trạng thái đó đã gộp vào "overdue" (Trễ tiến độ), giờ --safety chuyển sang dùng cho
+               "pending" (Chờ thực hiện) thay cho --late (xám) trước đây. */
             --safety: #FBBF24; --safety-dim: #FEF6E0;
             --ok: var(--success); --ok-dim: #E3FBF1;
+            /* Chữ trên nền --ok-dim dùng --ok (#34D399) thật ra chỉ ~1.8:1 tương phản, không đạt
+               WCAG AA (cần ≥4.5:1 cho chữ nhỏ) — dùng riêng --ok-text (xanh lá đậm hơn, cùng tông
+               với cặp màu Chức danh #2E7D4F/#E4F2E9 ở CHUCDANH_COLORS_ trong 0_TienIch.html) cho
+               MỌI chữ đặt trên nền --ok-dim, còn --ok vẫn giữ nguyên cho chấm trạng thái/icon. */
+            --ok-text: #2E7D4F;
             --warn: var(--danger); --warn-dim: #FEECEC;
             --late: #94A3B8; --late-dim: #EEF1F5;
+            /* Màu "cảnh báo mức vừa" cho KPI .bc-kpi.warn — trước dùng --late (xám), vừa sai ý nghĩa
+               (không đọc ra cảnh báo) vừa chỉ ~2.6:1 tương phản trên nền trắng. */
+            --caution: #B45309;
             --info: #60A5FA; --info-dim: #EAF2FE;
             --radius: 14px;
         }
@@ -378,10 +390,9 @@
            hiện (xanh dương) — hoàn thành (xanh lá) — trễ tiến độ nhưng hoàn thành (hổ phách) —
            trễ tiến độ không hoàn thành (đỏ san hô). Dùng chung 1 bảng màu này cho mọi tab
            (gantt/thanh tiến độ/badge) — mã màu theo đúng mẫu người dùng cung cấp. */
-        .gantt-fill.status-pending { background: linear-gradient(90deg, #cbd5e1, var(--late)); }
+        .gantt-fill.status-pending { background: linear-gradient(90deg, #fde68a, var(--safety)); }
         .gantt-fill.status-inprogress { background: linear-gradient(90deg, #93c5fd, var(--info)); }
         .gantt-fill.status-done { background: linear-gradient(90deg, #6ee7b7, var(--ok)); }
-        .gantt-fill.status-late_done { background: linear-gradient(90deg, #fcd34d, var(--safety)); }
         .gantt-fill.status-overdue { background: linear-gradient(90deg, #fca5a5, var(--warn)); }
 
         /* ---- 5_TienDo_NhatKy.html (mobile) ---- */
@@ -407,7 +418,7 @@
         .ntd-pct-suffix{ font-size:16px; font-weight:700; color:var(--ink-soft); }
         .ntd-feedback{ margin-top:10px; font-size:12.5px; padding:8px 10px; border-radius:8px; font-weight:600; display:none; }
         .ntd-feedback.show{ display:block; }
-        .ntd-feedback.ok{ background:var(--ok-dim); color:var(--ok); }
+        .ntd-feedback.ok{ background:var(--ok-dim); color:var(--ok-text); }
         .ntd-feedback.warn{ background:var(--warn-dim); color:var(--warn); }
         .ntd-submit-bar{ position:sticky; bottom:0; left:0; right:0; background:linear-gradient(180deg, rgba(247,246,242,0) 0%, var(--paper) 30%); padding:14px 0 4px; margin-top:-8px; }
         .ntd-submit-btn{ width:100%; padding:15px; border:none; border-radius:12px; background:var(--safety); color:#fff; font-size:16px; font-weight:800; letter-spacing:.01em; cursor:pointer; }
@@ -456,7 +467,7 @@
         .wtd-status-dot.filled{ background:var(--safety); }
         .wtd-status-dot.done{ background:var(--ok); }
         tr.wtd-done-row{ opacity:.6; } tr.wtd-done-row td{ background:#FAFAF7; }
-        .wtd-done-badge{ display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700; background:var(--ok-dim); color:var(--ok); }
+        .wtd-done-badge{ display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700; background:var(--ok-dim); color:var(--ok-text); }
         .wtd-footer{ display:flex; justify-content:space-between; align-items:center; padding:12px 4px 0; font-size:12.5px; color:var(--ink-soft); }
 
         /* ---- 6_BaoCao_TongHop.html (Tổng quan) ---- */
@@ -472,7 +483,7 @@
         .bc-kpi-label{ font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
         .bc-kpi-value{ font-size:26px; font-weight:800; margin-top:4px; }
         .bc-kpi.ok .bc-kpi-value{ color:var(--ok); }
-        .bc-kpi.warn .bc-kpi-value{ color:var(--late); }
+        .bc-kpi.warn .bc-kpi-value{ color:var(--caution); }
         .bc-kpi.bad .bc-kpi-value{ color:var(--warn); }
         .bc-filters{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
         .bc-chip{ padding:7px 13px; border-radius:20px; border:1.5px solid var(--line); background:var(--card); font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; }
@@ -488,10 +499,12 @@
         .bc-bar-plan{ position:absolute; top:-2px; width:2px; height:12px; background:var(--ink); }
         .bc-bar-nums{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-soft); margin-top:4px; }
         .bc-badge{ display:inline-block; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:700; white-space:nowrap; }
-        .bc-badge.pending{ background:var(--late-dim); color:var(--late); }
+        .bc-badge.pending{ background:var(--safety-dim); color:var(--safety); }
         .bc-badge.inprogress{ background:var(--info-dim); color:var(--info); }
-        .bc-badge.done{ background:var(--ok-dim); color:var(--ok); }
-        .bc-badge.late_done{ background:var(--safety-dim); color:var(--safety); }
+        .bc-badge.done{ background:var(--ok-dim); color:var(--ok-text); }
+        /* pl-tag: nhãn "PL" đánh dấu hạng mục BOQ tạo qua Phụ lục (10_BOQ.html) — không liên quan
+           trạng thái Công việc, chỉ mượn tông hổ phách để nổi bật, tách khỏi tên "late_done" cũ. */
+        .bc-badge.pl-tag{ background:var(--safety-dim); color:var(--safety); }
         .bc-badge.overdue{ background:var(--warn-dim); color:var(--warn); }
         .bc-note{ font-size:12px; color:var(--ink-soft); max-width:220px; }
         .bc-note em{ color:var(--warn); font-style:normal; font-weight:600; }

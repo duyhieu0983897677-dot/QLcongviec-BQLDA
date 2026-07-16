@@ -298,14 +298,14 @@ function readNhatKyRows_(sheet) {
 // Trả về { hangMuc, goiThau, congViec, users } — congViec đã tính sẵn luyKe/trangThaiMau/recentLogs
 // (cộng dồn từ NhatKyTienDo theo maCongViec, 1 lần đọc sheet duy nhất — KHÔNG tách riêng hàm/lệnh
 // gọi khác để lấy recentLogs nữa, tránh round-trip kép lên Apps Script làm chậm lần tải đầu).
-// trangThaiMau là 1 trong 5 giá trị, xét theo hạn ngayKetThucKH (KHÔNG nội suy % kế hoạch theo
+// trangThaiMau là 1 trong 4 giá trị, xét theo hạn ngayKetThucKH (KHÔNG nội suy % kế hoạch theo
 // thời gian đã trôi qua như trước):
 // - pending    : chưa hoàn thành và chưa tới ngayBatDauKH (chưa tới thời điểm bắt đầu)
 // - inprogress : chưa hoàn thành (luyKe<100), đã tới ngày bắt đầu và còn trong hạn
 // - done       : đã hoàn thành (luyKe>=100) đúng hạn (hoặc chưa đặt hạn để so)
-// - late_done  : đã hoàn thành nhưng ngày hoàn thành thực tế (log đưa lũy kế chạm mốc 100%
-//                đầu tiên) trễ hơn ngayKetThucKH
-// - overdue    : chưa hoàn thành và hôm nay đã qua ngayKetThucKH
+// - overdue    : hôm nay đã qua ngayKetThucKH và CHƯA hoàn thành, HOẶC đã hoàn thành nhưng ngày
+//                hoàn thành thực tế (log đưa lũy kế chạm mốc 100% đầu tiên) trễ hơn ngayKetThucKH
+//                (gộp chung "trễ nhưng xong" vào "trễ tiến độ", không tách riêng nữa)
 // congViec ở đây gồm CẢ Công việc đã bị Giám sát xóa (active=false) — để tab "Thi công / Tiến độ"
 // hiển thị gạch ngang; getBaoCaoTongHop() bên dưới tự lọc bỏ trước khi trả về báo cáo tổng hợp.
 function getData() {
@@ -351,7 +351,7 @@ function getData() {
         running += logsOfThis[i].phanTramNgay;
         if (running >= 99.999) { ngayHoanThanhThucTe = logsOfThis[i].ngayBaoCao; break; }
       }
-      cv.trangThaiMau = (cv.ngayKetThucKH && ngayHoanThanhThucTe && ngayHoanThanhThucTe > cv.ngayKetThucKH) ? 'late_done' : 'done';
+      cv.trangThaiMau = (cv.ngayKetThucKH && ngayHoanThanhThucTe && ngayHoanThanhThucTe > cv.ngayKetThucKH) ? 'overdue' : 'done';
     } else if (cv.ngayBatDauKH && today < cv.ngayBatDauKH) {
       cv.trangThaiMau = 'pending';
     } else {

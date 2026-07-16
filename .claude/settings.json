@@ -4,7 +4,26 @@
       "Bash(npm ls *)",
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);console.log\\(Object.keys\\(j\\)\\);console.log\\(j.token? 'has token':''\\);}catch\\(e\\){console.log\\('parse err',e.message\\)}}\\)\")",
       "Bash(node -e ' *)",
-      "Bash(curl -sL \"https://script.google.com/macros/s/AKfycbwFM3i2C2j0I2YnCD4Sc02jH8GP7557wWMr-BMfqa5iwzJ7DK_5Lq6QzeT6cP-vI4_tiQ/exec\" -o \"/c/Users/ADmin/AppData/Local/Temp/claude/d--04--CODE-BQLDA-02--CODE-C-P-NH-T-M-I-NH-T-01--CODE-CONGVIEC/f70f4798-04f2-4658-8cfe-7f4c135c338e/scratchpad/live_page.html\" -w \"HTTP status: %{http_code}\\\\nSize: %{size_download} bytes\\\\n\")"
+      "Bash(curl -sL \"https://script.google.com/macros/s/AKfycbwFM3i2C2j0I2YnCD4Sc02jH8GP7557wWMr-BMfqa5iwzJ7DK_5Lq6QzeT6cP-vI4_tiQ/exec\" -o \"/c/Users/ADmin/AppData/Local/Temp/claude/d--04--CODE-BQLDA-02--CODE-C-P-NH-T-M-I-NH-T-01--CODE-CONGVIEC/f70f4798-04f2-4658-8cfe-7f4c135c338e/scratchpad/live_page.html\" -w \"HTTP status: %{http_code}\\\\nSize: %{size_download} bytes\\\\n\")",
+      "Bash(node --check Code.js)",
+      "Bash(git push *)",
+      "WebFetch(domain:script.google.com)",
+      "Bash(mkdir -p /c/Users/ADmin/AppData/Local/Temp/claude/d--04--CODE-BQLDA-02--CODE-C-P-NH-T-M-I-NH-T-01--CODE-CONGVIEC/f70f4798-04f2-4658-8cfe-7f4c135c338e/scratchpad/hopdong_src)",
+      "Bash(clasp clone *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('9_HopDong.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('9_HopDong.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('10_BOQ.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('10_BOQ.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('11_NghiemThu.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('11_NghiemThu.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('12_ThanhToan.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('12_ThanhToan.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('13_QuyetToan.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('13_QuyetToan.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('14_TienDoThiCong.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('14_TienDoThiCong.html OK'\\);\")",
+      "Read(//d/04. CODE BQLDA/02. CODE CẬP НХẤT MỚI NHẤT/01. CODE CONGVIEC/**)",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('5_Dashboard.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('5_Dashboard.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('6_NguoiDung.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('6_NguoiDung.html OK'\\);\")",
+      "Bash(awk '$1>1')",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('4_ViecCuaToi.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('4_ViecCuaToi.html OK'\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('1_DangNhap.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*$/,''\\); new Function\\(src\\); console.log\\('1_DangNhap.html OK'\\);\")",
+      "Bash(npx skills *)",
+      "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('4_ViecCuaToi.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*\\\\$/,''\\); new Function\\(src\\); console.log\\('4_ViecCuaToi.html OK'\\);\")"
     ]
   }
 }

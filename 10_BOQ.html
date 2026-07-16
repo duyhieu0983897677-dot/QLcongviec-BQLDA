@@ -29,6 +29,11 @@ function renderBOQ() {
     if (content) content.style.display = '';
     document.getElementById('boqHopDongInfo').innerHTML =
         `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'} · Giá trị hiện hành: <b>${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
+    const editable = canEditHopDong();
+    const btnThem = document.getElementById('btnThemBOQItem');
+    if (btnThem) btnThem.style.display = editable ? '' : 'none';
+    const importBox = document.getElementById('boqImportBox');
+    if (importBox) importBox.style.display = editable ? '' : 'none';
     renderBOQTree();
     renderPhuLucList();
 }
@@ -92,7 +97,7 @@ function renderBOQTree() {
         }
         const pct = b.khoiLuongHieuLuc > 0 ? Math.min(100, Math.round((b.khoiLuongDaNghiemThu / b.khoiLuongHieuLuc) * 1000) / 10) : 0;
         html += `<tr>
-            <td style="padding-left:${indent}px;">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge late_done">PL</span>' : ''}</td>
+            <td style="padding-left:${indent}px;">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge pl-tag">PL</span>' : ''}</td>
             <td class="text-center">${b.donVi || '--'}</td>
             <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHopDong)}</td>
             <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
@@ -162,7 +167,7 @@ function saveBOQItemModal() {
     if (!payload.tenHangMuc) { showCustomAlert('Vui lòng nhập Tên hạng mục!', 'error'); return; }
 
     gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
-        .then(() => { showCustomAlert('Đã lưu hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadData(); })
+        .then(() => { showCustomAlert('Đã lưu hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -171,7 +176,7 @@ function deleteBOQItem(maBOQ) {
     if (!item) return;
     if (!confirm(`Xác nhận XÓA hạng mục "${item.tenHangMuc}"?`)) return;
     gsRun('adminXoaBOQItem', myUserId, myPassword, maBOQ)
-        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); reloadData(); })
+        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -181,6 +186,8 @@ function deleteBOQItem(maBOQ) {
 function renderPhuLucList() {
     const box = document.getElementById('phuLucList');
     if (!box) return;
+    const btnThem = document.getElementById('btnThemPhuLuc');
+    if (btnThem) btnThem.style.display = canEditHopDong() ? '' : 'none';
     const list = phuLuc.filter(p => p.maHopDong === currentHopDongId);
     if (list.length === 0) {
         box.innerHTML = `<div class="thongbao-empty">Chưa có Phụ lục nào.</div>`;
@@ -243,7 +250,7 @@ function savePhuLucModal() {
     const call = maPhuLuc
         ? gsRun('adminSuaPhuLuc', myUserId, myPassword, maPhuLuc, soHieu, ngay, ghiChu)
         : gsRun('adminTaoPhuLuc', myUserId, myPassword, currentHopDongId, soHieu, ngay, ghiChu);
-    call.then(() => { showCustomAlert('Đã lưu Phụ lục.', 'success'); closePhuLucModal(); reloadData(); })
+    call.then(() => { showCustomAlert('Đã lưu Phụ lục.', 'success'); closePhuLucModal(); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -255,7 +262,7 @@ function toggleTrangThaiPhuLuc(maPhuLuc) {
     if (!confirm(`Xác nhận ${hanhDong} Phụ lục "${pl.soHieu}"? Toàn bộ thay đổi khối lượng/đơn giá của Phụ lục này sẽ ${dangVoHieu ? 'được áp dụng lại' : 'tạm ngừng áp dụng'}, dữ liệu Phụ lục vẫn được giữ lại để tra cứu.`)) return;
 
     gsRun('adminToggleTrangThaiPhuLuc', myUserId, myPassword, maPhuLuc)
-        .then(() => { showCustomAlert(`Đã ${hanhDong} Phụ lục.`, 'success'); reloadData(); })
+        .then(() => { showCustomAlert(`Đã ${hanhDong} Phụ lục.`, 'success'); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -305,7 +312,7 @@ function saveThayDoiModal() {
     }
 
     gsRun('adminThemThayDoiPhuLuc', myUserId, myPassword, thayDoiPhuLucId_, payload)
-        .then(() => { showCustomAlert('Đã thêm thay đổi vào Phụ lục.', 'success'); closeThayDoiModal(); reloadData(); })
+        .then(() => { showCustomAlert('Đã thêm thay đổi vào Phụ lục.', 'success'); closeThayDoiModal(); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -347,7 +354,7 @@ function importBOQFromExcel() {
         chain.then(() => {
             showCustomAlert(`Đã nhập ${ok} dòng vào BOQ.`, ok > 0 ? 'success' : 'error');
             fileInput.value = '';
-            reloadData();
+            reloadHopDongData();
         });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }

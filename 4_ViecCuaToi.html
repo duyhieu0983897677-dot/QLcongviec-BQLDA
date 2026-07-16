@@ -6,7 +6,10 @@
    tab "Gói thầu/Hạng mục" cũ sang đây) + 2 modal:
    - "Thêm công việc": bảng nhiều dòng, mỗi dòng 1 Công việc (Gói thầu-
      Hạng mục-Tên-Ngày BĐ-Ngày KT), thêm được 1 hoặc nhiều dòng cùng
-     lúc, lưu hàng loạt (lặp gọi adminSaveCongViec từng dòng).
+     lúc, lưu hàng loạt (lặp gọi adminSaveCongViec từng dòng). Mỗi dòng
+     chọn được 1/nhiều/tất cả Hạng mục của Gói thầu (checkbox cuộn dọc,
+     giống fillCvHangMucCheckboxes ở 2_CongViec.html nhưng có thêm
+     "Chọn tất cả" vì đây là màn thêm nhanh hàng loạt).
    - "Báo cáo": bảng ngang liệt kê MỌI Công việc báo cáo được (lọc theo
      Gói thầu), mỗi dòng nhập % hoàn thành hôm nay + ghi chú, gửi 1
      lần cho toàn bộ qua themNhatKyTienDoHangLoat (đã có sẵn ở
@@ -149,14 +152,33 @@ function fillCvhlGoiThauSelect_(selectEl) {
 function onCvhlGoiThauChange(rowId) {
     const tr = document.getElementById('cvhlRow' + rowId);
     if (!tr) return;
-    const maGoiThau = tr.querySelector('.cvhl-goithau').value;
-    const hmSel = tr.querySelector('.cvhl-hangmuc');
-    if (!maGoiThau) { hmSel.innerHTML = '<option value="">-- Chọn Gói thầu trước --</option>'; return; }
+    fillCvhlHangMucBox_(rowId, tr.querySelector('.cvhl-goithau').value);
+}
+
+// Hộp chọn Hạng mục cho 1 dòng "Thêm công việc" — checkbox cuộn dọc trong khung cố định chiều cao
+// (tránh phải đặt panel dạng dropdown tuyệt đối trong <td>, dễ bị cắt bởi overflow-y:auto của
+// .modal-content/.table-responsive bao ngoài) + "Chọn tất cả" để thêm nhanh cả cụm Hạng mục.
+function fillCvhlHangMucBox_(rowId, maGoiThau) {
+    const box = document.getElementById('cvhlHm' + rowId);
+    if (!box) return;
+    if (!maGoiThau) { box.innerHTML = '<span style="color:gray;">-- Chọn Gói thầu trước --</span>'; return; }
     const g = goiThau.find(x => x.maGoiThau === maGoiThau);
     const list = g ? hangMuc.filter(h => g.maHangMucList.includes(h.maHangMuc)) : [];
-    hmSel.innerHTML = list.length
-        ? '<option value="">-- Chọn Hạng mục --</option>' + list.map(h => `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`).join('')
-        : '<option value="">-- Gói thầu chưa gộp Hạng mục --</option>';
+    if (list.length === 0) { box.innerHTML = '<span style="color:gray;">-- Gói thầu chưa gộp Hạng mục --</span>'; return; }
+    box.innerHTML = `
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:700; border-bottom:1px solid var(--border); padding-bottom:4px;">
+            <input type="checkbox" onchange="onCvhlHangMucCheckAll_(${rowId}, this.checked)"> Chọn tất cả
+        </label>` +
+        list.map(h => `
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
+            <input type="checkbox" class="cvhl-hm-cb" value="${h.maHangMuc}"> ${h.maHangMuc} — ${h.tenHangMuc}
+        </label>`).join('');
+}
+
+function onCvhlHangMucCheckAll_(rowId, checked) {
+    const tr = document.getElementById('cvhlRow' + rowId);
+    if (!tr) return;
+    tr.querySelectorAll('.cvhl-hm-cb').forEach(cb => { cb.checked = checked; });
 }
 
 function initCvhlDatePickers_(tr) {
@@ -176,7 +198,7 @@ function themDongCongViec() {
     tr.id = 'cvhlRow' + rowId;
     tr.innerHTML = `
         <td><select class="form-control cvhl-goithau" onchange="onCvhlGoiThauChange(${rowId})"></select></td>
-        <td><select class="form-control cvhl-hangmuc"><option value="">-- Chọn Gói thầu trước --</option></select></td>
+        <td><div id="cvhlHm${rowId}" style="max-height:110px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:0.82rem;"><span style="color:gray;">-- Chọn Gói thầu trước --</span></div></td>
         <td><input type="text" class="form-control cvhl-ten" placeholder="Tên công việc"></td>
         <td><input type="text" class="form-control cvhl-batdau" placeholder="dd/mm/yyyy"></td>
         <td><input type="text" class="form-control cvhl-ketthuc" placeholder="dd/mm/yyyy"></td>
@@ -220,15 +242,15 @@ function luuCongViecHangLoat() {
     const payloads = [];
     for (const tr of rows) {
         const maGoiThau = tr.querySelector('.cvhl-goithau').value;
-        const maHangMuc = tr.querySelector('.cvhl-hangmuc').value;
+        const maHangMucList = Array.from(tr.querySelectorAll('.cvhl-hm-cb:checked')).map(cb => cb.value);
         const tenCongViec = tr.querySelector('.cvhl-ten').value.trim();
-        if (!maGoiThau && !maHangMuc && !tenCongViec) continue; // dòng bỏ trống hoàn toàn thì bỏ qua, không báo lỗi
-        if (!maGoiThau || !maHangMuc || !tenCongViec) {
+        if (!maGoiThau && maHangMucList.length === 0 && !tenCongViec) continue; // dòng bỏ trống hoàn toàn thì bỏ qua, không báo lỗi
+        if (!maGoiThau || maHangMucList.length === 0 || !tenCongViec) {
             showCustomAlert('Mỗi dòng cần nhập đủ Gói thầu, Hạng mục và Tên công việc!', 'error');
             return;
         }
         payloads.push({
-            tenCongViec, maGoiThau, maHangMucList: [maHangMuc], nguoiDuocGiaoId,
+            tenCongViec, maGoiThau, maHangMucList, nguoiDuocGiaoId,
             ngayBatDauKH: convertDMYtoISO(tr.querySelector('.cvhl-batdau').value.trim()) || '',
             ngayKetThucKH: convertDMYtoISO(tr.querySelector('.cvhl-ketthuc').value.trim()) || ''
         });
@@ -243,7 +265,7 @@ function luuCongViecHangLoat() {
     chain.then(() => {
         showCustomAlert(`Đã thêm ${ok} công việc${fail ? `, ${fail} dòng lỗi` : ''}.`, fail ? 'error' : 'success');
         closeThemCongViecHangLoatModal();
-        reloadData();
+        reloadCongViecData();
     });
 }
 
@@ -341,7 +363,7 @@ function submitBaoCaoHangLoat() {
             if (fail.length) msg += ` ${fail.length} lỗi: ` + fail.map(f => f.error).slice(0, 3).join('; ');
             showCustomAlert(msg, fail.length ? 'error' : 'success');
             closeBaoCaoModal();
-            reloadData();
+            reloadCongViecData();
         })
         .catch(handleBackendError);
 }

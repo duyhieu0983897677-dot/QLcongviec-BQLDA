@@ -73,14 +73,14 @@ function xacNhanQuyetToan() {
     if (!confirm('Xác nhận CHỐT Quyết toán Hợp đồng này?')) return;
     const ghiChu = prompt('Ghi chú (không bắt buộc):', '') || '';
     gsRun('adminTaoQuyetToan', myUserId, myPassword, currentHopDongId, ghiChu)
-        .then(() => { showCustomAlert('Đã xác nhận Quyết toán.', 'success'); reloadData(); })
+        .then(() => { showCustomAlert('Đã xác nhận Quyết toán.', 'success'); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
 function huyQuyetToan(maQuyetToan) {
     if (!confirm('Xác nhận HỦY Quyết toán này? Số liệu sẽ quay về dạng tạm tính.')) return;
     gsRun('adminXoaQuyetToan', myUserId, myPassword, maQuyetToan)
-        .then(() => { showCustomAlert('Đã hủy Quyết toán.', 'success'); reloadData(); })
+        .then(() => { showCustomAlert('Đã hủy Quyết toán.', 'success'); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 </script>

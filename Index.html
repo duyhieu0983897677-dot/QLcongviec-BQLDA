@@ -262,7 +262,7 @@
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
                     <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-file-contract"></i> Danh sách Hợp đồng</div>
-                    <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openHopDongModal()"><i class="fa-solid fa-plus"></i> Thêm Hợp đồng</button>
+                    <button id="btnThemHopDong" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openHopDongModal()"><i class="fa-solid fa-plus"></i> Thêm Hợp đồng</button>
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
@@ -295,7 +295,7 @@
                     <div id="boqHopDongInfo" style="margin-bottom:10px; font-size:0.9rem;"></div>
                     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
                         <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-list-check"></i> Bảng khối lượng (BOQ)</div>
-                        <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openBOQItemModal()"><i class="fa-solid fa-plus"></i> Thêm hạng mục</button>
+                        <button id="btnThemBOQItem" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openBOQItemModal()"><i class="fa-solid fa-plus"></i> Thêm hạng mục</button>
                     </div>
                     <div class="table-responsive">
                         <table class="data-table">
@@ -313,7 +313,7 @@
                             <tbody id="boqBody"></tbody>
                         </table>
                     </div>
-                    <details class="admin-only" style="margin-top:14px;">
+                    <details id="boqImportBox" style="margin-top:14px; display:none;">
                         <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel</summary>
                         <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo đúng thứ tự cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Thành tiền (bỏ qua) | Ngày bắt đầu KH | Ngày kết thúc KH (2 cột ngày cuối không bắt buộc, dòng đầu là tiêu đề). Dòng có STT dạng số La Mã/chữ cái hoặc không có Khối lượng lẫn Đơn giá sẽ tự nhận là Đầu mục.</p>
                         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -326,7 +326,7 @@
                 <div class="card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-file-pen"></i> Phụ lục Hợp đồng</div>
-                        <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openPhuLucModal()"><i class="fa-solid fa-plus"></i> Thêm Phụ lục</button>
+                        <button id="btnThemPhuLuc" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openPhuLucModal()"><i class="fa-solid fa-plus"></i> Thêm Phụ lục</button>
                     </div>
                     <div id="phuLucList"></div>
                 </div>
@@ -367,13 +367,14 @@
                         </div>
                     </div>
                     <button id="ntSubmit" class="btn btn-sm" style="background:var(--success);" onclick="submitNghiemThu()" disabled><i class="fa-solid fa-check"></i> Ghi nhận</button>
+                    <p id="ntNoPerm" style="display:none; color:var(--text-muted); font-size:0.8rem; margin-top:6px;">Chỉ Quản trị hoặc Giám sát QS mới được ghi nhận Nghiệm thu.</p>
 
                     <div style="margin-top:16px;">
                         <div class="card-title" style="font-size:0.9rem;">5 lượt gần nhất</div>
                         <div id="ntRecent"></div>
                     </div>
 
-                    <details class="admin-only" style="margin-top:16px;">
+                    <details id="ntImportBox" style="margin-top:16px; display:none;">
                         <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel (nhiều hạng mục cùng lúc)</summary>
                         <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo cột: STT | Tên hạng mục | ĐVT | Khối lượng (dòng đầu là tiêu đề). Mỗi dòng khớp với đúng 1 hạng mục BOQ theo STT+Tên, áp dụng cho CÙNG 1 ngày nhập bên dưới.</p>
                         <div class="form-group" style="margin-bottom:10px; max-width:220px;">
@@ -425,7 +426,7 @@
                 <div class="card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                         <div class="card-title" style="margin-bottom:0;"><i class="fa-solid fa-money-check-dollar"></i> Các Đợt thanh toán</div>
-                        <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openPaymentModal()"><i class="fa-solid fa-plus"></i> Thêm Đợt thanh toán</button>
+                        <button id="btnThemDotTT" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openPaymentModal()"><i class="fa-solid fa-plus"></i> Thêm Đợt thanh toán</button>
                     </div>
                     <div id="ttList"></div>
                 </div>
@@ -519,8 +520,7 @@
                         <option value="pending">Chờ thực hiện</option>
                         <option value="inprogress">Đang thực hiện</option>
                         <option value="done">Hoàn thành</option>
-                        <option value="late_done">Trễ tiến độ nhưng hoàn thành</option>
-                        <option value="overdue">Trễ tiến độ không hoàn thành</option>
+                        <option value="overdue">Trễ tiến độ</option>
                     </select>
                     <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục..." oninput="renderCongViecCaNhan()" style="flex:1; min-width:180px;">
                 </div>
@@ -765,10 +765,10 @@
                 <select id="ntdGoiThauFilter" onchange="renderBaoCaoTable()" style="min-width:220px;">
                     <option value="">-- Tất cả Gói thầu --</option>
                 </select>
-                <div class="form-group" style="margin:0; max-width:160px;">
-                    <label style="font-size:0.75rem; margin-bottom:2px; display:block;">Ngày báo cáo (áp dụng chung)</label>
-                    <input type="text" id="ntdNgay" class="form-control" placeholder="dd/mm/yyyy">
-                </div>
+                <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; font-weight:600; color:var(--text-muted); margin:0;">
+                    Ngày báo cáo
+                    <input type="text" id="ntdNgay" class="form-control" style="width:140px;" placeholder="dd/mm/yyyy">
+                </label>
             </div>
             <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
                 <table class="data-table">

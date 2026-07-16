@@ -31,6 +31,11 @@ function renderNghiemThu() {
     if (content) content.style.display = '';
     document.getElementById('ntHopDongInfo').innerHTML = `<b>${hd.tenHopDong}</b> — ${hd.nhaThau || '--'}`;
 
+    const editable = canEditHopDong();
+    document.getElementById('ntNoPerm').style.display = editable ? 'none' : '';
+    document.getElementById('ntImportBox').style.display = editable ? '' : 'none';
+    ['ntNgay', 'ntKhoiLuong', 'ntGhiChu'].forEach(id => { document.getElementById(id).disabled = !editable; });
+
     const sel = document.getElementById('ntBOQ');
     const currentVal = sel.value;
     const items = boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader);
@@ -72,7 +77,7 @@ function selectNghiemThuBOQ(maBOQ) {
         <span>Khối lượng hiệu lực: <b>${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</b></span>
         <span>Đã nghiệm thu: <b>${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</b></span>
         <span>Còn lại: <b>${khoiLuongHienThi_(conLai)}</b></span>`;
-    btn.disabled = false;
+    btn.disabled = !canEditHopDong();
 
     const logs = nghiemThu.filter(n => n.maBOQ === maBOQ).slice().sort((a, b2) => b2.maNghiemThu.localeCompare(a.maNghiemThu)).slice(0, 5);
     document.getElementById('ntRecent').innerHTML = logs.length === 0
@@ -96,7 +101,7 @@ function submitNghiemThu() {
             showCustomAlert('Đã ghi Nghiệm thu.', 'success');
             document.getElementById('ntKhoiLuong').value = '';
             document.getElementById('ntGhiChu').value = '';
-            reloadData();
+            reloadHopDongData();
         })
         .catch(err => { handleBackendError(err); btn.disabled = false; });
 }
@@ -131,7 +136,7 @@ function importNghiemThuFromExcel() {
             if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '...' : '');
             showCustomAlert(msg, ok > 0 ? 'success' : 'error');
             fileInput.value = '';
-            reloadData();
+            reloadHopDongData();
         });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }

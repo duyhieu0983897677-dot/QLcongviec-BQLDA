@@ -10,7 +10,9 @@
    - switchTab()      : Chuyển tab đang xem
    - (cuối file)      : Gọi getData() ngay khi script này chạy (không đợi window.onload) để tải
                         dữ liệu (Hạng mục/Gói thầu/Công việc/User) từ Google Sheet khi mở trang
-   - reloadData()      : Tải lại dữ liệu sau khi ghi Nhật ký / sửa Hạng mục / Gói thầu
+   - reloadData()/reloadCongViecData()/reloadHopDongData() : Tải lại dữ liệu sau khi lưu — gọi đúng
+                        hàm theo module đang thao tác để đỡ 1 round-trip backend (xem chú thích tại
+                        định nghĩa của reloadData() bên dưới)
    - gsRun()           : Bọc google.script.run thành Promise, dùng để chain nhiều lệnh backend
    - showCustomAlert() : Hiện thông báo xanh/đỏ
    - round0(), formatVN(), convertDMYtoISO()... : Hàm tiện ích dùng khắp nơi
@@ -19,7 +21,7 @@
 let hangMuc = [];    // Cây mã/tên Hạng mục tham chiếu (capDo 1/2/3) — chỉ để lọc, không nhận %
 let goiThau = [];    // Danh sách Gói thầu, mỗi Gói thầu gộp nhiều Hạng mục
 let congViec = [];   // Công việc do Admin/Giám sát tự tạo — ĐÂY là đơn vị nhận Nhật ký tiến độ,
-                      // đã có sẵn luyKe/trangThaiMau (inprogress/done/late_done/overdue) tính từ
+                      // đã có sẵn luyKe/trangThaiMau (inprogress/done/overdue) tính từ
                       // NhatKyTienDo, xem chi tiết logic ở getData() trong Code.js
 let users = [];      // Danh sách Giám sát / Admin
 let collapsedGroups = new Set();
@@ -33,8 +35,7 @@ const TRANGTHAI_LABEL = {
     pending: 'Chờ thực hiện',
     inprogress: 'Đang thực hiện',
     done: 'Hoàn thành',
-    late_done: 'Trễ tiến độ nhưng hoàn thành',
-    overdue: 'Trễ tiến độ không hoàn thành'
+    overdue: 'Trễ tiến độ'
 };
 const PHAN_LOAI_LABEL = { ho_so: 'I. Phần hồ sơ', thi_cong: 'II. Phần triển khai thi công' };
 
@@ -126,10 +127,30 @@ if (typeof google !== 'undefined') {
 
 // Gọi lại sau khi ghi Nhật ký tiến độ / sửa Hạng mục / Gói thầu — server luôn là nguồn sự thật
 // (lũy kế % được server tính lại từ NhatKyTienDo), không tự suy đoán ở client.
+// loadThongBao() bắn song song (không await) thay vì nối tiếp .then() như trước — chuông thông báo
+// là tính năng phụ, không cần bắt số liệu chính phải đợi thêm 1 round-trip backend mới hiển thị.
+//
+// 3 hàm dưới đây SONG SONG nhau, dùng cho 3 tình huống khác nhau — gọi đúng hàm giúp giảm hẳn số
+// round-trip backend sau mỗi lần lưu (mỗi round-trip tốn kém do độ trễ cố định của Apps Script):
+// - reloadData()         : tải lại CẢ HAI, dùng cho nút "Làm mới" (không biết tab nào đang mở cần gì)
+// - reloadCongViecData() : chỉ tải Hạng mục/Gói thầu/Công việc/User — dùng sau thao tác Công việc/
+//                          Nhật ký tiến độ/Gói thầu/Hạng mục/Giám sát (không đụng dữ liệu Hợp đồng)
+// - reloadHopDongData()  : chỉ tải Hợp đồng/BOQ/Phụ lục/Nghiệm thu/Thanh toán/Quyết toán — dùng sau
+//                          thao tác trong module Hợp đồng (không đụng dữ liệu Công việc)
 function reloadData() {
+    loadThongBao();
     return Promise.all([gsRun('getData'), gsRun('getHopDongData')])
-        .then(([data, hopDongData]) => { applyLoadedData(data); applyLoadedHopDongData(hopDongData); })
-        .then(loadThongBao);
+        .then(([data, hopDongData]) => { applyLoadedData(data); applyLoadedHopDongData(hopDongData); });
+}
+
+function reloadCongViecData() {
+    loadThongBao();
+    return gsRun('getData').then(applyLoadedData);
+}
+
+function reloadHopDongData() {
+    loadThongBao();
+    return gsRun('getHopDongData').then(applyLoadedHopDongData);
 }
 
 // Nhận TÊN CHUỖI của hàm (không nhận thẳng tham chiếu hàm) và tra qua window[...] —
