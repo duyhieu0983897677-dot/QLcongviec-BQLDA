@@ -5,8 +5,10 @@ function include(filename) {
 
 // HangMuc nay CHỈ là dữ liệu tham chiếu (mã/tên/cây cha-con) để lọc & để Gói thầu gộp —
 // không còn nhận Nhật ký tiến độ trực tiếp (xem CongViec bên dưới).
-const HANGMUC_HEADERS_ = ['maHangMuc', 'tenHangMuc', 'capDo', 'parentId', 'active'];
-const GOITHAU_HEADERS_ = ['maGoiThau', 'tenGoiThau', 'maHangMucList'];
+// stt (số thứ tự hiển thị) thêm ở CUỐI mỗi bảng — không chèn giữa để không xáo trộn cột của các
+// sheet đã tồn tại. Cho phép sửa tay để tự sắp xếp lại thứ tự hiển thị (1->n), độc lập với mã.
+const HANGMUC_HEADERS_ = ['maHangMuc', 'tenHangMuc', 'capDo', 'parentId', 'active', 'stt'];
+const GOITHAU_HEADERS_ = ['maGoiThau', 'tenGoiThau', 'maHangMucList', 'stt'];
 // CongViec: đơn vị công việc thật do Admin/Giám sát tự tạo — đây mới là nơi Nhật ký tiến độ trỏ vào.
 // phanLoai ('ho_so'/'thi_cong') tự gán = phanMacDinh của người tạo tại thời điểm tạo, không sửa tay.
 // nguoiGiao_id/nguoiGiao_ten CHỈ có giá trị khi Admin tạo Công việc và giao cho người KHÁC (khác
@@ -213,7 +215,10 @@ function readHangMucRows_(sheet) {
       maHangMuc,
       tenHangMuc: String(r[1] || '').trim(),
       capDo: parseInt(r[2], 10) || 1,
-      parentId: String(r[3] || '').trim()
+      parentId: String(r[3] || '').trim(),
+      // Dòng cũ chưa từng gán stt sẽ đọc ra '' -> mặc định 0, các dòng mới tạo có stt tăng dần
+      // (xem adminSaveHangMuc) nên vẫn xếp SAU mọi dòng cũ khi sort tăng dần, đúng thứ tự hiện có.
+      stt: parseInt(r[5], 10) || 0
     });
   });
   return result;
@@ -231,7 +236,8 @@ function readGoiThauRows_(sheet) {
     result.push({
       maGoiThau,
       tenGoiThau: String(r[1] || '').trim(),
-      maHangMucList: String(r[2] || '').split(',').map(s => s.trim()).filter(Boolean)
+      maHangMucList: String(r[2] || '').split(',').map(s => s.trim()).filter(Boolean),
+      stt: parseInt(r[3], 10) || 0
     });
   });
   return result;
@@ -478,7 +484,13 @@ function adminSaveHangMuc(userId, password, node) {
     if (String(data[i][0]).trim() === keyToFind) { foundRow = i + 1; break; }
   }
 
-  const row = [maHangMuc, node.tenHangMuc || '', parseInt(node.capDo, 10) || 1, node.parentId || '', true];
+  let stt = parseInt(node.stt, 10);
+  if (!stt) {
+    let maxStt = 0;
+    data.forEach((r, i) => { if (i > 0) { const s = parseInt(r[5], 10) || 0; if (s > maxStt) maxStt = s; } });
+    stt = maxStt + 1;
+  }
+  const row = [maHangMuc, node.tenHangMuc || '', parseInt(node.capDo, 10) || 1, node.parentId || '', true, stt];
 
   if (foundRow > 0) {
     sheet.getRange(foundRow, 1, 1, row.length).setValues([row]);
@@ -559,11 +571,13 @@ function adminSaveGoiThau(userId, password, goiThau) {
 
   const data = sheet.getDataRange().getValues();
   let maGoiThau = String(goiThau.maGoiThau || '').trim();
+  let stt = parseInt(goiThau.stt, 10);
 
   if (maGoiThau) {
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]).trim() === maGoiThau) {
-        sheet.getRange(i + 1, 2, 1, 2).setValues([[tenGoiThau, maHangMucList]]);
+        if (!stt) stt = parseInt(data[i][3], 10) || 0;
+        sheet.getRange(i + 1, 2, 1, 3).setValues([[tenGoiThau, maHangMucList, stt]]);
         logActivity(userId, user.name, 'Sửa Gói thầu', tenGoiThau);
         return 'Success';
       }
@@ -571,12 +585,16 @@ function adminSaveGoiThau(userId, password, goiThau) {
   }
 
   let maxSTT = 0;
+  let maxDisplayStt = 0;
   for (let i = 1; i < data.length; i++) {
-    const stt = parseInt(String(data[i][0]).replace('GT', ''), 10);
-    if (!isNaN(stt) && stt > maxSTT) maxSTT = stt;
+    const s = parseInt(String(data[i][0]).replace('GT', ''), 10);
+    if (!isNaN(s) && s > maxSTT) maxSTT = s;
+    const ds = parseInt(data[i][3], 10) || 0;
+    if (ds > maxDisplayStt) maxDisplayStt = ds;
   }
   maGoiThau = 'GT' + (maxSTT + 1);
-  sheet.appendRow([maGoiThau, tenGoiThau, maHangMucList]);
+  if (!stt) stt = maxDisplayStt + 1;
+  sheet.appendRow([maGoiThau, tenGoiThau, maHangMucList, stt]);
   logActivity(userId, user.name, 'Thêm Gói thầu', tenGoiThau);
   return 'Success';
 }

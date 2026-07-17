@@ -499,7 +499,7 @@
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr><th style="text-align:left;">Tên gói thầu</th><th>Hạng mục gộp</th></tr></thead>
+                        <thead><tr><th style="width:60px;">STT</th><th style="text-align:left;">Tên gói thầu</th><th>Hạng mục gộp</th></tr></thead>
                         <tbody id="goiThauBody"></tbody>
                     </table>
                 </div>
@@ -648,6 +648,10 @@
                 <select id="hmPicker" class="form-control" onchange="onHmPickerChange(this.value)"></select>
             </div>
             <div class="form-group" style="margin-bottom:10px;">
+                <label>STT <span style="font-weight:400; color:var(--text-muted);">(thứ tự hiển thị, có thể sửa)</span></label>
+                <input type="number" id="hmStt" class="form-control" min="1" step="1">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
                 <label>Mã Hạng mục</label>
                 <input type="text" id="hmMaHangMuc" class="form-control" placeholder="VD: 90, 90.1, II…">
             </div>
@@ -683,6 +687,10 @@
             <div id="gtPickerGroup" class="form-group" style="margin-bottom:10px; display:none;">
                 <label>Chọn Gói thầu cần sửa/xóa</label>
                 <select id="gtPicker" class="form-control" onchange="onGtPickerChange(this.value)"></select>
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>STT <span style="font-weight:400; color:var(--text-muted);">(thứ tự hiển thị, có thể sửa)</span></label>
+                <input type="number" id="gtStt" class="form-control" min="1" step="1">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Tên gói thầu</label>

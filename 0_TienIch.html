@@ -89,8 +89,10 @@ function gsRun(fnName, ...args) {
 
 function applyLoadedData(response) {
     const parsed = JSON.parse(response);
-    hangMuc = parsed.hangMuc || [];
-    goiThau = parsed.goiThau || [];
+    // Sắp xếp theo stt (1->n) ngay tại nguồn — mọi dropdown/bảng dùng 2 mảng này khắp app tự động
+    // đồng bộ thứ tự, không cần sửa lại từng nơi .map()/.forEach() riêng lẻ.
+    hangMuc = (parsed.hangMuc || []).slice().sort((a, b) => (a.stt || 0) - (b.stt || 0));
+    goiThau = (parsed.goiThau || []).slice().sort((a, b) => (a.stt || 0) - (b.stt || 0));
     congViec = parsed.congViec || [];
     users = parsed.users || [];
     updateUI();

@@ -33,14 +33,14 @@ function renderHangMucRefList() {
         return;
     }
 
+    const byStt = (a, b) => (a.stt || 0) - (b.stt || 0);
     const childrenByParent = {};
     hangMuc.forEach(h => { const key = h.parentId || ''; (childrenByParent[key] = childrenByParent[key] || []).push(h); });
+    Object.values(childrenByParent).forEach(list => list.sort(byStt));
 
-    let stt = 0;
     function renderNode(node, depth) {
-        stt++;
         let rows = `<tr>
-            <td class="text-center">${stt}</td>
+            <td class="text-center mono">${node.stt || '--'}</td>
             <td class="mono">${node.maHangMuc}</td>
             <td style="padding-left:${depth * 18}px;">${node.tenHangMuc}</td>
         </tr>`;
@@ -58,12 +58,13 @@ function renderGoiThauList() {
     if (!body) return;
     if (currentRole !== 'ADMIN') { body.innerHTML = ''; return; }
     if (goiThau.length === 0) {
-        body.innerHTML = '<tr><td colspan="2" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="3" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>';
         return;
     }
-    body.innerHTML = goiThau.map(g => {
+    const sorted = goiThau.slice().sort((a, b) => (a.stt || 0) - (b.stt || 0));
+    body.innerHTML = sorted.map(g => {
         const names = g.maHangMucList.map(id => { const h = findHangMuc(id); return h ? h.maHangMuc : id; }).join(', ');
-        return `<tr><td>${g.tenGoiThau}</td><td>${names || '--'}</td></tr>`;
+        return `<tr><td class="text-center mono">${g.stt || '--'}</td><td>${g.tenGoiThau}</td><td>${names || '--'}</td></tr>`;
     }).join('');
 }
 
@@ -76,9 +77,15 @@ function fillHmPicker_(selectedId) {
     if (selectedId) sel.value = selectedId;
 }
 
+// STT gợi ý cho Hạng mục mới = lớn nhất hiện có + 1 — vẫn sửa tay được trước khi lưu.
+function nextHangMucStt_() {
+    return hangMuc.reduce((max, h) => Math.max(max, h.stt || 0), 0) + 1;
+}
+
 function loadHangMucIntoForm_(maHangMuc) {
     document.getElementById('hmEditId').value = maHangMuc || '';
     const node = maHangMuc ? findHangMuc(maHangMuc) : null;
+    document.getElementById('hmStt').value = node ? node.stt : nextHangMucStt_();
     document.getElementById('hmMaHangMuc').value = node ? node.maHangMuc : '';
     document.getElementById('hmTen').value = node ? node.tenHangMuc : '';
     document.getElementById('hmCapDo').value = node ? String(node.capDo) : '1';
@@ -118,6 +125,7 @@ function saveHangMucModal() {
         maHangMuc,
         oldMaHangMuc,
         tenHangMuc,
+        stt: parseInt(document.getElementById('hmStt').value, 10) || 0,
         capDo: parseInt(document.getElementById('hmCapDo').value, 10),
         parentId: document.getElementById('hmParentId').value
     };
@@ -174,9 +182,15 @@ function fillGtPicker_(selectedId) {
     if (selectedId) sel.value = selectedId;
 }
 
+// STT gợi ý cho Gói thầu mới = lớn nhất hiện có + 1 — vẫn sửa tay được trước khi lưu.
+function nextGoiThauStt_() {
+    return goiThau.reduce((max, g) => Math.max(max, g.stt || 0), 0) + 1;
+}
+
 function loadGoiThauIntoForm_(maGoiThau) {
     document.getElementById('gtEditId').value = maGoiThau || '';
     const g = maGoiThau ? goiThau.find(x => x.maGoiThau === maGoiThau) : null;
+    document.getElementById('gtStt').value = g ? g.stt : nextGoiThauStt_();
     document.getElementById('gtTen').value = g ? g.tenGoiThau : '';
     fillGoiThauGroupCheckboxes(g ? g.maHangMucList : []);
     document.getElementById('gtDeleteBtn').style.display = g ? '' : 'none';
@@ -205,8 +219,9 @@ function saveGoiThauModal() {
     const tenGoiThau = document.getElementById('gtTen').value.trim();
     if (!tenGoiThau) { showCustomAlert('Vui lòng nhập Tên gói thầu!', 'error'); return; }
     const maHangMucList = Array.from(document.querySelectorAll('.gt-hm-cb:checked')).map(cb => cb.value);
+    const stt = parseInt(document.getElementById('gtStt').value, 10) || 0;
 
-    gsRun('adminSaveGoiThau', myUserId, myPassword, { maGoiThau, tenGoiThau, maHangMucList })
+    gsRun('adminSaveGoiThau', myUserId, myPassword, { maGoiThau, tenGoiThau, maHangMucList, stt })
         .then(() => {
             closeGoiThauModal();
             showCustomAlert('Đã lưu Gói thầu.', 'success');
