@@ -37,7 +37,7 @@ function renderNguoiDung() {
         <td>${u.name}</td>
         <td class="text-center">${u.role === 'ADMIN' ? 'Quản trị' : 'Giám sát'}</td>
         <td>${u.chucDanh || '--'}</td>
-        <td class="text-center">${PHAN_LOAI_LABEL[u.phanMacDinh] || '-- Chưa gán --'}</td>
+        <td class="text-center">${u.phanMacDinh === 'ca_hai' ? 'Cả hai' : (PHAN_LOAI_LABEL[u.phanMacDinh] || '-- Chưa gán --')}</td>
         <td class="text-center">${congViecCountByUser[u.id] || 0}</td>
         <td class="text-center">
             <div class="action-cell">

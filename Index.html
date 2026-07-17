@@ -781,6 +781,7 @@
                     <option value="">-- Chưa gán --</option>
                     <option value="ho_so">I. Phần hồ sơ (vd: QS, QAQC)</option>
                     <option value="thi_cong">II. Phần triển khai thi công (vd: Giám sát hiện trường)</option>
+                    <option value="ca_hai">Cả hai — chọn Phần riêng cho từng công việc lúc tạo</option>
                 </select>
             </div>
             <div class="form-group" style="margin-bottom:10px;">
@@ -831,11 +832,20 @@
     <div id="themCongViecHangLoatModal" class="modal">
         <div class="modal-content" style="max-width:1000px;">
             <h3 style="margin-bottom:12px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> Thêm công việc</h3>
-            <div id="cvhlGiaoChoGroup" class="form-group admin-only" style="margin-bottom:12px; max-width:320px;">
-                <label>Giao việc cho <span style="font-weight:400; color:var(--text-muted);">(áp dụng cho mọi dòng bên dưới, để trống = tự đảm nhận)</span></label>
-                <select id="cvhlGiaoCho" class="form-control">
-                    <option value="">-- Tự đảm nhận --</option>
-                </select>
+            <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
+                <div id="cvhlGiaoChoGroup" class="form-group admin-only" style="margin-bottom:0; max-width:320px; flex:1; min-width:220px;">
+                    <label>Giao việc cho <span style="font-weight:400; color:var(--text-muted);">(áp dụng cho mọi dòng bên dưới, để trống = tự đảm nhận)</span></label>
+                    <select id="cvhlGiaoCho" class="form-control" onchange="onCvhlGiaoChoChange()">
+                        <option value="">-- Tự đảm nhận --</option>
+                    </select>
+                </div>
+                <div id="cvhlPhanGroup" class="form-group" style="display:none; margin-bottom:0; max-width:320px; flex:1; min-width:220px;">
+                    <label>Phần <span style="font-weight:400; color:var(--text-muted);">(người này được gán "Cả hai" — chọn Phần áp dụng cho mọi dòng bên dưới)</span></label>
+                    <select id="cvhlPhan" class="form-control">
+                        <option value="ho_so">I. Phần hồ sơ</option>
+                        <option value="thi_cong">II. Phần triển khai thi công</option>
+                    </select>
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="data-table">

@@ -214,6 +214,14 @@ function xoaDongCongViec(rowId) {
     if (tr) tr.remove();
 }
 
+// Người "Cả hai" (phanMacDinh='ca_hai') không tự suy ra được Phần — hiện thêm dropdown "Phần" để
+// chọn tay cho lô đang thêm, ẩn đi với người đã có Phần mặc định cố định (đỡ rối cho trường hợp thường).
+function onCvhlGiaoChoChange() {
+    const targetId = currentRole === 'ADMIN' ? (document.getElementById('cvhlGiaoCho').value || mySupervisorId) : mySupervisorId;
+    const target = users.find(u => u.id === targetId);
+    document.getElementById('cvhlPhanGroup').style.display = (target && target.phanMacDinh === 'ca_hai') ? '' : 'none';
+}
+
 function openThemCongViecHangLoatModal() {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
     document.getElementById('cvhlBody').innerHTML = '';
@@ -226,6 +234,7 @@ function openThemCongViecHangLoatModal() {
             users.filter(u => u.role !== 'ADMIN').map(u => `<option value="${u.id}">${u.name}</option>`).join('');
         sel.value = '';
     }
+    onCvhlGiaoChoChange();
 
     document.getElementById('themCongViecHangLoatModal').classList.add('active');
 }
@@ -239,6 +248,10 @@ function luuCongViecHangLoat() {
     if (rows.length === 0) { showCustomAlert('Chưa có dòng nào để lưu!', 'error'); return; }
 
     const nguoiDuocGiaoId = currentRole === 'ADMIN' ? (document.getElementById('cvhlGiaoCho').value || '') : '';
+    // Chỉ gửi phanLoai khi dropdown "Phần" đang hiện (người phụ trách được gán "Cả hai") — người có
+    // Phần mặc định cố định thì để backend tự suy ra như cũ, không gửi đè lên.
+    const phanLoai = document.getElementById('cvhlPhanGroup').style.display !== 'none'
+        ? document.getElementById('cvhlPhan').value : '';
     const payloads = [];
     for (const tr of rows) {
         const maGoiThau = tr.querySelector('.cvhl-goithau').value;
@@ -250,7 +263,7 @@ function luuCongViecHangLoat() {
             return;
         }
         payloads.push({
-            tenCongViec, maGoiThau, maHangMucList, nguoiDuocGiaoId,
+            tenCongViec, maGoiThau, maHangMucList, nguoiDuocGiaoId, phanLoai,
             ngayBatDauKH: convertDMYtoISO(tr.querySelector('.cvhl-batdau').value.trim()) || '',
             ngayKetThucKH: convertDMYtoISO(tr.querySelector('.cvhl-ketthuc').value.trim()) || ''
         });

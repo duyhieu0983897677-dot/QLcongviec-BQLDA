@@ -10,7 +10,8 @@ function include(filename) {
 const HANGMUC_HEADERS_ = ['maHangMuc', 'tenHangMuc', 'capDo', 'parentId', 'active', 'stt'];
 const GOITHAU_HEADERS_ = ['maGoiThau', 'tenGoiThau', 'maHangMucList', 'stt'];
 // CongViec: đơn vị công việc thật do Admin/Giám sát tự tạo — đây mới là nơi Nhật ký tiến độ trỏ vào.
-// phanLoai ('ho_so'/'thi_cong') tự gán = phanMacDinh của người tạo tại thời điểm tạo, không sửa tay.
+// phanLoai ('ho_so'/'thi_cong') tự gán = phanMacDinh của người tạo tại thời điểm tạo, không sửa tay
+// — trừ người có phanMacDinh='ca_hai' thì phải chọn tay lúc tạo (xem adminSaveCongViec).
 // nguoiGiao_id/nguoiGiao_ten CHỈ có giá trị khi Admin tạo Công việc và giao cho người KHÁC (khác
 // nguoiTao_id — người phụ trách); rỗng nghĩa là tự tạo/tự đảm nhận, không ai giao.
 const CONGVIEC_HEADERS_ = ['maCongViec', 'tenCongViec', 'maGoiThau', 'maHangMucList', 'phanLoai',
@@ -406,7 +407,8 @@ function listSupervisors() {
 
 // (Admin) Thêm mới hoặc sửa 1 tài khoản Giám sát trực tiếp vào tab DanhSachUser.
 // chucDanh: nhãn hiển thị tự do (vd "QS", "QAQC", "Giám sát hiện trường").
-// phanMacDinh: 'ho_so' hoặc 'thi_cong' — quyết định Công việc do người này tự tạo rơi vào phần nào.
+// phanMacDinh: 'ho_so' hoặc 'thi_cong' — quyết định Công việc do người này tự tạo rơi vào phần nào;
+// 'ca_hai' = làm cả 2 phần, phải tự chọn Phần cho từng Công việc lúc tạo (xem adminSaveCongViec).
 function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPassword, chucDanh, phanMacDinh) {
   const adminUser = login(adminId, adminPass);
   if (adminUser.role !== 'ADMIN') throw new Error("Chỉ Quản trị mới có quyền quản lý tài khoản!");
@@ -698,10 +700,20 @@ function adminSaveCongViec(userId, password, congViec) {
       : 'Tài khoản của bạn chưa được Quản trị gán Phần mặc định (Chức danh). Vui lòng liên hệ Quản trị trước khi tự tạo Công việc.');
   }
 
+  // "Cả hai" (phanMacDinh='ca_hai') không tự suy ra được — bắt buộc client gửi kèm phanLoai
+  // (xem dropdown "Phần" ở modal Thêm công việc hàng loạt, 4_ViecCuaToi.html).
+  let phanLoai = phanMacDinh;
+  if (phanMacDinh === 'ca_hai') {
+    phanLoai = String(congViec.phanLoai || '').trim();
+    if (phanLoai !== 'ho_so' && phanLoai !== 'thi_cong') {
+      throw new Error(`Nhân sự "${nguoiPhuTrachTen}" được gán "Cả hai" — vui lòng chọn Phần (Hồ sơ/Thi công) cho công việc này!`);
+    }
+  }
+
   const now = new Date();
   const newId = sinhMaCongViec_(sheet, now);
   sheet.appendRow([
-    newId, tenCongViec, maGoiThau, maHangMucJoined, phanMacDinh,
+    newId, tenCongViec, maGoiThau, maHangMucJoined, phanLoai,
     nguoiPhuTrachId, nguoiPhuTrachTen,
     congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '', true,
     nguoiGiaoId, nguoiGiaoTen
