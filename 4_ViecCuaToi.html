@@ -68,8 +68,8 @@ function renderCongViecRow(cv) {
         <td class="text-center"><span class="bc-badge ${status}">${TRANGTHAI_LABEL[status] || '--'}</span></td>
         <td class="text-center">
             ${isDeleted ? `<span class="deleted-label">Đã xóa</span>` : (editable ? `<div class="action-cell">
-                <button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')"><i class="fa-solid fa-trash"></i></button>
+                <button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')" aria-label="Sửa công việc" title="Sửa công việc"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')" aria-label="Xóa công việc" title="Xóa công việc"><i class="fa-solid fa-trash"></i></button>
             </div>` : '')}
         </td>
     </tr>`;
@@ -202,7 +202,7 @@ function themDongCongViec() {
         <td><input type="text" class="form-control cvhl-ten" placeholder="Tên công việc"></td>
         <td><input type="text" class="form-control cvhl-batdau" placeholder="dd/mm/yyyy"></td>
         <td><input type="text" class="form-control cvhl-ketthuc" placeholder="dd/mm/yyyy"></td>
-        <td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="xoaDongCongViec(${rowId})" title="Xóa dòng"><i class="fa-solid fa-xmark"></i></button></td>
+        <td class="text-center"><button type="button" class="btn btn-sm btn-danger" onclick="xoaDongCongViec(${rowId})" aria-label="Xóa dòng" title="Xóa dòng"><i class="fa-solid fa-xmark"></i></button></td>
     `;
     tbody.appendChild(tr);
     fillCvhlGoiThauSelect_(tr.querySelector('.cvhl-goithau'));

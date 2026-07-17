@@ -43,7 +43,7 @@ let bcBarChartInstance = null;
 // pending giờ dùng màu hổ phách (trước là xám #94A3B8) — màu này thừa lại từ trạng thái "Trễ tiến
 // độ nhưng hoàn thành" đã gộp vào "overdue" (Trễ tiến độ), không còn tách riêng nữa (xem getData()
 // ở Code.js và TRANGTHAI_LABEL ở 0_TienIch.html).
-const BC_STATUS_COLORS = { pending: '#FBBF24', inprogress: '#60A5FA', done: '#34D399', overdue: '#F87171' };
+const BC_STATUS_COLORS = { pending: '#E8A93D', inprogress: '#1B7A8C', done: '#4F8B62', overdue: '#C4432E' };
 
 // Chart.js không có sẵn kiểu nhãn % kéo "râu" ra ngoài lát cắt (kiểu Excel/Google Sheets) — tự vẽ
 // bằng 1 plugin nhỏ, không cần thêm thư viện ngoài. Bỏ qua lát cắt = 0 (không có gì để chỉ vào).
@@ -72,7 +72,7 @@ const PIE_OUTSIDE_LABELS_PLUGIN = {
             const goRight = cos >= 0;
             const p3x = p2x + (goRight ? 14 : -14), p3y = p2y;
 
-            ctx.strokeStyle = '#94A3B8';
+            ctx.strokeStyle = '#9A9184';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(p1x, p1y);
@@ -80,7 +80,7 @@ const PIE_OUTSIDE_LABELS_PLUGIN = {
             ctx.lineTo(p3x, p3y);
             ctx.stroke();
 
-            ctx.fillStyle = '#334155';
+            ctx.fillStyle = '#26313A';
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textBaseline = 'middle';
             ctx.textAlign = goRight ? 'left' : 'right';
@@ -103,8 +103,27 @@ function renderBcCongViecPanel() {
     document.getElementById('bc-kpi-total').textContent = bcAllCongViec.length;
     renderBcCharts();
     fillBcDetailSelect();
+    fillBcDetailExtraFilters();
     renderBcColToggle();
     renderBcDetail();
+}
+
+// Đổ dropdown "Người phụ trách" / "Chức danh" cho Báo cáo chi tiết — chỉ đổ 1 lần (options.length<=1)
+// giống fillBcDetailSelect ở tab Công việc cá nhân, để không mất lựa chọn hiện tại mỗi lần render lại.
+function fillBcDetailExtraFilters() {
+    const gsSelect = document.getElementById('bcDetailGS');
+    if (gsSelect && gsSelect.options.length <= 1) {
+        const ids = [...new Set(bcAllCongViec.map(cv => cv.nguoiTaoId).filter(Boolean))];
+        ids.sort((a, b) => nameOfUser(a).localeCompare(nameOfUser(b), 'vi'));
+        gsSelect.innerHTML = '<option value="">-- Tất cả người phụ trách --</option>' +
+            ids.map(id => `<option value="${id}">${nameOfUser(id)}</option>`).join('');
+    }
+    const cdSelect = document.getElementById('bcDetailChucDanh');
+    if (cdSelect && cdSelect.options.length <= 1) {
+        const chucDanhs = [...new Set((users || []).map(u => u.chucDanh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+        cdSelect.innerHTML = '<option value="">-- Tất cả chức danh --</option>' +
+            chucDanhs.map(cd => `<option value="${cd}">${cd}</option>`).join('');
+    }
 }
 
 function renderBcCharts() {
@@ -253,9 +272,21 @@ function renderBcDetail() {
         return;
     }
 
-    const rows = bcAllCongViec.filter(cv => type === 'goithau' ? cv.maGoiThau === val : (cv.maHangMucList || []).includes(val));
+    const fGS = document.getElementById('bcDetailGS').value;
+    const fChucDanh = document.getElementById('bcDetailChucDanh').value;
+    const fStatus = document.getElementById('bcDetailTrangThai').value;
+    const fSearch = document.getElementById('bcDetailSearch').value.trim().toLowerCase();
+
+    const rows = bcAllCongViec.filter(cv => {
+        if (type === 'goithau' ? cv.maGoiThau !== val : !(cv.maHangMucList || []).includes(val)) return false;
+        if (fGS && cv.nguoiTaoId !== fGS) return false;
+        if (fChucDanh && chucDanhOfUser(cv.nguoiTaoId) !== fChucDanh) return false;
+        if (fStatus && cv.trangThaiMau !== fStatus) return false;
+        if (fSearch && !cv.tenCongViec.toLowerCase().includes(fSearch)) return false;
+        return true;
+    });
     if (rows.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${BC_DETAIL_COLSPAN}" class="text-center" style="color:gray; padding:15px;">Chưa có công việc nào.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${BC_DETAIL_COLSPAN}" class="text-center" style="color:gray; padding:15px;">Không có công việc nào khớp bộ lọc.</td></tr>`;
         return;
     }
 
@@ -535,8 +566,8 @@ function renderCpSCurveChart_(planMonthlyMap, monthlyMap) {
         data: {
             labels,
             datasets: [
-                { label: 'Kế hoạch lũy kế', data: planData, borderColor: '#FBBF24', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#FBBF24' },
-                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(52,211,153,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
+                { label: 'Kế hoạch lũy kế', data: planData, borderColor: '#E8A93D', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#E8A93D' },
+                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(79,139,98,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
             ]
         },
         options: {

@@ -104,7 +104,7 @@ function confirmPassword() {
 
     const btnSubmit = passInput.parentElement.nextElementSibling.querySelector('button');
     const originalText = btnSubmit.innerHTML;
-    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải...';
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang tải…';
     btnSubmit.disabled = true;
 
     if (typeof google !== 'undefined') {
@@ -173,7 +173,7 @@ function submitChangePassword() {
     if (typeof google !== 'undefined') {
         const btn = document.getElementById('changePassModal').querySelector('button');
         const origText = btn.innerHTML;
-        btn.innerHTML = 'Đang xử lý...'; btn.disabled = true;
+        btn.innerHTML = 'Đang xử lý…'; btn.disabled = true;
 
         google.script.run
         .withSuccessHandler(function() {

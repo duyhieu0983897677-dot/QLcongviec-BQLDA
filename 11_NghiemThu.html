@@ -133,7 +133,7 @@ function importNghiemThuFromExcel() {
         });
         chain.then(() => {
             let msg = `Đã nhập Nghiệm thu cho ${ok} hạng mục.`;
-            if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '...' : '');
+            if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '…' : '');
             showCustomAlert(msg, ok > 0 ? 'success' : 'error');
             fileInput.value = '';
             reloadHopDongData();

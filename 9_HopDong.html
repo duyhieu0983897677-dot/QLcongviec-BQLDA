@@ -101,18 +101,18 @@ function renderHopDongList() {
             const g = goiThau.find(x => x.maGoiThau === hd.maGoiThau);
             const dangChon = hd.maHopDong === currentHopDongId;
             return `<tr class="${dangChon ? 'hd-row-active' : ''}">
-                <td>${hd.tenHopDong}${dangChon ? ' <span class="bc-badge inprogress">Đang xem</span>' : ''}</td>
+                <td><span class="mono">${hd.tenHopDong}</span>${dangChon ? ' <span class="bc-badge inprogress">Đang xem</span>' : ''}</td>
                 <td>${hd.nhaThau || '--'}</td>
                 <td>${g ? g.tenGoiThau : '--'}</td>
                 <td class="text-center">${formatVN(hd.ngayKy)}</td>
                 <td class="text-right">${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</td>
                 <td class="text-center">
                     <div class="action-cell">
-                        <button class="btn btn-sm" style="background:var(--primary);" onclick="chonHopDong('${hd.maHopDong}', 'boq')" title="Xem BOQ"><i class="fa-solid fa-list-check"></i></button>
-                        <button class="btn btn-sm" style="background:var(--info);" onclick="chonHopDong('${hd.maHopDong}', 'thanhtoan')" title="Xem Thanh toán"><i class="fa-solid fa-money-check-dollar"></i></button>
+                        <button class="btn btn-sm" style="background:var(--primary);" onclick="chonHopDong('${hd.maHopDong}', 'boq')" aria-label="Xem BOQ" title="Xem BOQ"><i class="fa-solid fa-list-check"></i></button>
+                        <button class="btn btn-sm" style="background:var(--info);" onclick="chonHopDong('${hd.maHopDong}', 'thanhtoan')" aria-label="Xem Thanh toán" title="Xem Thanh toán"><i class="fa-solid fa-money-check-dollar"></i></button>
                         ${canEditHopDong() ? `
-                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openHopDongModal('${hd.maHopDong}')"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteHopDong('${hd.maHopDong}')"><i class="fa-solid fa-trash"></i></button>` : ''}
+                        <button class="btn btn-sm" style="background:var(--accent);" onclick="openHopDongModal('${hd.maHopDong}')" aria-label="Sửa Hợp đồng" title="Sửa Hợp đồng"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteHopDong('${hd.maHopDong}')" aria-label="Xóa Hợp đồng" title="Xóa Hợp đồng"><i class="fa-solid fa-trash"></i></button>` : ''}
                     </div>
                 </td>
             </tr>`;

@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <!-- defer: không chặn parse HTML/chạy script chính — Chart.js/flatpickr chỉ thật sự cần sau
@@ -24,6 +24,7 @@
     <?!= include('Style'); ?>
 </head>
 <body class="role-view view-only-mode">
+    <a href="#main-content" class="skip-link">Bỏ qua tới nội dung chính</a>
 
     <header class="header">
         <div class="brand">
@@ -36,7 +37,7 @@
 
         <div class="header-actions">
             <div class="js-bell-wrap bell-wrap">
-                <button class="js-bell-btn bell-btn" onclick="toggleThongBaoPanel()" title="Thông báo">
+                <button class="js-bell-btn bell-btn" onclick="toggleThongBaoPanel()" aria-label="Thông báo" title="Thông báo">
                     <i class="fa-solid fa-bell"></i>
                     <span class="js-bell-badge bell-badge">0</span>
                 </button>
@@ -64,7 +65,7 @@
             </div>
             <div class="sidebar-login">
                 <div class="js-bell-wrap bell-wrap">
-                    <button class="js-bell-btn bell-btn" onclick="toggleThongBaoPanel()" title="Thông báo">
+                    <button class="js-bell-btn bell-btn" onclick="toggleThongBaoPanel()" aria-label="Thông báo" title="Thông báo">
                         <i class="fa-solid fa-bell"></i>
                         <span class="js-bell-badge bell-badge">0</span>
                     </button>
@@ -113,7 +114,7 @@
             </div>
         </aside>
 
-    <main class="container">
+    <main class="container" id="main-content" tabindex="-1">
 
         <!-- TRANG CHỦ (chỉ hiện trên điện thoại, <768px) -->
         <section id="home" class="tab-content home-screen">
@@ -125,7 +126,7 @@
                 <button class="nav-btn home-tile" onclick="switchTab('dashboard')" style="--tile-c: var(--primary);">
                     <i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span>
                 </button>
-                <button class="nav-btn home-tile" onclick="switchTab('hopdong')" style="--tile-c: #0e7c9c;">
+                <button class="nav-btn home-tile" onclick="switchTab('hopdong')" style="--tile-c: #2C93A6;">
                     <i class="fa-solid fa-file-contract"></i><span>Hợp đồng</span>
                 </button>
             </div>
@@ -133,12 +134,12 @@
                 <button class="nav-btn home-tile" onclick="switchTab('congviectoi')" style="--tile-c: var(--accent);">
                     <i class="fa-solid fa-list-check"></i><span>Công việc cá nhân</span>
                 </button>
-                <button class="nav-btn home-tile" onclick="switchTab('tiendothicong')" style="--tile-c: #b45309;">
+                <button class="nav-btn home-tile" onclick="switchTab('tiendothicong')" style="--tile-c: #A8620E;">
                     <i class="fa-solid fa-chart-gantt"></i><span>Tiến độ</span>
                 </button>
             </div>
             <div class="home-tiles">
-                <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #64748b;">
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #7A7264;">
                     <i class="fa-solid fa-sitemap"></i><span>Gói thầu/Hạng mục</span>
                 </button>
                 <button class="nav-btn home-tile" onclick="switchTab('diemdanh')" style="--tile-c: #b8860b;">
@@ -146,7 +147,7 @@
                 </button>
             </div>
             <div class="home-tiles">
-                <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7c3aed;">
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7C5A8B;">
                     <i class="fa-solid fa-users-gear"></i><span>Nhân sự</span>
                 </button>
             </div>
@@ -157,7 +158,7 @@
             <div class="dash-header" style="background: linear-gradient(135deg, var(--navy), var(--primary-dark)); color:white; padding:8px 14px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                 <div>
                     <h2 style="font-size:0.92rem; margin:0;"><i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG — <span id="bc-kpi-total">0</span> công việc</h2>
-                    <p style="font-size:0.7rem; color:#cbd5e1; margin:1px 0 0;">Tự động tổng hợp từ Nhật ký tiến độ · Cập nhật lúc <span id="bcUpdatedAt">--</span></p>
+                    <p style="font-size:0.7rem; color:#C9D6D2; margin:1px 0 0;">Tự động tổng hợp từ Nhật ký tiến độ · Cập nhật lúc <span id="bcUpdatedAt">--</span></p>
                 </div>
                 <button class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="reloadData()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
             </div>
@@ -192,6 +193,20 @@
                             <option value="hangmuc">Xem theo Hạng mục</option>
                         </select>
                         <select id="bcDetailSelect" class="hd-select" onchange="renderBcDetail()"></select>
+                        <select id="bcDetailGS" class="hd-select" onchange="renderBcDetail()">
+                            <option value="">-- Tất cả người phụ trách --</option>
+                        </select>
+                        <select id="bcDetailChucDanh" class="hd-select" onchange="renderBcDetail()">
+                            <option value="">-- Tất cả chức danh --</option>
+                        </select>
+                        <select id="bcDetailTrangThai" class="hd-select" onchange="renderBcDetail()">
+                            <option value="">-- Tất cả trạng thái --</option>
+                            <option value="pending">Chờ thực hiện</option>
+                            <option value="inprogress">Đang thực hiện</option>
+                            <option value="done">Hoàn thành</option>
+                            <option value="overdue">Trễ tiến độ</option>
+                        </select>
+                        <input type="text" id="bcDetailSearch" placeholder="Tìm tên công việc…" oninput="renderBcDetail()" style="flex:1; min-width:180px;">
                         <div class="col-toggle-wrap">
                             <button type="button" class="btn btn-sm col-toggle-btn" onclick="toggleBcColPanel()"><i class="fa-solid fa-table-columns"></i> Cột hiển thị</button>
                             <div id="bcColTogglePanel" class="col-toggle-panel">
@@ -537,7 +552,7 @@
                         <option value="done">Hoàn thành</option>
                         <option value="overdue">Trễ tiến độ</option>
                     </select>
-                    <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục..." oninput="renderCongViecCaNhan()" style="flex:1; min-width:180px;">
+                    <input type="text" id="filterSearch" placeholder="Tìm công việc / mã Hạng mục…" oninput="renderCongViecCaNhan()" style="flex:1; min-width:180px;">
                 </div>
                 <div class="table-responsive">
                     <table class="data-table">
@@ -634,7 +649,7 @@
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Mã Hạng mục</label>
-                <input type="text" id="hmMaHangMuc" class="form-control" placeholder="VD: 90, 90.1, II...">
+                <input type="text" id="hmMaHangMuc" class="form-control" placeholder="VD: 90, 90.1, II…">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Tên Hạng mục</label>
@@ -671,7 +686,7 @@
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Tên gói thầu</label>
-                <input type="text" id="gtTen" class="form-control" placeholder="VD: Gói thầu kết cấu & hoàn thiện thô HM 2,3,4...">
+                <input type="text" id="gtTen" class="form-control" placeholder="VD: Gói thầu kết cấu & hoàn thiện thô HM 2,3,4…">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Các Hạng mục thuộc gói thầu này</label>
@@ -702,7 +717,7 @@
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Tên công việc</label>
-                <input type="text" id="cvTen" class="form-control" placeholder="Người phụ trách tự đặt tên...">
+                <input type="text" id="cvTen" class="form-control" placeholder="Người phụ trách tự đặt tên…">
             </div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
                 <div class="form-group"><label>Bắt đầu</label><input type="text" id="cvBatDau" class="form-control" placeholder="dd/mm/yyyy"></div>
@@ -716,8 +731,8 @@
                 </label>
                 <div id="cvCommentList" class="cv-comment-list"></div>
                 <div class="cv-comment-input-row">
-                    <textarea id="cvCommentInput" class="form-control" rows="2" placeholder="Nhập bình luận..."></textarea>
-                    <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="guiBinhLuanCongViec()"><i class="fa-solid fa-paper-plane"></i></button>
+                    <textarea id="cvCommentInput" class="form-control" rows="2" placeholder="Nhập bình luận…"></textarea>
+                    <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="guiBinhLuanCongViec()" aria-label="Gửi bình luận" title="Gửi bình luận"><i class="fa-solid fa-paper-plane"></i></button>
                 </div>
             </div>
 
@@ -735,7 +750,7 @@
             <input type="hidden" id="userEditId">
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Tên đăng nhập (ID) — không dấu, không trùng</label>
-                <input type="text" id="userLoginId" class="form-control" placeholder="vd: mr.lam">
+                <input type="text" id="userLoginId" class="form-control" placeholder="vd: mr.lam" autocomplete="off" spellcheck="false">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Họ tên hiển thị</label>
@@ -749,7 +764,7 @@
                 </select>
             </div>
             <div class="form-group" style="margin-bottom:10px;">
-                <label>Chức danh <span style="font-weight:400; color:var(--text-muted);">(vd: QS, QAQC, Giám sát hiện trường...)</span></label>
+                <label>Chức danh <span style="font-weight:400; color:var(--text-muted);">(vd: QS, QAQC, Giám sát hiện trường…)</span></label>
                 <input type="text" id="userChucDanh" class="form-control" placeholder="vd: Giám sát hiện trường">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
@@ -762,7 +777,7 @@
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Mật khẩu <span id="userPassHint" style="font-weight:400; color:var(--text-muted);">(để trống nếu không đổi)</span></label>
-                <input type="text" id="userPassword" class="form-control" placeholder="Mật khẩu ban đầu...">
+                <input type="text" id="userPassword" class="form-control" placeholder="Mật khẩu ban đầu…" autocomplete="new-password" spellcheck="false">
             </div>
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveUserModal()">Lưu</button>
@@ -1104,10 +1119,10 @@
             <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">Nhập ID và Mật khẩu để bắt đầu.</p>
 
             <div class="form-group" style="margin-bottom: 15px;">
-                <input type="text" id="adminUsernameInput" class="form-control" placeholder="Tên đăng nhập (ID)..." style="text-align: center; font-size: 1.1rem;">
+                <input type="text" id="adminUsernameInput" class="form-control" placeholder="Tên đăng nhập (ID)…" autocomplete="username" spellcheck="false" style="text-align: center; font-size: 1.1rem;">
             </div>
             <div class="form-group" style="margin-bottom: 15px;">
-                <input type="password" id="adminPasswordInput" class="form-control" placeholder="Mật khẩu..." style="text-align: center; font-size: 1.1rem; letter-spacing: 3px;" onkeydown="if(event.key === 'Enter') confirmPassword();">
+                <input type="password" id="adminPasswordInput" class="form-control" placeholder="Mật khẩu…" autocomplete="current-password" spellcheck="false" style="text-align: center; font-size: 1.1rem; letter-spacing: 3px;" onkeydown="if(event.key === 'Enter') confirmPassword();">
             </div>
 
             <div style="display:flex; gap: 10px; margin-top: 20px;">
@@ -1121,9 +1136,9 @@
     <div id="changePassModal" class="modal" style="z-index: 9999;">
         <div class="modal-content" style="max-width: 400px; text-align: center; padding: 2rem;">
             <h3 style="margin-bottom: 20px; color: var(--primary-dark); font-size: 1.2rem;"><i class="fa-solid fa-key"></i> ĐỔI MẬT KHẨU</h3>
-            <div class="form-group"><input type="password" id="oldPassInput" class="form-control" placeholder="Mật khẩu HIỆN TẠI..." style="text-align: center; margin-bottom:10px;"></div>
-            <div class="form-group"><input type="password" id="newPassInput" class="form-control" placeholder="Mật khẩu MỚI..." style="text-align: center; margin-bottom:10px;"></div>
-            <div class="form-group"><input type="password" id="confirmNewPassInput" class="form-control" placeholder="Nhập lại mật khẩu MỚI..." style="text-align: center; margin-bottom:20px;"></div>
+            <div class="form-group"><input type="password" id="oldPassInput" class="form-control" placeholder="Mật khẩu HIỆN TẠI…" autocomplete="current-password" spellcheck="false" style="text-align: center; margin-bottom:10px;"></div>
+            <div class="form-group"><input type="password" id="newPassInput" class="form-control" placeholder="Mật khẩu MỚI…" autocomplete="new-password" spellcheck="false" style="text-align: center; margin-bottom:10px;"></div>
+            <div class="form-group"><input type="password" id="confirmNewPassInput" class="form-control" placeholder="Nhập lại mật khẩu MỚI…" autocomplete="new-password" spellcheck="false" style="text-align: center; margin-bottom:20px;"></div>
             <div style="display:flex; gap: 10px;">
                 <button class="btn" onclick="submitChangePassword()" style="background-color: var(--success); flex: 1;">Xác nhận</button>
                 <button class="btn btn-danger" onclick="closeChangePassModal()" style="flex: 1;">Hủy</button>
@@ -1133,7 +1148,7 @@
 
     <!-- MODAL CẢNH BÁO / THÔNG BÁO -->
     <div id="alertModal" class="modal" style="z-index: 99999;">
-        <div id="alertModalContent" class="modal-content construction-modal modal-error" style="max-width: 400px; text-align: center; padding-top: 2rem;">
+        <div id="alertModalContent" class="modal-content construction-modal modal-error" style="max-width: 400px; text-align: center; padding-top: 2rem;" role="alert" aria-live="assertive">
             <div id="alertIcon" style="font-size: 3.5rem; margin-bottom: 10px;"><i class="fa-solid fa-triangle-exclamation"></i></div>
             <h3 id="alertTitle" style="margin-bottom: 10px; font-size: 1.3rem;">CẢNH BÁO</h3>
             <p id="alertMessage" style="color: var(--text-muted); margin-bottom: 20px;"></p>

@@ -89,8 +89,8 @@ function renderBOQTree() {
                     <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
                     <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
                     ${editable ? `<span class="action-cell" style="float:right;" onclick="event.stopPropagation();">
-                        <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')"><i class="fa-solid fa-trash"></i></button>
+                        <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')" aria-label="Sửa hạng mục" title="Sửa hạng mục"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')" aria-label="Xóa hạng mục" title="Xóa hạng mục"><i class="fa-solid fa-trash"></i></button>
                     </span>` : ''}
                 </td>
             </tr>`;
@@ -108,8 +108,8 @@ function renderBOQTree() {
             <td class="text-center">${formatVN(b.ngayBatDauKH)} - ${formatVN(b.ngayKetThucKH)}</td>
             <td class="text-center">
                 ${editable ? `<div class="action-cell">
-                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')" aria-label="Sửa hạng mục" title="Sửa hạng mục"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')" aria-label="Xóa hạng mục" title="Xóa hạng mục"><i class="fa-solid fa-trash"></i></button>
                 </div>` : '--'}
             </td>
         </tr>`;
@@ -212,7 +212,7 @@ function renderPhuLucList() {
                 ${vohieu ? '<span class="bc-badge overdue">Đã vô hiệu hóa</span>' : ''}
                 ${editable ? `<span class="action-cell" style="float:right;">
                     ${!vohieu ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="openThayDoiModal('${pl.maPhuLuc}')"><i class="fa-solid fa-plus"></i> Thay đổi</button>` : ''}
-                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openPhuLucModal('${pl.maPhuLuc}')"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn btn-sm" style="background:var(--accent);" onclick="openPhuLucModal('${pl.maPhuLuc}')" aria-label="Sửa Phụ lục" title="Sửa Phụ lục"><i class="fa-solid fa-pen"></i></button>
                     <button class="btn btn-sm ${vohieu ? '' : 'btn-danger'}" style="${vohieu ? 'background:var(--success);' : ''}" onclick="toggleTrangThaiPhuLuc('${pl.maPhuLuc}')">${vohieu ? '<i class="fa-solid fa-rotate-left"></i> Khôi phục' : '<i class="fa-solid fa-ban"></i> Vô hiệu hóa'}</button>
                 </span>` : ''}
             </div>

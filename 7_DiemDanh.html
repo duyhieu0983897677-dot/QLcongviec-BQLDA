@@ -46,7 +46,7 @@ function renderDiemDanh() {
 }
 
 function loadDiemDanh(thang) {
-    document.getElementById('ddBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Đang tải...</td></tr>';
+    document.getElementById('ddBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Đang tải…</td></tr>';
     gsRun('getDiemDanhPhep', thang)
         .then(json => { ddData = JSON.parse(json); renderDiemDanhTable(); })
         .catch(handleBackendError);

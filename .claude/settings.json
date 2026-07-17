@@ -25,7 +25,12 @@
       "Bash(npx skills *)",
       "Bash(node -e \"const fs=require\\('fs'\\); let src=fs.readFileSync\\('4_ViecCuaToi.html','utf8'\\); src=src.replace\\(/^<script>/,''\\).replace\\(/<\\\\/script>\\\\s*\\\\$/,''\\); new Function\\(src\\); console.log\\('4_ViecCuaToi.html OK'\\);\")",
       "Bash(npx clasp *)",
-      "WebFetch(domain:docs.google.com)"
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(xargs -I{} grep -n '\\\\.\\\\.\\\\.' {})",
+      "Read(//d/04. CODE BQLDA/02. CODE CẬP НХThấy MỚI NHẤT/01. CODE CONGVIEC/**)",
+      "Bash(sort -t: -k2)",
+      "Bash(uniq -c -f1)"
     ]
   }
 }

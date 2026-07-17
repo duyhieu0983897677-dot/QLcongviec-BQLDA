@@ -41,7 +41,7 @@ function renderHangMucRefList() {
         stt++;
         let rows = `<tr>
             <td class="text-center">${stt}</td>
-            <td>${node.maHangMuc}</td>
+            <td class="mono">${node.maHangMuc}</td>
             <td style="padding-left:${depth * 18}px;">${node.tenHangMuc}</td>
         </tr>`;
         (childrenByParent[node.maHangMuc] || []).forEach(child => { rows += renderNode(child, depth + 1); });

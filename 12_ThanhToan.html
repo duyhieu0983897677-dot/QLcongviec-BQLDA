@@ -62,8 +62,8 @@ function renderThanhToan() {
             <div class="pl-item-head">
                 <b>${r.tenDot}</b> <span class="pl-item-date">${formatVN(r.ngayThanhToan)} · ${r.phanTramThanhToan}%</span>
                 ${editable ? `<span class="action-cell" style="float:right;">
-                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openDieuChinhModal('${r.maDotThanhToan}')" title="Sửa điều chỉnh"><i class="fa-solid fa-sliders"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteDotThanhToan('${r.maDotThanhToan}')"><i class="fa-solid fa-trash"></i></button>
+                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openDieuChinhModal('${r.maDotThanhToan}')" aria-label="Sửa điều chỉnh" title="Sửa điều chỉnh"><i class="fa-solid fa-sliders"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteDotThanhToan('${r.maDotThanhToan}')" aria-label="Xóa Đợt thanh toán" title="Xóa Đợt thanh toán"><i class="fa-solid fa-trash"></i></button>
                 </span>` : ''}
             </div>
             <div class="pl-item-note">
@@ -154,7 +154,7 @@ function importThanhToanFromExcel() {
             if (input) { input.value = qty; ok++; }
         });
         let msg = `Đã điền khối lượng cho ${ok} hạng mục vào danh sách bên dưới.`;
-        if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '...' : '');
+        if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '…' : '');
         showCustomAlert(msg, ok > 0 ? 'success' : 'error');
         fileInput.value = '';
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));

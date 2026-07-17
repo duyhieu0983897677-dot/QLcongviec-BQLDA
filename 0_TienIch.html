@@ -314,7 +314,7 @@ function commentBadgeHtml(cv) {
     if (!n) return '';
     const lines = (cv.recentComments || []).slice().reverse()
         .map(c => `${c.nguoiBinhLuanTen} (${c.thoiGian}): ${c.noiDung}`);
-    if (n > lines.length) lines.push(`... và ${n - lines.length} bình luận khác`);
+    if (n > lines.length) lines.push(`… và ${n - lines.length} bình luận khác`);
     return `<span class="comment-badge" title="${escapeHtml(lines.join('\n'))}"><i class="fa-solid fa-comment"></i>${n}</span>`;
 }
 </script>
