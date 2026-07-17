@@ -237,13 +237,13 @@ function fillBcDetailSelect() {
     const type = document.getElementById('bcDetailType').value;
     const sel = document.getElementById('bcDetailSelect');
     const currentVal = sel.value;
-    let html = '';
+    let html = type === 'goithau' ? '<option value="">-- Tất cả Gói thầu --</option>' : '<option value="">-- Tất cả Hạng mục --</option>';
     if (type === 'goithau') {
-        html = goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        html += goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
     } else {
-        html = hangMuc.map(h => `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`).join('');
+        html += hangMuc.map(h => `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`).join('');
     }
-    sel.innerHTML = html || '<option value="">-- Chưa có dữ liệu --</option>';
+    sel.innerHTML = html;
     if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal;
 }
 
@@ -267,18 +267,14 @@ function renderBcDetail() {
     const val = document.getElementById('bcDetailSelect').value;
     const tbody = document.getElementById('bcDetailBody');
 
-    if (!val) {
-        tbody.innerHTML = `<tr><td colspan="${BC_DETAIL_COLSPAN}" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu.</td></tr>`;
-        return;
-    }
-
     const fGS = document.getElementById('bcDetailGS').value;
     const fChucDanh = document.getElementById('bcDetailChucDanh').value;
     const fStatus = document.getElementById('bcDetailTrangThai').value;
     const fSearch = document.getElementById('bcDetailSearch').value.trim().toLowerCase();
 
     const rows = bcAllCongViec.filter(cv => {
-        if (type === 'goithau' ? cv.maGoiThau !== val : !(cv.maHangMucList || []).includes(val)) return false;
+        // val rỗng = "Tất cả Gói thầu/Hạng mục" — không lọc theo Gói thầu/Hạng mục nữa.
+        if (val && (type === 'goithau' ? cv.maGoiThau !== val : !(cv.maHangMucList || []).includes(val))) return false;
         if (fGS && cv.nguoiTaoId !== fGS) return false;
         if (fChucDanh && chucDanhOfUser(cv.nguoiTaoId) !== fChucDanh) return false;
         if (fStatus && cv.trangThaiMau !== fStatus) return false;

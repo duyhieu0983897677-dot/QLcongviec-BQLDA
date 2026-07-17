@@ -17,6 +17,10 @@
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); padding-bottom: 80px; scroll-behavior: smooth; }
+        /* Đồng bộ font tiêu đề cho MỌI thẻ h1-h4 toàn trang (tiêu đề modal, section...) thay vì chỉ
+           vài class riêng lẻ (.card-title, .bc-title...) — trước đây các <h3> tiêu đề modal không có
+           class vẫn thừa hưởng Inter của body, nhìn lệch tông với phần đã đổi font. */
+        h1, h2, h3, h4 { font-family: var(--font-display); }
         .mono { font-family: var(--font-mono); letter-spacing: 0.2px; }
 
         /* Ẩn ngoài màn hình cho tới khi được focus bằng bàn phím (Tab) — cho người dùng bàn phím
@@ -286,6 +290,8 @@
         .t-name-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
         .t-name { font-weight: 600; color: var(--text-main); display: inline-block; max-width: 260px;
             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+        /* Báo cáo chi tiết: Tên công việc không cần in đậm (khác bảng Công việc cá nhân). */
+        #bcDetailTable .t-name { font-weight: 400; }
         .task-name-cell .t-target { font-size: 0.76rem; color: var(--text-muted); display: inline-block;
             max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* Chấm số bình luận cạnh tên công việc — công khai, ai cũng xem được, rê chuột hiện nội dung. */
