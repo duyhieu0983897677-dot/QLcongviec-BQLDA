@@ -9,6 +9,9 @@
             --primary: #3B82F6; --primary-dark: #2563EB; --accent: #34D399;
             --success: #34D399; --bg: #F1F5F9; --card-bg: #FFFFFF;
             --text-main: #334155; --text-muted: #64748B; --danger: #F87171; --border: #E2E8F0;
+            /* Viền dọc giữa các cột bảng — nhạt hơn hẳn --border (viền ngang phân hàng) để bảng
+               vẫn phân được ranh giới cột (giữ dễ đọc) mà không tạo lưới đối chọi với badge màu. */
+            --border-faint: #EEF2F7;
             --navy: #1E293B; --navy-light: #334155; --header-h: 64px; --sidebar-w: 260px;
             --font-display: 'Inter', sans-serif;
             --font-mono: 'Inter', sans-serif;
@@ -187,10 +190,12 @@
         .bc-charts-grid { display: grid; grid-template-columns: 1fr; gap: 24px; align-items: start; }
         .bc-bar-scroll { overflow-x: auto; }
         #bcBarChartInner { height: 260px; }
-        .bc-group-row td { background: #f8fafc; color: var(--primary-dark); font-weight: 700; text-align: left !important; font-size: 0.85rem; padding: 0.55rem 0.6rem; }
+        .bc-group-row td { background: #f8fafc; color: var(--primary-dark); font-weight: 700; text-align: left !important; font-size: 0.85rem; padding: 0.55rem 0.6rem; border-right: none; }
         /* Cấp con của bc-group-row — nhạt + thụt lề hơn để phân biệt rõ "Phần" (cấp trên) với
-           "Gói thầu" (cấp dưới) khi xem gộp nhiều Gói thầu cùng lúc ("Tất cả Gói thầu"). */
-        .bc-subgroup-row td { background: var(--card-bg); color: var(--text-muted); font-weight: 600; text-align: left !important; font-size: 0.8rem; padding: 0.4rem 0.6rem 0.4rem 1.5rem; border-left: 3px solid var(--border); }
+           "Gói thầu" (cấp dưới) khi xem gộp nhiều Gói thầu cùng lúc ("Tất cả Gói thầu"). Viền trái
+           nhạt (--border-faint) thay cho 3px --border cũ — chỉ đủ làm mốc phân cấp, không đóng
+           khung gắt như trước. */
+        .bc-subgroup-row td { background: var(--card-bg); color: var(--text-muted); font-weight: 600; text-align: left !important; font-size: 0.8rem; padding: 0.4rem 0.6rem 0.4rem 1.5rem; border-left: 2px solid var(--border-faint); border-right: none; }
         /* LƯU Ý: display:flex đặt thẳng lên <td> sẽ khiến vertical-align bị bỏ qua (nội dung dạt
            lên đỉnh ô thay vì canh giữa khi hàng bị kéo cao do cột khác xuống dòng nhiều) — nên đặt
            flex lên 1 div bọc bên trong (.bc-bar-flex), còn <td> giữ nguyên vertical-align:middle. */
@@ -270,7 +275,10 @@
 
         .table-responsive { width: 100%; overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); margin-top: 10px;}
         .data-table { width: 100%; border-collapse: collapse; min-width: 750px; font-size: 0.9rem; }
-        .data-table th, .data-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 0.75rem 0.6rem; }
+        .data-table th, .data-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-faint); padding: 0.75rem 0.6rem; }
+        .data-table th:last-child, .data-table td:last-child { border-right: none; }
+        /* Tô nhẹ nền cả hàng khi rê chuột — giúp dò theo hàng ngang mà không cần viền dọc đậm. */
+        .data-table tbody tr:hover td { background-color: #f8fafc; }
         /* Tiêu đề cột luôn nhỏ hơn + in hoa để phân biệt rõ với nội dung bảng — trước đây dùng
            chung font-size với td (chỉ khác màu/đậm) nên nhìn như 1 khối chữ đồng cỡ, dễ nhầm. */
         .data-table th { background-color: #f8fafc; color: var(--primary-dark); font-weight: 700; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.3px; text-align: center; }
@@ -375,8 +383,10 @@
             .nav-mobile { display: none; }
             body { padding-bottom: 0; }
             .kpi-row { grid-template-columns: repeat(4, 1fr); }
+            /* Dải KPI Thanh toán chỉ có 3 khối (Tạm ứng HĐ/TC + Tổng đã thanh toán) — 3 cột thay vì
+               4 cột mặc định của .kpi-row, tránh dư 1 cột trống. */
+            .kpi-row.kpi-row-3 { grid-template-columns: repeat(3, 1fr); }
             .bc-charts-grid { grid-template-columns: 1fr 1fr; }
-            .tt-advance-grid { grid-template-columns: 1fr 1fr; }
             .form-row-3 { grid-template-columns: 1fr 1fr 1fr; }
             .btn { width: auto; }
 
@@ -619,16 +629,38 @@
         .tt-item-row span { font-size: 0.85rem; color: var(--text-main); }
         .tt-item-row input { width: 110px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
 
-        /* Bảng thống kê tổng hợp 1 Hợp đồng — đặt trên "Các Đợt thanh toán". */
-        .tt-summary-card { background: linear-gradient(135deg, var(--navy), var(--navy-light)); color: white; border-radius: 12px; padding: 16px 18px; margin-bottom: 15px; }
-        .tt-summary-card h3 { font-family: var(--font-display); margin: 0 0 4px; font-size: 1rem; }
-        .tt-summary-sub { margin: 0 0 14px; font-size: 0.8rem; color: #cbd5e1; }
-        .tt-advance-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 14px; }
-        .tt-advance-box { background: rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 14px; }
-        .tt-advance-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8; margin-bottom: 8px; }
-        .tt-advance-row { display: flex; justify-content: space-between; gap: 10px; font-size: 0.85rem; padding: 3px 0; }
-        .tt-advance-row.tt-highlight b { color: var(--safety, #FBBF24); }
-        .tt-total-box { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: rgba(255,255,255,0.08); border-radius: 10px; padding: 12px 14px; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.3px; text-transform: uppercase; }
+        /* Tiêu đề Hợp đồng phía trên dải KPI Thanh toán — trước dùng thẻ navy đậm riêng
+           (.tt-summary-card), nhưng panel con bên trong chỉ phủ 8% trắng nên gần như không phân
+           biệt được với nền lẫn với nhau. Đổi sang dùng lại đúng hệ .kpi-box (thẻ trắng + icon +
+           accent màu) đã có sẵn ở tab Hợp đồng — tách bạch rõ ràng hơn, nhất quán toàn app. */
+        .tt-header { margin-bottom: 14px; }
+        .tt-header h3 { font-family: var(--font-display); margin: 0 0 4px; font-size: 1.05rem; color: var(--text-main); }
+        .tt-header p { margin: 0; font-size: 0.82rem; color: var(--text-muted); }
+        .kpi-caption { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+        /* 5 hàng tổng hợp giá trị HĐ trước/sau thuế VAT — nằm NGAY TRONG bảng BOQ (tfoot), dùng
+           chung tông xanh var(--primary-dark) của .data-table th thay vì màu navy tách biệt, để
+           đồng bộ với phần thân bảng. Hàng cuối (Tổng cộng SAU thuế) đảo ngược nền/chữ (nền
+           primary-dark, chữ trắng) — vẫn cùng họ màu xanh, chỉ khác 1 chút để nổi bật là số kết
+           luận, không lệch tông như khối navy trước đây. */
+        .boq-total-row td {
+            background: var(--border-faint); color: var(--primary-dark); font-weight: 700;
+            padding: 10px 8px; text-transform: uppercase; letter-spacing: 0.2px; font-size: 0.8rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .boq-total-row td b { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 0.88rem; }
+        .boq-total-row.boq-total-final td { background: var(--primary-dark); color: #fff; }
+        .boq-total-row.boq-total-final td b { color: var(--accent); font-size: 1rem; }
+        .boq-total-input {
+            width: 180px; max-width: 40vw; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border);
+            background: #fff; color: var(--primary-dark); font-weight: 700; text-align: right;
+            font-variant-numeric: tabular-nums; font-family: inherit; font-size: 0.85rem;
+        }
+        .boq-total-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .boq-total-input:disabled { opacity: 0.6; cursor: not-allowed; }
+        /* Khối "Tổng đã thanh toán" là số quan trọng nhất của cả dải — viền trái dày hơn để nổi bật
+           hơn 2 khối Tạm ứng bên cạnh. */
+        .kpi-box.kpi-hero { border-left-width: 6px; }
 
         /* Chuyển đổi 2 báo cáo trong tab Tổng quan: "Báo cáo Công việc" / "Báo cáo Chi phí". */
         .bc-pill-switch { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }

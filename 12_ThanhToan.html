@@ -17,6 +17,21 @@
    - openDieuChinhModal(id)        : Sửa lại phần thu hồi/khấu trừ sau khi đã tạo Đợt
    ================================================================ */
 
+// Bảng "Tổng hợp lũy kế khối lượng đã thanh toán" — toàn hợp đồng, theo cây BOQ (khoiLuongDaThanhToan
+// tính sẵn ở getHopDongData() trong Code.js). Dùng chung renderBOQLuyKeTable_() ở 9_HopDong.html,
+// giống hệt bảng lũy kế Nghiệm thu ở 11_NghiemThu.html, chỉ khác field nguồn. Số "Đã thanh toán"
+// theo TỪNG hạng mục ở đây là giá trị GỐC (khối lượng × đơn giá, trước thuế/tạm ứng/khấu trừ) — số
+// "Đã thanh toán" thực nhận sau thuế/khấu trừ vẫn chỉ có ở cấp đợt/hợp đồng (danh sách Đợt bên dưới),
+// vì VAT/tạm ứng/khấu trừ áp dụng theo đợt, không tách được theo từng hạng mục.
+let ttLuyKeExpanded_ = new Set();
+function toggleTtLuyKeHeader_(maBOQ) {
+    if (ttLuyKeExpanded_.has(maBOQ)) ttLuyKeExpanded_.delete(maBOQ); else ttLuyKeExpanded_.add(maBOQ);
+    renderTtLuyKeTable_();
+}
+function renderTtLuyKeTable_() {
+    renderBOQLuyKeTable_('ttLuyKeBody', 'khoiLuongDaThanhToan', ttLuyKeExpanded_, 'toggleTtLuyKeHeader_');
+}
+
 function renderThanhToan() {
     fillHopDongSelect_('ttHopDongSelect');
     const emptyBox = document.getElementById('ttNoHopDong');
@@ -32,6 +47,7 @@ function renderThanhToan() {
     if (content) content.style.display = '';
     const btnThem = document.getElementById('btnThemDotTT');
     if (btnThem) btnThem.style.display = canEditHopDong() ? '' : 'none';
+    renderTtLuyKeTable_();
 
     const rounds = dotThanhToan.filter(d => d.maHopDong === currentHopDongId);
     const giaTriHD = giaTriHienHanhHopDong(currentHopDongId);
@@ -40,17 +56,14 @@ function renderThanhToan() {
     const daThuHoiTC = rounds.reduce((s, r) => s + (r.thuHoiTamUngThiCong || 0), 0);
 
     document.getElementById('ttHopDongTitle').textContent = hd.tenHopDong;
-    // Không tô màu val-hopdong (#1D4ED8) ở đây — dòng này nằm trên nền navy đậm của
-    // .tt-summary-card, xanh dương đậm trên nền navy tương phản quá thấp (dưới chuẩn WCAG AA),
-    // giữ nguyên màu chữ nhạt mặc định của thẻ cho dễ đọc.
     document.getElementById('ttHopDongSub').textContent =
         `Giá trị HĐ hiện hành (trước thuế): ${tienHienThi_(giaTriHD)}đ · VAT ${hd.thueVAT || 0}%`;
-    document.getElementById('ttAdvHDGiven').textContent = tienHienThi_(hd.tamUngHopDong) + 'đ';
-    document.getElementById('ttAdvHDRecovered').textContent = tienHienThi_(daThuHoiHD) + 'đ';
     document.getElementById('ttAdvHDRemaining').textContent = tienHienThi_(Math.max(0, hd.tamUngHopDong - daThuHoiHD)) + 'đ';
-    document.getElementById('ttAdvTCGiven').textContent = tienHienThi_(hd.tamUngThiCong) + 'đ';
-    document.getElementById('ttAdvTCRecovered').textContent = tienHienThi_(daThuHoiTC) + 'đ';
+    document.getElementById('ttAdvHDCaption').textContent =
+        `Đã cấp ${tienHienThi_(hd.tamUngHopDong)}đ · Đã thu hồi ${tienHienThi_(daThuHoiHD)}đ`;
     document.getElementById('ttAdvTCRemaining').textContent = tienHienThi_(Math.max(0, hd.tamUngThiCong - daThuHoiTC)) + 'đ';
+    document.getElementById('ttAdvTCCaption').textContent =
+        `Đã cấp ${tienHienThi_(hd.tamUngThiCong)}đ · Đã thu hồi ${tienHienThi_(daThuHoiTC)}đ`;
     document.getElementById('ttKpiThanhToan').textContent = tienHienThi_(tongDaTT) + 'đ';
 
     const box = document.getElementById('ttList');
@@ -71,7 +84,7 @@ function renderThanhToan() {
             </div>
             <div class="pl-item-note">
                 Thực hiện: ${tienHienThi_(bd.thucHien)} · Tạm tính: ${tienHienThi_(bd.tamTinh)} · VAT (${bd.vatRate}%): ${tienHienThi_(bd.thueGTGT)}<br>
-                Thu hồi tạm ứng HĐ: ${tienHienThi_(r.thuHoiTamUngHopDong)} · TC: ${tienHienThi_(r.thuHoiTamUngThiCong)} · Khấu trừ khác: ${tienHienThi_(r.khauTruKhac)}
+                Thu hồi tạm ứng HĐ: ${tienHienThi_(r.thuHoiTamUngHopDong)} · TC: ${tienHienThi_(r.thuHoiTamUngThiCong)} · Khấu trừ khác: ${tienHienThi_(r.khauTruKhac)} · Giảm giá: ${tienHienThi_(r.giamGiaDot || 0)}
             </div>
             <div class="pl-item-note"><b>Giá trị thanh toán kỳ này: <span class="val-thanhtoan">${tienHienThi_(bd.finalValue)}</span></b></div>
         </div>`;
@@ -93,7 +106,7 @@ function getPaymentRoundBreakdown(round) {
     const vatRate = (hd && hd.thueVAT) || 0;
     const thueGTGT = Math.round(tamTinh * vatRate / 100);
     const tamTinhSauThue = tamTinh + thueGTGT;
-    const finalValue = tamTinhSauThue - round.thuHoiTamUngHopDong - round.thuHoiTamUngThiCong - round.khauTruKhac;
+    const finalValue = tamTinhSauThue - round.thuHoiTamUngHopDong - round.thuHoiTamUngThiCong - round.khauTruKhac - (round.giamGiaDot || 0);
     return { thucHien, tamTinh, vatRate, thueGTGT, tamTinhSauThue, finalValue };
 }
 
@@ -106,6 +119,7 @@ function openPaymentModal() {
     document.getElementById('ttAdvHD').value = 0;
     document.getElementById('ttAdvTC').value = 0;
     document.getElementById('ttOther').value = 0;
+    document.getElementById('ttGiamGia').value = 0;
     document.getElementById('ttOtherNote').value = '';
 
     const items = boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader);
@@ -148,7 +162,7 @@ function importThanhToanFromExcel() {
         const khongKhop = [];
         rows.forEach((row, idx) => {
             if (idx === 0) return;
-            const stt = row[0], ten = row[1];
+            const stt = sttTuExcel_(row[0]), ten = row[1];
             const qty = parseNumberSafely(row[3]);
             if (!ten || isNaN(qty) || qty <= 0) return;
             const item = khopBOQTheoSttTen_(stt, ten);
@@ -167,7 +181,7 @@ function goiYThuHoi_(loai) {
     const chiTiet = timDsChiTietTamThoi_();
     if (chiTiet.length === 0) { showCustomAlert('Nhập khối lượng dự kiến trước khi gợi ý!', 'error'); return; }
     gsRun('goiYThuHoiTamUng', currentHopDongId, chiTiet, loai)
-        .then(val => { document.getElementById(loai === 'thiCong' ? 'ttAdvTC' : 'ttAdvHD').value = val; })
+        .then(val => { setTienValue_(document.getElementById(loai === 'thiCong' ? 'ttAdvTC' : 'ttAdvHD'), val); })
         .catch(handleBackendError);
 }
 
@@ -182,9 +196,10 @@ function createPaymentRound() {
         ngayThanhToan: convertDMYtoISO(document.getElementById('ttDate').value.trim()) || '',
         phanTramThanhToan: parseNumberSafely(document.getElementById('ttPercent').value),
         ghiChu: document.getElementById('ttNote').value.trim(),
-        thuHoiTamUngHopDong: parseNumberSafely(document.getElementById('ttAdvHD').value) || 0,
-        thuHoiTamUngThiCong: parseNumberSafely(document.getElementById('ttAdvTC').value) || 0,
-        khauTruKhac: parseNumberSafely(document.getElementById('ttOther').value) || 0,
+        thuHoiTamUngHopDong: parseTienInput_(document.getElementById('ttAdvHD').value) || 0,
+        thuHoiTamUngThiCong: parseTienInput_(document.getElementById('ttAdvTC').value) || 0,
+        khauTruKhac: parseTienInput_(document.getElementById('ttOther').value) || 0,
+        giamGiaDot: parseTienInput_(document.getElementById('ttGiamGia').value) || 0,
         ghiChuKhauTru: document.getElementById('ttOtherNote').value.trim(),
         chiTiet
     };
@@ -205,9 +220,10 @@ function openDieuChinhModal(maDotThanhToan) {
     const r = dotThanhToan.find(d => d.maDotThanhToan === maDotThanhToan);
     if (!r) return;
     dieuChinhId_ = maDotThanhToan;
-    document.getElementById('dcAdvHD').value = r.thuHoiTamUngHopDong;
-    document.getElementById('dcAdvTC').value = r.thuHoiTamUngThiCong;
-    document.getElementById('dcOther').value = r.khauTruKhac;
+    setTienValue_(document.getElementById('dcAdvHD'), r.thuHoiTamUngHopDong);
+    setTienValue_(document.getElementById('dcAdvTC'), r.thuHoiTamUngThiCong);
+    setTienValue_(document.getElementById('dcOther'), r.khauTruKhac);
+    setTienValue_(document.getElementById('dcGiamGia'), r.giamGiaDot || 0);
     document.getElementById('dcOtherNote').value = r.ghiChuKhauTru;
     document.getElementById('dieuChinhModal').classList.add('active');
 }
@@ -215,9 +231,10 @@ function closeDieuChinhModal() { document.getElementById('dieuChinhModal').class
 
 function saveDieuChinh() {
     const payload = {
-        thuHoiTamUngHopDong: parseNumberSafely(document.getElementById('dcAdvHD').value) || 0,
-        thuHoiTamUngThiCong: parseNumberSafely(document.getElementById('dcAdvTC').value) || 0,
-        khauTruKhac: parseNumberSafely(document.getElementById('dcOther').value) || 0,
+        thuHoiTamUngHopDong: parseTienInput_(document.getElementById('dcAdvHD').value) || 0,
+        thuHoiTamUngThiCong: parseTienInput_(document.getElementById('dcAdvTC').value) || 0,
+        khauTruKhac: parseTienInput_(document.getElementById('dcOther').value) || 0,
+        giamGiaDot: parseTienInput_(document.getElementById('dcGiamGia').value) || 0,
         ghiChuKhauTru: document.getElementById('dcOtherNote').value.trim()
     };
     gsRun('adminSuaDieuChinhThanhToan', myUserId, myPassword, dieuChinhId_, payload)

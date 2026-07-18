@@ -241,10 +241,10 @@
                         <select id="bcChiPhiHopDongSelect" class="hd-select" onchange="renderBcChiPhi()"></select>
                     </div>
                     <div class="kpi-row">
-                        <div class="kpi-mini"><span>Giá trị Hợp đồng</span><b id="cpKpiTong" class="val-hopdong">0</b></div>
-                        <div class="kpi-mini"><span>Đã thực hiện</span><b id="cpKpiThucHien" class="val-nghiemthu">0</b></div>
-                        <div class="kpi-mini"><span>Phát sinh (vượt KL)</span><b id="cpKpiPhatSinh" class="val-phatsinh">0</b></div>
-                        <div class="kpi-mini"><span>Đã thanh toán</span><b id="cpKpiThanhToan" class="val-thanhtoan">0</b></div>
+                        <div class="kpi-mini"><span>Giá trị Hợp đồng (có VAT)</span><b id="cpKpiTong" class="val-hopdong">0</b></div>
+                        <div class="kpi-mini"><span>Đã thực hiện (có VAT)</span><b id="cpKpiThucHien" class="val-nghiemthu">0</b></div>
+                        <div class="kpi-mini"><span>Phát sinh (vượt KL, có VAT)</span><b id="cpKpiPhatSinh" class="val-phatsinh">0</b></div>
+                        <div class="kpi-mini"><span>Đã thanh toán (có VAT)</span><b id="cpKpiThanhToan" class="val-thanhtoan">0</b></div>
                     </div>
                 </div>
 
@@ -263,7 +263,7 @@
                 </div>
 
                 <div id="cpSCurveCard" class="card">
-                    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Biểu đồ dòng tiền (Kế hoạch vs Thực tế lũy kế)</div>
+                    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Biểu đồ dòng tiền (Kế hoạch vs Thực tế lũy kế, có VAT)</div>
                     <p id="cpSCurveEmptyNote" style="font-size:0.78rem; color:var(--text-muted); display:none;">Chưa có hạng mục BOQ nào đặt Ngày bắt đầu/kết thúc kế hoạch nên chưa vẽ được đường "Kế hoạch lũy kế".</p>
                     <div style="height:320px;"><canvas id="cpSCurveChart"></canvas></div>
                 </div>
@@ -356,32 +356,54 @@
                 <div class="card">
                     <div class="card-header-row">
                         <div id="boqHopDongInfo" style="font-size:0.9rem;"></div>
-                        <button id="btnThemBOQItem" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openBOQItemModal()"><i class="fa-solid fa-plus"></i> Thêm hạng mục</button>
+                        <button id="btnThemBOQItem" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openBOQItemModal()"><i class="fa-solid fa-pen-to-square"></i> Thêm / Sửa hạng mục</button>
                     </div>
                     <div class="table-responsive">
                         <table class="data-table">
                             <thead><tr>
+                                <th style="width:56px;">STT</th>
                                 <th style="text-align:left;">Tên hạng mục</th>
                                 <th>ĐVT</th>
-                                <th>KL hợp đồng</th>
-                                <th>KL hiệu lực</th>
+                                <th>Khối lượng</th>
                                 <th>Đơn giá</th>
-                                <th>Đã nghiệm thu</th>
-                                <th>%</th>
-                                <th>Thời gian KH</th>
-                                <th>Hành động</th>
+                                <th>Thành tiền</th>
+                                <th style="text-align:left;">Ghi chú</th>
                             </tr></thead>
                             <tbody id="boqBody"></tbody>
+                            <tfoot>
+                                <tr class="boq-total-row">
+                                    <td colspan="5">Tổng cộng giá trị trước thuế VAT</td>
+                                    <td class="text-right"><b id="boqTongTruocThue">0đ</b></td>
+                                    <td></td>
+                                </tr>
+                                <tr class="boq-total-row">
+                                    <td colspan="5">Giá trị giảm giá (chưa VAT)</td>
+                                    <td class="text-right"><input type="text" inputmode="numeric" id="boqGiamGiaInput" class="boq-total-input" oninput="formatTienLive_(this)" onchange="capNhatGiamGiaBOQ_()"></td>
+                                    <td></td>
+                                </tr>
+                                <tr class="boq-total-row">
+                                    <td colspan="5">Giá trị sau giảm giá (chưa VAT)</td>
+                                    <td class="text-right"><b id="boqSauGiamGia">0đ</b></td>
+                                    <td></td>
+                                </tr>
+                                <tr class="boq-total-row">
+                                    <td colspan="5">Thuế VAT <span id="boqVatPercent">0</span>%</td>
+                                    <td class="text-right"><b id="boqThueVat">0đ</b></td>
+                                    <td></td>
+                                </tr>
+                                <tr class="boq-total-row boq-total-final">
+                                    <td colspan="5">Tổng cộng giá trị sau thuế</td>
+                                    <td class="text-right"><b id="boqTongSauThue">0đ</b></td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
-                    <details id="boqImportBox" style="margin-top:14px; display:none;">
-                        <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel</summary>
-                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo đúng thứ tự cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Thành tiền (bỏ qua) | Ngày bắt đầu KH | Ngày kết thúc KH (2 cột ngày cuối không bắt buộc, dòng đầu là tiêu đề). Dòng có STT dạng số La Mã/chữ cái hoặc không có Khối lượng lẫn Đơn giá sẽ tự nhận là Đầu mục.</p>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                            <input type="file" id="boqExcelFile" accept=".xlsx,.xls,.csv" class="form-control" style="flex:1; min-width:200px;">
-                            <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="importBOQFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập vào BOQ</button>
-                        </div>
-                    </details>
+
+                    <div id="boqImportBox" style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Có nhiều hạng mục cần nhập cùng lúc?</span>
+                        <button class="btn btn-sm" style="background:transparent; color:var(--primary-dark); border:1px solid var(--border); width:auto;" onclick="document.getElementById('boqExcelModal').classList.add('active')"><i class="fa-solid fa-file-import"></i> Nhập nhanh từ Excel</button>
+                    </div>
                 </div>
 
                 <div class="card">
@@ -411,7 +433,7 @@
             <div id="ntContent">
                 <div class="card">
                     <div class="card-title"><i class="fa-solid fa-pen-to-square"></i> Ghi nhận khối lượng nghiệm thu</div>
-                    <div class="form-group" style="margin-bottom:10px; max-width:380px;">
+                    <div class="form-group" style="margin-bottom:10px;">
                         <label>Hạng mục BOQ</label>
                         <select id="ntBOQ" class="form-control" onchange="selectNghiemThuBOQ(this.value)"></select>
                     </div>
@@ -438,18 +460,29 @@
                         <div id="ntRecent"></div>
                     </div>
 
-                    <details id="ntImportBox" style="margin-top:16px; display:none;">
-                        <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel (nhiều hạng mục cùng lúc)</summary>
-                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo cột: STT | Tên hạng mục | ĐVT | Khối lượng xác nhận | Ghi chú (dòng đầu là tiêu đề). Mỗi dòng khớp với đúng 1 hạng mục BOQ theo STT+Tên, áp dụng cho CÙNG 1 ngày nhập bên dưới.</p>
-                        <div class="form-group" style="margin-bottom:10px; max-width:220px;">
-                            <label>Ngày nghiệm thu</label>
-                            <input type="text" id="ntExcelNgay" class="form-control" placeholder="dd/mm/yyyy">
-                        </div>
-                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                            <input type="file" id="ntExcelFile" accept=".xlsx,.xls,.csv" class="form-control" style="flex:1; min-width:200px;">
-                            <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="importNghiemThuFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
-                        </div>
-                    </details>
+                    <div id="ntImportBox" style="margin-top:16px; padding-top:16px; border-top:1px dashed var(--border); display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Có nhiều hạng mục cần nhập cùng lúc?</span>
+                        <button class="btn btn-sm" style="background:transparent; color:var(--primary-dark); border:1px solid var(--border); width:auto;" onclick="document.getElementById('ntExcelModal').classList.add('active')"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt từ Excel</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tổng hợp lũy kế khối lượng nghiệm thu</div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr>
+                                <th style="width:56px;">STT</th>
+                                <th style="text-align:left;">Tên hạng mục</th>
+                                <th>ĐVT</th>
+                                <th>Khối lượng HĐ</th>
+                                <th>Đơn giá</th>
+                                <th>Đã nghiệm thu</th>
+                                <th>Chênh lệch</th>
+                                <th>Giá trị sản lượng đã đạt</th>
+                            </tr></thead>
+                            <tbody id="ntLuyKeBody"></tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="card">
@@ -491,28 +524,56 @@
                 <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
             </div>
             <div id="ttContent">
-                <div class="tt-summary-card">
+                <div class="tt-header">
                     <h3 id="ttHopDongTitle">--</h3>
-                    <p class="tt-summary-sub" id="ttHopDongSub"></p>
-                    <div class="tt-advance-grid">
-                        <div class="tt-advance-box">
-                            <div class="tt-advance-title">Tạm ứng hợp đồng</div>
-                            <div class="tt-advance-row"><span>Đã tạm ứng</span><b id="ttAdvHDGiven">0đ</b></div>
-                            <div class="tt-advance-row"><span>Đã thu hồi</span><b id="ttAdvHDRecovered">0đ</b></div>
-                            <div class="tt-advance-row tt-highlight"><span>Còn lại chưa thu hồi</span><b id="ttAdvHDRemaining">0đ</b></div>
-                        </div>
-                        <div class="tt-advance-box">
-                            <div class="tt-advance-title">Tạm ứng thi công</div>
-                            <div class="tt-advance-row"><span>Đã tạm ứng</span><b id="ttAdvTCGiven">0đ</b></div>
-                            <div class="tt-advance-row"><span>Đã thu hồi</span><b id="ttAdvTCRecovered">0đ</b></div>
-                            <div class="tt-advance-row tt-highlight"><span>Còn lại chưa thu hồi</span><b id="ttAdvTCRemaining">0đ</b></div>
+                    <p id="ttHopDongSub"></p>
+                </div>
+                <div class="kpi-row kpi-row-3">
+                    <div class="kpi-box kpi-blue">
+                        <div class="kpi-icon"><i class="fa-solid fa-building-columns"></i></div>
+                        <div class="kpi-body">
+                            <div class="kpi-title">Tạm ứng HĐ — còn lại</div>
+                            <div class="kpi-value" id="ttAdvHDRemaining">0đ</div>
+                            <div class="kpi-caption" id="ttAdvHDCaption">Đã cấp 0đ · Đã thu hồi 0đ</div>
                         </div>
                     </div>
-                    <div class="tt-total-box">
-                        <span>Tổng đã thanh toán (thực nhận, lũy kế)</span>
-                        <b id="ttKpiThanhToan" class="val-thanhtoan">0đ</b>
+                    <div class="kpi-box kpi-amber">
+                        <div class="kpi-icon"><i class="fa-solid fa-helmet-safety"></i></div>
+                        <div class="kpi-body">
+                            <div class="kpi-title">Tạm ứng TC — còn lại</div>
+                            <div class="kpi-value" id="ttAdvTCRemaining">0đ</div>
+                            <div class="kpi-caption" id="ttAdvTCCaption">Đã cấp 0đ · Đã thu hồi 0đ</div>
+                        </div>
+                    </div>
+                    <div class="kpi-box kpi-green kpi-hero">
+                        <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
+                        <div class="kpi-body">
+                            <div class="kpi-title">Tổng đã thanh toán (lũy kế)</div>
+                            <div class="kpi-value" id="ttKpiThanhToan">0đ</div>
+                            <div class="kpi-caption">Thực nhận, sau VAT &amp; khấu trừ</div>
+                        </div>
                     </div>
                 </div>
+
+                <div class="card">
+                    <div class="card-title"><i class="fa-solid fa-chart-line"></i> Tổng hợp lũy kế khối lượng đã thanh toán</div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr>
+                                <th style="width:56px;">STT</th>
+                                <th style="text-align:left;">Tên hạng mục</th>
+                                <th>ĐVT</th>
+                                <th>Khối lượng HĐ</th>
+                                <th>Đơn giá</th>
+                                <th>Đã thanh toán</th>
+                                <th>Chênh lệch</th>
+                                <th>Giá trị đã thanh toán</th>
+                            </tr></thead>
+                            <tbody id="ttLuyKeBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-header-row">
                         <div class="card-title"><i class="fa-solid fa-money-check-dollar"></i> Các Đợt thanh toán</div>
@@ -957,11 +1018,11 @@
             <div class="form-row-3">
                 <div class="form-group">
                     <label>Tạm ứng hợp đồng</label>
-                    <input type="number" step="any" id="hdTamUngHopDong" class="form-control">
+                    <input type="text" inputmode="numeric" id="hdTamUngHopDong" class="form-control" oninput="formatTienLive_(this)">
                 </div>
                 <div class="form-group">
                     <label>Tạm ứng thi công</label>
-                    <input type="number" step="any" id="hdTamUngThiCong" class="form-control">
+                    <input type="text" inputmode="numeric" id="hdTamUngThiCong" class="form-control" oninput="formatTienLive_(this)">
                 </div>
                 <div class="form-group">
                     <label>Thuế GTGT (%)</label>
@@ -970,7 +1031,7 @@
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Giảm giá (số tiền)</label>
-                <input type="number" step="any" id="hdGiamGia" class="form-control">
+                <input type="text" inputmode="numeric" id="hdGiamGia" class="form-control" oninput="formatTienLive_(this)">
             </div>
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveHopDongModal()">Lưu</button>
@@ -982,8 +1043,12 @@
     <!-- MODAL: THÊM/SỬA HẠNG MỤC BOQ -->
     <div id="boqItemModal" class="modal">
         <div class="modal-content" style="max-width:520px;">
-            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="boqModalTitle">Thêm hạng mục BOQ</span></h3>
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> <span id="boqModalTitle">Thêm / Sửa hạng mục BOQ</span></h3>
             <input type="hidden" id="boqEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Chọn hạng mục cần sửa (hoặc để thêm mới)</label>
+                <select id="boqManageSelect" class="form-control" onchange="openBOQItemModal(this.value)"></select>
+            </div>
             <div class="form-row-3">
                 <div class="form-group">
                     <label>STT</label>
@@ -1015,7 +1080,7 @@
                     </div>
                     <div class="form-group">
                         <label>Đơn giá</label>
-                        <input type="number" step="any" id="boqDonGia" class="form-control">
+                        <input type="text" inputmode="numeric" id="boqDonGia" class="form-control" oninput="formatTienLive_(this)">
                     </div>
                 </div>
                 <div class="form-row-3">
@@ -1028,8 +1093,13 @@
                         <input type="text" id="boqNgayKT" class="form-control" placeholder="dd/mm/yyyy">
                     </div>
                 </div>
+                <div class="form-group" style="margin-bottom:10px;">
+                    <label>Ghi chú</label>
+                    <input type="text" id="boqGhiChu" class="form-control">
+                </div>
             </div>
             <div class="modal-actions">
+                <button id="boqBtnXoa" class="btn btn-danger" style="display:none; margin-right:auto; width:auto;" onclick="deleteBOQItem(document.getElementById('boqEditId').value)"><i class="fa-solid fa-trash"></i> Xóa hạng mục</button>
                 <button class="btn" style="background:var(--success);" onclick="saveBOQItemModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeBOQItemModal()">Hủy</button>
             </div>
@@ -1113,6 +1183,42 @@
         </div>
     </div>
 
+    <!-- MODAL: NHẬP HẠNG MỤC BOQ TỪ EXCEL -->
+    <div id="boqExcelModal" class="modal">
+        <div class="modal-content" style="max-width:440px;">
+            <h3 style="margin-bottom:6px; color:var(--primary-dark);"><i class="fa-solid fa-file-import"></i> Nhập nhanh từ Excel</h3>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin:0 0 14px;">File Excel theo đúng thứ tự cột: STT | Tên hạng mục | ĐVT | Khối lượng | Đơn giá | Thành tiền (bỏ qua) | Ngày bắt đầu KH | Ngày kết thúc KH (2 cột ngày cuối không bắt buộc, dòng đầu là tiêu đề). Dòng có STT dạng số La Mã/chữ cái hoặc không có Khối lượng lẫn Đơn giá sẽ tự nhận là Đầu mục.</p>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Chọn file Excel</label>
+                <input type="file" id="boqExcelFile" accept=".xlsx,.xls,.csv" class="form-control">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="document.getElementById('boqExcelModal').classList.remove('active')">Hủy</button>
+                <button class="btn" onclick="importBOQFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập vào BOQ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: NHẬP HÀNG LOẠT NGHIỆM THU TỪ EXCEL -->
+    <div id="ntExcelModal" class="modal">
+        <div class="modal-content" style="max-width:440px;">
+            <h3 style="margin-bottom:6px; color:var(--primary-dark);"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt từ Excel</h3>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin:0 0 14px;">Cột: STT | Tên hạng mục | ĐVT | Khối lượng xác nhận | Ghi chú (dòng đầu là tiêu đề). Mỗi dòng khớp 1 hạng mục BOQ theo STT+Tên, áp dụng cho cùng 1 ngày bên dưới.</p>
+            <div class="form-group" style="margin-bottom:10px; max-width:220px;">
+                <label>Ngày nghiệm thu</label>
+                <input type="text" id="ntExcelNgay" class="form-control" placeholder="dd/mm/yyyy">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Chọn file Excel</label>
+                <input type="file" id="ntExcelFile" accept=".xlsx,.xls,.csv" class="form-control">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="document.getElementById('ntExcelModal').classList.remove('active')">Hủy</button>
+                <button class="btn" onclick="importNghiemThuFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: TẠO ĐỢT THANH TOÁN -->
     <div id="paymentModal" class="modal">
         <div class="modal-content" style="max-width:560px;">
@@ -1146,21 +1252,25 @@
                 <div class="form-group">
                     <label>Thu hồi tạm ứng HĐ</label>
                     <div style="display:flex; gap:6px;">
-                        <input type="number" step="any" id="ttAdvHD" class="form-control" value="0">
+                        <input type="text" inputmode="numeric" id="ttAdvHD" class="form-control" value="0" oninput="formatTienLive_(this)">
                         <button type="button" class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="goiYThuHoi_('hopDong')" title="Gợi ý">?</button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Thu hồi tạm ứng TC</label>
                     <div style="display:flex; gap:6px;">
-                        <input type="number" step="any" id="ttAdvTC" class="form-control" value="0">
+                        <input type="text" inputmode="numeric" id="ttAdvTC" class="form-control" value="0" oninput="formatTienLive_(this)">
                         <button type="button" class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="goiYThuHoi_('thiCong')" title="Gợi ý">?</button>
                     </div>
                 </div>
                 <div class="form-group">
                     <label>Khấu trừ khác</label>
-                    <input type="number" step="any" id="ttOther" class="form-control" value="0">
+                    <input type="text" inputmode="numeric" id="ttOther" class="form-control" value="0" oninput="formatTienLive_(this)">
                 </div>
+            </div>
+            <div class="form-group" style="margin-bottom:10px; max-width:220px;">
+                <label>Giá trị giảm giá</label>
+                <input type="text" inputmode="numeric" id="ttGiamGia" class="form-control" value="0" oninput="formatTienLive_(this)">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Ghi chú khấu trừ khác</label>
@@ -1183,15 +1293,19 @@
             <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-sliders"></i> Sửa điều chỉnh Thanh toán</h3>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Thu hồi tạm ứng HĐ</label>
-                <input type="number" step="any" id="dcAdvHD" class="form-control">
+                <input type="text" inputmode="numeric" id="dcAdvHD" class="form-control" oninput="formatTienLive_(this)">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Thu hồi tạm ứng TC</label>
-                <input type="number" step="any" id="dcAdvTC" class="form-control">
+                <input type="text" inputmode="numeric" id="dcAdvTC" class="form-control" oninput="formatTienLive_(this)">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Khấu trừ khác</label>
-                <input type="number" step="any" id="dcOther" class="form-control">
+                <input type="text" inputmode="numeric" id="dcOther" class="form-control" oninput="formatTienLive_(this)">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Giá trị giảm giá</label>
+                <input type="text" inputmode="numeric" id="dcGiamGia" class="form-control" oninput="formatTienLive_(this)">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
                 <label>Ghi chú khấu trừ khác</label>

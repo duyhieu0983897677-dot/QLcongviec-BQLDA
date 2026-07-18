@@ -46,6 +46,52 @@ function giaTriHienHanhHopDong(maHopDong) {
     return Math.max(0, Math.round(total) - ((hd && hd.giamGia) || 0));
 }
 
+// Bảng lũy kế theo cây BOQ — DÙNG CHUNG cho tab Nghiệm thu (valueField='khoiLuongDaNghiemThu') và
+// Thanh toán (valueField='khoiLuongDaThanhToan'), tránh chép lại logic dựng cây 2 lần. Mỗi tab tự
+// giữ 1 Set thu gọn/mở riêng (expandedSet) + tên hàm toggle riêng (toggleFnName, ví dụ
+// 'toggleNtLuyKeHeader_') vì 2 bảng độc lập, không share trạng thái đóng/mở.
+// Cột: STT | Tên hạng mục | ĐVT | Khối lượng HĐ | Đơn giá | <lũy kế> | Chênh lệch | Giá trị đạt
+// được — Chênh lệch/Giá trị đạt được đều tính trên giá trị HIỆU LỰC (sau Phụ lục), giá trị gốc
+// trước thuế GTGT (cùng cách hiểu với cột Thành tiền ở tab BOQ, xem renderBOQTree() ở 10_BOQ.html).
+function renderBOQLuyKeTable_(tbodyId, valueField, expandedSet, toggleFnName) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+    const items = boq.filter(b => b.maHopDong === currentHopDongId);
+    const empty = `<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
+    if (items.length === 0) { tbody.innerHTML = empty; return; }
+
+    const chains = tinhChuoiChaBOQ_(items);
+    let html = '';
+    items.forEach((b, idx) => {
+        if (chains[idx].some(pid => !expandedSet.has(pid))) return;
+        const indent = 16 + (b.cap || 0) * 20;
+        if (b.isHeader) {
+            const isOpen = expandedSet.has(b.maBOQ);
+            html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="${toggleFnName}('${b.maBOQ}')">
+                <td colspan="8" style="padding-left:${indent}px;">
+                    <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
+                    <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
+                </td>
+            </tr>`;
+            return;
+        }
+        const luyKe = b[valueField] || 0;
+        const chenhLech = (b.khoiLuongHieuLuc || 0) - luyKe;
+        const giaTriDat = luyKe * (b.donGiaHieuLuc || 0);
+        html += `<tr>
+            <td class="text-center">${b.stt || '--'}</td>
+            <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
+            <td class="text-center">${b.donVi || '--'}</td>
+            <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
+            <td class="text-right">${tienHienThi_(b.donGiaHieuLuc)}</td>
+            <td class="text-right val-nghiemthu">${khoiLuongHienThi_(luyKe)}</td>
+            <td class="text-right ${chenhLech < 0 ? 'val-phatsinh' : ''}">${khoiLuongHienThi_(chenhLech)}</td>
+            <td class="text-right val-thanhtoan">${tienHienThi_(giaTriDat)}</td>
+        </tr>`;
+    });
+    tbody.innerHTML = html || empty;
+}
+
 // Chỉ Quản trị hoặc Giám sát có Chức danh "QS" mới được xem SỐ TIỀN (đơn giá/giá trị/thanh toán...)
 // và sửa dữ liệu Hợp đồng — người khác vẫn xem được khối lượng bình thường, số tiền ẩn qua
 // tienHienThi_() (xem kiemTraQuyenHopDong_() ở Code.js, phải khớp đúng luật này ở backend).
@@ -171,10 +217,10 @@ function openHopDongModal(maHopDong) {
     document.getElementById('hdTen').value = hd ? hd.tenHopDong : '';
     document.getElementById('hdNhaThau').value = hd ? hd.nhaThau : '';
     document.getElementById('hdNgayKy').value = hd ? formatVN(hd.ngayKy) : '';
-    document.getElementById('hdTamUngHopDong').value = hd ? hd.tamUngHopDong : '';
-    document.getElementById('hdTamUngThiCong').value = hd ? hd.tamUngThiCong : '';
+    setTienValue_(document.getElementById('hdTamUngHopDong'), hd ? hd.tamUngHopDong : '');
+    setTienValue_(document.getElementById('hdTamUngThiCong'), hd ? hd.tamUngThiCong : '');
     document.getElementById('hdThueVAT').value = hd ? hd.thueVAT : 10;
-    document.getElementById('hdGiamGia').value = hd ? hd.giamGia : '';
+    setTienValue_(document.getElementById('hdGiamGia'), hd ? hd.giamGia : '');
 
     const gtSelect = document.getElementById('hdGoiThau');
     gtSelect.innerHTML = '<option value="">-- Chưa gắn Gói thầu --</option>' +
@@ -203,10 +249,10 @@ function saveHopDongModal() {
         maGoiThau: document.getElementById('hdGoiThau').value,
         nhaThau: document.getElementById('hdNhaThau').value.trim(),
         ngayKy: convertDMYtoISO(document.getElementById('hdNgayKy').value.trim()) || '',
-        tamUngHopDong: parseNumberSafely(document.getElementById('hdTamUngHopDong').value) || 0,
-        tamUngThiCong: parseNumberSafely(document.getElementById('hdTamUngThiCong').value) || 0,
+        tamUngHopDong: parseTienInput_(document.getElementById('hdTamUngHopDong').value) || 0,
+        tamUngThiCong: parseTienInput_(document.getElementById('hdTamUngThiCong').value) || 0,
         thueVAT: parseNumberSafely(document.getElementById('hdThueVAT').value) || 0,
-        giamGia: parseNumberSafely(document.getElementById('hdGiamGia').value) || 0
+        giamGia: parseTienInput_(document.getElementById('hdGiamGia').value) || 0
     };
     if (!payload.tenHopDong) { showCustomAlert('Vui lòng nhập Tên hợp đồng!', 'error'); return; }
 
@@ -258,6 +304,17 @@ function docFileExcel_(file) {
         reader.onerror = () => reject(new Error('Không đọc được file.'));
         reader.readAsArrayBuffer(file);
     });
+}
+
+// STT dạng "D.M" (VD: 3.1, 4.2) khi gõ vào Excel dễ bị chính Excel tự động hiểu thành NGÀY THÁNG
+// (3.1 -> 3 tháng 1) rồi đổi ô sang định dạng Date — SheetJS đọc lại thành object Date, nếu
+// String() thẳng object đó sẽ ra chuỗi giờ/múi giờ dài dòng (VD: "Sat Jan 03 2026 00:00:00
+// GMT+0700...") thay vì "3.1". Dò đúng ngược lại ngày/tháng của Date để phục hồi lại "D.M" ban đầu.
+function sttTuExcel_(value) {
+    if (value instanceof Date && !isNaN(value.getTime())) {
+        return value.getDate() + '.' + (value.getMonth() + 1);
+    }
+    return String(value == null ? '' : value).trim();
 }
 
 // Ngày Excel có thể là Date object, số serial, hoặc chuỗi dd/mm/yyyy — chuyển hết về yyyy-MM-dd.

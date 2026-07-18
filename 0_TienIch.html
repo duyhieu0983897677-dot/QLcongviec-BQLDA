@@ -268,6 +268,26 @@ function parseNumberSafely(val) {
     return parseFloat(str);
 }
 
+// Cặp hàm cho các Ô NHẬP TIỀN (số nguyên VNĐ, KHÔNG có phần thập phân) — chèn dấu chấm ngăn cách
+// hàng nghìn ngay khi gõ để người nhập nhìn thấy đang gõ bao nhiêu tiền (VD: gõ "1000000" tự hiện
+// "1.000.000"), gắn qua oninput="formatTienLive_(this)". KHÔNG dùng cho ô Khối lượng (dấu chấm ở
+// đó là dấu thập phân — xem parseNumberSafely ở trên) — chỉ dùng cho tiền nguyên đồng.
+function formatTienLive_(el) {
+    const neg = el.value.trim().startsWith('-');
+    const digits = el.value.replace(/[^\d]/g, '');
+    el.value = (neg && digits ? '-' : '') + digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+// Đọc lại số nguyên thật từ ô đã format bởi formatTienLive_() — bỏ dấu chấm ngăn cách hàng nghìn.
+// Cũng dùng để điền giá trị ban đầu vào ô (setTienValue_) khi mở modal/render lại.
+function parseTienInput_(val) {
+    const str = String(val == null ? '' : val).replace(/\./g, '').trim();
+    if (!str || str === '-') return NaN;
+    return parseInt(str, 10);
+}
+function setTienValue_(el, num) {
+    el.value = (num || num === 0) ? Math.round(num).toLocaleString('vi-VN') : '';
+}
+
 // --- HÀM TIỆN ÍCH CÂY HẠNG MỤC (dùng chung nhiều nơi) ---
 function findHangMuc(maHangMuc) {
     return hangMuc.find(h => h.maHangMuc === maHangMuc);

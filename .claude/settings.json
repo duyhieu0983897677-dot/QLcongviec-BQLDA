@@ -30,7 +30,10 @@
       "Bash(xargs -I{} grep -n '\\\\.\\\\.\\\\.' {})",
       "Read(//d/04. CODE BQLDA/02. CODE CẬP НХThấy MỚI NHẤT/01. CODE CONGVIEC/**)",
       "Bash(sort -t: -k2)",
-      "Bash(uniq -c -f1)"
+      "Bash(uniq -c -f1)",
+      "Skill(artifact-design)",
+      "Skill(artifact-design:*)",
+      "Bash(git checkout *)"
     ]
   }
 }

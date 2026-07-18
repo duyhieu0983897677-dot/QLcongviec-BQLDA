@@ -24,6 +24,18 @@
 
 let ntState_ = { boq: null };
 
+// Bảng "Tổng hợp lũy kế khối lượng nghiệm thu" — toàn hợp đồng, KHÔNG lọc theo ngày (khác bảng
+// "Chi tiết ... theo ngày" bên dưới, vẫn giữ nguyên để tra cứu/sửa từng lượt nhập). Dùng chung
+// renderBOQLuyKeTable_() ở 9_HopDong.html, chỉ khác field nguồn so với tab Thanh toán.
+let ntLuyKeExpanded_ = new Set();
+function toggleNtLuyKeHeader_(maBOQ) {
+    if (ntLuyKeExpanded_.has(maBOQ)) ntLuyKeExpanded_.delete(maBOQ); else ntLuyKeExpanded_.add(maBOQ);
+    renderNtLuyKeTable_();
+}
+function renderNtLuyKeTable_() {
+    renderBOQLuyKeTable_('ntLuyKeBody', 'khoiLuongDaNghiemThu', ntLuyKeExpanded_, 'toggleNtLuyKeHeader_');
+}
+
 function renderNghiemThu() {
     fillHopDongSelect_('ntHopDongSelect');
     const emptyBox = document.getElementById('ntNoHopDong');
@@ -40,20 +52,23 @@ function renderNghiemThu() {
 
     const editable = canEditHopDong();
     document.getElementById('ntNoPerm').style.display = editable ? 'none' : '';
-    document.getElementById('ntImportBox').style.display = editable ? '' : 'none';
+    document.getElementById('ntImportBox').style.display = editable ? 'flex' : 'none';
     ['ntNgay', 'ntKhoiLuong', 'ntGhiChu'].forEach(id => { document.getElementById(id).disabled = !editable; });
 
     const sel = document.getElementById('ntBOQ');
     const currentVal = sel.value;
-    const items = boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader);
-    sel.innerHTML = '<option value="">-- Chọn hạng mục --</option>' +
-        items.map(b => `<option value="${b.maBOQ}">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</option>`).join('');
+    // Lấy CẢ đầu mục cha (isHeader) để tinhChuoiChaBOQ_ dò đúng chuỗi cha — buildBOQOptgroupHTML_
+    // (includeHeaders=false) tự bỏ header ra khỏi option, chỉ dùng để nhóm optgroup theo tên cha.
+    const allItems = boq.filter(b => b.maHopDong === currentHopDongId);
+    const items = allItems.filter(b => !b.isHeader);
+    sel.innerHTML = '<option value="">-- Chọn hạng mục --</option>' + buildBOQOptgroupHTML_(allItems, false);
     if (currentVal && items.some(b => b.maBOQ === currentVal)) sel.value = currentVal;
 
     document.getElementById('ntNgay').value = formatVN(getTodayDate());
     if (!document.getElementById('ntExcelNgay').value) document.getElementById('ntExcelNgay').value = formatVN(getTodayDate());
     if (!document.getElementById('ntLogNgay').value) document.getElementById('ntLogNgay').value = formatVN(getTodayDate());
     selectNghiemThuBOQ(sel.value);
+    renderNtLuyKeTable_();
     renderNghiemThuTheoNgay();
 
     // Bảng chọn ngày trên lịch — chỉ khởi tạo 1 lần cho mỗi ô (el._flatpickr), không phải mở modal
@@ -256,7 +271,7 @@ function importNghiemThuFromExcel() {
         let chain = Promise.resolve();
         rows.forEach((row, idx) => {
             if (idx === 0) return;
-            const stt = row[0], ten = row[1];
+            const stt = sttTuExcel_(row[0]), ten = row[1];
             const qty = parseNumberSafely(row[3]);
             const note = String(row[4] || '').trim();
             if (!ten || isNaN(qty) || qty <= 0) return;
@@ -270,6 +285,7 @@ function importNghiemThuFromExcel() {
             if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '…' : '');
             showCustomAlert(msg, ok > 0 ? 'success' : 'error');
             fileInput.value = '';
+            if (ok > 0) document.getElementById('ntExcelModal').classList.remove('active');
             reloadHopDongData();
         });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));

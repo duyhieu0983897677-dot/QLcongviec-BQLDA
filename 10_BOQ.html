@@ -28,15 +28,50 @@ function renderBOQ() {
     }
     if (emptyBox) emptyBox.style.display = 'none';
     if (content) content.style.display = '';
-    document.getElementById('boqHopDongInfo').innerHTML =
-        `Giá trị hiện hành: <b>${tienHienThi_(giaTriHienHanhHopDong(hd.maHopDong))}</b> đ`;
     const editable = canEditHopDong();
     const btnThem = document.getElementById('btnThemBOQItem');
     if (btnThem) btnThem.style.display = editable ? '' : 'none';
     const importBox = document.getElementById('boqImportBox');
-    if (importBox) importBox.style.display = editable ? '' : 'none';
+    if (importBox) importBox.style.display = editable ? 'flex' : 'none';
     renderBOQTree();
+    renderBOQTotalBlock_(hd);
     renderPhuLucList();
+}
+
+// Khối 5 hàng "Tổng cộng giá trị trước/sau thuế VAT" ở cuối bảng BOQ — Giá trị giảm giá là ô nhập
+// tay (đồng bộ 2 chiều với hd.giamGia, xem capNhatGiamGiaBOQ_()), các hàng còn lại đều tính lại từ
+// Khối lượng/Đơn giá HIỆU LỰC (sau Phụ lục) của bảng BOQ, cùng công thức với giaTriHienHanhHopDong()
+// (9_HopDong.html) — "Giá trị sau giảm giá (chưa VAT)" ở đây LUÔN khớp với con số đó.
+function renderBOQTotalBlock_(hd) {
+    const items = boq.filter(b => b.maHopDong === hd.maHopDong && !b.isHeader);
+    const tongTruocThue = Math.round(items.reduce((s, b) => s + (b.khoiLuongHieuLuc || 0) * (b.donGiaHieuLuc || 0), 0));
+    const sauGiamGia = giaTriHienHanhHopDong(hd.maHopDong);
+    const vatRate = Number(hd.thueVAT) || 0;
+    const thueVat = Math.round(sauGiamGia * vatRate / 100);
+    const tongSauThue = sauGiamGia + thueVat;
+
+    document.getElementById('boqTongTruocThue').textContent = tienHienThi_(tongTruocThue) + 'đ';
+    const giamGiaInput = document.getElementById('boqGiamGiaInput');
+    // Không ghi đè giá trị đang gõ dở nếu ô đang được focus — tránh giật con trỏ khi reloadHopDongData()
+    // chạy lại renderBOQ() ngay sau khi lưu.
+    if (document.activeElement !== giamGiaInput) setTienValue_(giamGiaInput, hd.giamGia || 0);
+    giamGiaInput.disabled = !canEditHopDong();
+    document.getElementById('boqSauGiamGia').textContent = tienHienThi_(sauGiamGia) + 'đ';
+    document.getElementById('boqVatPercent').textContent = vatRate;
+    document.getElementById('boqThueVat').textContent = tienHienThi_(thueVat) + 'đ';
+    document.getElementById('boqTongSauThue').textContent = tienHienThi_(tongSauThue) + 'đ';
+}
+
+// Sửa Giá trị giảm giá ngay tại tab BOQ — lưu qua đúng adminSaveHopDong() (cùng đường lưu với modal
+// Sửa Hợp đồng ở 9_HopDong.html), khỏi phải nhảy sang tab Hợp đồng chỉ để đổi 1 con số.
+function capNhatGiamGiaBOQ_() {
+    const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    if (!hd) return;
+    const newVal = parseTienInput_(document.getElementById('boqGiamGiaInput').value) || 0;
+    if (newVal === (hd.giamGia || 0)) return;
+    gsRun('adminSaveHopDong', myUserId, myPassword, Object.assign({}, hd, { giamGia: newVal }))
+        .then(() => { showCustomAlert('Đã cập nhật Giá trị giảm giá.', 'success'); reloadHopDongData(); })
+        .catch(handleBackendError);
 }
 
 // Cây BOQ hiển thị ĐÚNG theo thứ tự lưu trong sheet (= thứ tự tạo/nhập) — KHÔNG tự sắp xếp lại
@@ -66,14 +101,49 @@ function tinhChuoiChaBOQ_(items) {
     return chains;
 }
 
+// Dựng HTML <option>/<optgroup> cho 1 danh sách hạng mục BOQ (đã lọc theo Hợp đồng) — nhóm mỗi
+// hạng mục vào <optgroup> mang tên đầu mục cha GẦN NHẤT (dùng tinhChuoiChaBOQ_), để dropdown chọn
+// hạng mục hiện rõ đang thuộc mục lớn nào thay vì 1 danh sách phẳng. includeHeaders=true thì đầu
+// mục cha cũng là 1 option chọn được (đặt vào optgroup của CHÍNH cha nó, tức ông/bà) — dùng cho
+// modal Thêm/Sửa/Xóa BOQ (10_BOQ.html); false thì chỉ liệt kê hạng mục con — dùng cho dropdown
+// chọn hạng mục để ghi nhận khối lượng (11_NghiemThu.html).
+function buildBOQOptgroupHTML_(items, includeHeaders) {
+    const chains = tinhChuoiChaBOQ_(items);
+    const byId = {};
+    items.forEach(b => { byId[b.maBOQ] = b; });
+
+    const groupOrder = [];
+    const groupOptions = {};
+    items.forEach((b, idx) => {
+        if (b.isHeader && !includeHeaders) return;
+        const chain = chains[idx];
+        const parentId = chain.length ? chain[chain.length - 1] : '';
+        if (!(parentId in groupOptions)) { groupOptions[parentId] = []; groupOrder.push(parentId); }
+        const label = (b.stt ? b.stt + ' - ' : '') + b.tenHangMuc;
+        groupOptions[parentId].push(`<option value="${b.maBOQ}">${escapeHtml(label)}</option>`);
+    });
+
+    return groupOrder.map(key => {
+        const optionsHtml = groupOptions[key].join('');
+        if (!key) return optionsHtml; // không có cha (đầu mục gốc) — không bọc optgroup
+        const parent = byId[key];
+        const label = parent ? (parent.stt ? parent.stt + ' - ' : '') + parent.tenHangMuc : key;
+        return `<optgroup label="${escapeHtml(label)}">${optionsHtml}</optgroup>`;
+    }).join('');
+}
+
+// Bảng BOQ CHỈ còn 7 cột cốt lõi (STT/Tên/ĐVT/Khối lượng/Đơn giá/Thành tiền/Ghi chú) — Khối lượng/
+// Đơn giá dùng giá trị HIỆU LỰC (sau Phụ lục), khớp với Giá trị hiện hành HĐ ở giaTriHienHanhHopDong().
+// Tiến độ % / Đã nghiệm thu / Thời gian KH chuyển sang xem ở bảng lũy kế tab Nghiệm thu/Thanh toán.
+// KHÔNG còn nút Sửa/Xóa từng dòng — dùng chung 1 nút "Thêm / Sửa hạng mục" mở openBOQItemModal(),
+// chọn hạng mục cần sửa/xóa qua dropdown bên trong modal (xem #boqManageSelect).
 function renderBOQTree() {
     const tbody = document.getElementById('boqBody');
     const items = boq.filter(b => b.maHopDong === currentHopDongId);
     if (items.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
         return;
     }
-    const editable = canEditHopDong();
     const chains = tinhChuoiChaBOQ_(items);
 
     let html = '';
@@ -85,40 +155,40 @@ function renderBOQTree() {
         if (b.isHeader) {
             const isOpen = boqExpandedHeaders_.has(b.maBOQ);
             html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="toggleBoqHeader_('${b.maBOQ}')">
-                <td colspan="9" style="padding-left:${indent}px;">
+                <td colspan="7" style="padding-left:${indent}px;">
                     <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
                     <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
-                    ${editable ? `<span class="action-cell" style="float:right;" onclick="event.stopPropagation();">
-                        <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')" aria-label="Sửa hạng mục" title="Sửa hạng mục"><i class="fa-solid fa-pen"></i></button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')" aria-label="Xóa hạng mục" title="Xóa hạng mục"><i class="fa-solid fa-trash"></i></button>
-                    </span>` : ''}
                 </td>
             </tr>`;
             return;
         }
-        const pct = b.khoiLuongHieuLuc > 0 ? Math.min(100, Math.round((b.khoiLuongDaNghiemThu / b.khoiLuongHieuLuc) * 1000) / 10) : 0;
+        const thanhTien = (b.khoiLuongHieuLuc || 0) * (b.donGiaHieuLuc || 0);
         html += `<tr>
-            <td style="padding-left:${indent}px;">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge pl-tag">PL</span>' : ''}</td>
+            <td class="text-center">${b.stt || '--'}</td>
+            <td style="padding-left:${indent}px;">${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge pl-tag">PL</span>' : ''}</td>
             <td class="text-center">${b.donVi || '--'}</td>
-            <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHopDong)}</td>
             <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
             <td class="text-right">${tienHienThi_(b.donGiaHieuLuc)}</td>
-            <td class="text-right val-nghiemthu">${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</td>
-            <td class="text-center"><span class="bc-badge ${pct >= 100 ? 'done' : 'inprogress'}">${pct}%</span></td>
-            <td class="text-center">${formatVN(b.ngayBatDauKH)} - ${formatVN(b.ngayKetThucKH)}</td>
-            <td class="text-center">
-                ${editable ? `<div class="action-cell">
-                    <button class="btn btn-sm" style="background:var(--primary);" onclick="openBOQItemModal('${b.maBOQ}')" aria-label="Sửa hạng mục" title="Sửa hạng mục"><i class="fa-solid fa-pen"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="deleteBOQItem('${b.maBOQ}')" aria-label="Xóa hạng mục" title="Xóa hạng mục"><i class="fa-solid fa-trash"></i></button>
-                </div>` : '--'}
-            </td>
+            <td class="text-right val-nghiemthu">${tienHienThi_(thanhTien)}</td>
+            <td style="text-align:left;">${b.ghiChu || '--'}</td>
         </tr>`;
     });
-    tbody.innerHTML = html || `<tr><td colspan="9" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
+    tbody.innerHTML = html || `<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
 }
 
+// Modal Thêm/Sửa/Xóa BOQ dùng CHUNG 1 nút — gọi openBOQItemModal() (không tham số) để mở modal ở
+// trạng thái "Thêm mới", hoặc openBOQItemModal(maBOQ) để mở thẳng vào 1 hạng mục có sẵn. Dropdown
+// #boqManageSelect bên trong modal (đổi giá trị gọi lại chính hàm này) cho phép đổi mục tiêu SỬA
+// mà không cần đóng/mở lại modal — đây là nơi DUY NHẤT chọn hạng mục để sửa/xóa, thay cho các nút
+// Sửa/Xóa từng dòng đã bỏ khỏi bảng (xem renderBOQTree()).
 function openBOQItemModal(maBOQ) {
     const item = maBOQ ? boq.find(b => b.maBOQ === maBOQ) : null;
+    const allItems = boq.filter(b => b.maHopDong === currentHopDongId);
+
+    const sel = document.getElementById('boqManageSelect');
+    sel.innerHTML = '<option value="">-- Thêm hạng mục mới --</option>' + buildBOQOptgroupHTML_(allItems, true);
+    sel.value = item ? item.maBOQ : '';
+
     document.getElementById('boqModalTitle').textContent = item ? 'Sửa hạng mục BOQ' : 'Thêm hạng mục BOQ';
     document.getElementById('boqEditId').value = item ? item.maBOQ : '';
     document.getElementById('boqStt').value = item ? item.stt : '';
@@ -127,9 +197,11 @@ function openBOQItemModal(maBOQ) {
     document.getElementById('boqCap').value = item ? item.cap : 0;
     document.getElementById('boqDonVi').value = item ? item.donVi : '';
     document.getElementById('boqKhoiLuong').value = item ? item.khoiLuongHopDong : '';
-    document.getElementById('boqDonGia').value = item ? item.donGia : '';
+    setTienValue_(document.getElementById('boqDonGia'), item ? item.donGia : '');
     document.getElementById('boqNgayBD').value = item && item.ngayBatDauKH ? formatVN(item.ngayBatDauKH) : '';
     document.getElementById('boqNgayKT').value = item && item.ngayKetThucKH ? formatVN(item.ngayKetThucKH) : '';
+    document.getElementById('boqGhiChu').value = item ? (item.ghiChu || '') : '';
+    document.getElementById('boqBtnXoa').style.display = item ? '' : 'none';
     toggleBOQHeaderFields();
     document.getElementById('boqItemModal').classList.add('active');
     setTimeout(() => {
@@ -161,9 +233,10 @@ function saveBOQItemModal() {
         cap: parseInt(document.getElementById('boqCap').value, 10) || 0,
         donVi: document.getElementById('boqDonVi').value.trim(),
         khoiLuongHopDong: parseNumberSafely(document.getElementById('boqKhoiLuong').value) || 0,
-        donGia: parseNumberSafely(document.getElementById('boqDonGia').value) || 0,
+        donGia: parseTienInput_(document.getElementById('boqDonGia').value) || 0,
         ngayBatDauKH: convertDMYtoISO(document.getElementById('boqNgayBD').value.trim()) || '',
-        ngayKetThucKH: convertDMYtoISO(document.getElementById('boqNgayKT').value.trim()) || ''
+        ngayKetThucKH: convertDMYtoISO(document.getElementById('boqNgayKT').value.trim()) || '',
+        ghiChu: document.getElementById('boqGhiChu').value.trim()
     };
     if (!payload.tenHangMuc) { showCustomAlert('Vui lòng nhập Tên hạng mục!', 'error'); return; }
 
@@ -177,7 +250,7 @@ function deleteBOQItem(maBOQ) {
     if (!item) return;
     if (!confirm(`Xác nhận XÓA hạng mục "${item.tenHangMuc}"?`)) return;
     gsRun('adminXoaBOQItem', myUserId, myPassword, maBOQ)
-        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongData(); })
         .catch(handleBackendError);
 }
 
@@ -332,7 +405,7 @@ function importBOQFromExcel() {
         let chain = Promise.resolve();
         rows.forEach((row, idx) => {
             if (idx === 0) return; // bỏ dòng tiêu đề
-            const stt = String(row[0] || '').trim();
+            const stt = sttTuExcel_(row[0]);
             const ten = String(row[1] || '').trim();
             if (!ten) return;
             const lower = ten.toLowerCase();
@@ -355,6 +428,7 @@ function importBOQFromExcel() {
         chain.then(() => {
             showCustomAlert(`Đã nhập ${ok} dòng vào BOQ.`, ok > 0 ? 'success' : 'error');
             fileInput.value = '';
+            if (ok > 0) document.getElementById('boqExcelModal').classList.remove('active');
             reloadHopDongData();
         });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));

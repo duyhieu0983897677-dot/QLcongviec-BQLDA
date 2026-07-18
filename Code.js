@@ -37,8 +37,11 @@ const HOPDONG_HEADERS_ = ['maHopDong', 'tenHopDong', 'maGoiThau', 'nhaThau', 'ng
   'tamUngHopDong', 'tamUngThiCong', 'thueVAT', 'giamGia', 'active'];
 // BOQHangMuc: cây hạng mục trong 1 Hợp đồng, phân cấp qua stt (dạng "1.1.2") + cap (số).
 // maPhuLucTao rỗng = thuộc BOQ gốc; có giá trị = do 1 Phụ lục thêm mới (loại MOI).
+// 'ghiChu' luôn APPEND ở CUỐI (sau 'active') — không chèn giữa, vì adminXoaBOQItem() hardcode cột
+// active là index 13 (sheet.getRange(i+1, 13)); thêm cột mới ở cuối giữ nguyên mọi index cũ, dòng
+// dữ liệu cũ chưa có Ghi chú vẫn đọc được bình thường (ô trống).
 const BOQ_HEADERS_ = ['maBOQ', 'maHopDong', 'stt', 'tenHangMuc', 'isHeader', 'donVi',
-  'khoiLuongHopDong', 'donGia', 'cap', 'ngayBatDauKH', 'ngayKetThucKH', 'maPhuLucTao', 'active'];
+  'khoiLuongHopDong', 'donGia', 'cap', 'ngayBatDauKH', 'ngayKetThucKH', 'maPhuLucTao', 'active', 'ghiChu'];
 const PHULUC_HEADERS_ = ['maPhuLuc', 'maHopDong', 'soHieu', 'ngayPhuLuc', 'ghiChu', 'active'];
 // loaiThayDoi: MOI (thêm hạng mục mới, không cần khối lượng/giá riêng ở đây) / THAY_THE (đổi hẳn
 // khối lượng hiệu lực = khoiLuongMoi) / DIEU_CHINH (cộng/trừ chênh lệch = khoiLuongDieuChinh).
@@ -48,9 +51,13 @@ const PHULUC_THAYDOI_HEADERS_ = ['id', 'maPhuLuc', 'maBOQ', 'loaiThayDoi', 'khoi
 // giống hệt NhatKyTienDo (xem themNghiemThu()).
 const NGHIEMTHU_HEADERS_ = ['maNghiemThu', 'maBOQ', 'ngayNghiemThu', 'khoiLuong', 'ghiChu',
   'nguoiNhap_id', 'nguoiNhap_ten', 'thoiGianNhap', 'active'];
+// 'giamGiaDot' luôn APPEND ở CUỐI (sau 'active') — không chèn giữa, vì adminXoaDotThanhToan()
+// hardcode cột active là index 11 (sheet.getRange(i+1, 11)); thêm ở cuối giữ nguyên mọi index cũ.
+// Khác với hd.giamGia (giảm giá 1 LẦN cho cả hợp đồng, sửa ở tab BOQ) — giamGiaDot là khoản giảm
+// giá riêng của TỪNG Đợt thanh toán (giống thu hồi tạm ứng/khấu trừ khác, cũng trừ vào Đợt đó).
 const DOTTHANHTOAN_HEADERS_ = ['maDotThanhToan', 'maHopDong', 'tenDot', 'ngayThanhToan',
   'phanTramThanhToan', 'ghiChu', 'thuHoiTamUngHopDong', 'thuHoiTamUngThiCong', 'khauTruKhac',
-  'ghiChuKhauTru', 'active'];
+  'ghiChuKhauTru', 'active', 'giamGiaDot'];
 const DOTTHANHTOAN_CHITIET_HEADERS_ = ['id', 'maDotThanhToan', 'maBOQ', 'khoiLuong', 'active'];
 // QuyetToan: chỉ lưu mốc xác nhận — mọi số liệu tổng hợp tính lại từ BOQ/PhuLuc/NghiemThu/ThanhToan
 // mỗi lần đọc (xem tinhQuyetToanHopDong_()).
@@ -1509,7 +1516,7 @@ function readBOQRows_(sheet) {
       donVi: String(r[5] || '').trim(), khoiLuongHopDong: round3_(r[6]),
       donGia: round0_(r[7]), cap: parseInt(r[8], 10) || 0,
       ngayBatDauKH: formatDateCell_(r[9]), ngayKetThucKH: formatDateCell_(r[10]),
-      maPhuLucTao: String(r[11] || '').trim()
+      maPhuLucTao: String(r[11] || '').trim(), ghiChu: String(r[13] || '').trim()
     });
   });
   return result;
@@ -1592,7 +1599,7 @@ function readDotThanhToanRows_(sheet) {
       ngayThanhToan: formatDateCell_(r[3]), phanTramThanhToan: Number(r[4]) || 0,
       ghiChu: String(r[5] || '').trim(), thuHoiTamUngHopDong: round0_(r[6]),
       thuHoiTamUngThiCong: round0_(r[7]), khauTruKhac: round0_(r[8]),
-      ghiChuKhauTru: String(r[9] || '').trim()
+      ghiChuKhauTru: String(r[9] || '').trim(), giamGiaDot: round0_(r[11])
     });
   });
   return result;
@@ -1684,7 +1691,7 @@ function tinhQuyetToanHopDong_(maHopDong, preloaded) {
     });
     const tamTinh = thucHien * (dot.phanTramThanhToan || 100) / 100;
     const thue = tamTinh * vatRate / 100;
-    tongDaThanhToan += tamTinh + thue - dot.thuHoiTamUngHopDong - dot.thuHoiTamUngThiCong - dot.khauTruKhac;
+    tongDaThanhToan += tamTinh + thue - dot.thuHoiTamUngHopDong - dot.thuHoiTamUngThiCong - dot.khauTruKhac - (dot.giamGiaDot || 0);
   });
   tongDaThanhToan = Math.round(tongDaThanhToan);
 
@@ -1720,11 +1727,16 @@ function getHopDongData() {
   const donGiaHieuLucMap = tinhDonGiaHieuLuc_(boq, phuLucThayDoiHieuLuc_);
   const executedByBOQ = {};
   nghiemThu.forEach(n => { executedByBOQ[n.maBOQ] = Math.round(((executedByBOQ[n.maBOQ] || 0) + n.khoiLuong) * 1000) / 1000; });
+  // Khối lượng đã đưa vào thanh toán, lũy kế qua MỌI đợt (bảng lũy kế tab Thanh toán) — không cần
+  // join qua dotThanhToan.maHopDong vì maBOQ vốn đã gắn cố định với đúng 1 hợp đồng.
+  const paidByBOQ = {};
+  dotThanhToanChiTiet.forEach(c => { paidByBOQ[c.maBOQ] = Math.round(((paidByBOQ[c.maBOQ] || 0) + c.khoiLuong) * 1000) / 1000; });
 
   boq.forEach(item => {
     item.khoiLuongHieuLuc = effectiveQtyMap[item.maBOQ] != null ? effectiveQtyMap[item.maBOQ] : item.khoiLuongHopDong;
     item.donGiaHieuLuc = donGiaHieuLucMap[item.maBOQ] != null ? donGiaHieuLucMap[item.maBOQ] : item.donGia;
     item.khoiLuongDaNghiemThu = executedByBOQ[item.maBOQ] || 0;
+    item.khoiLuongDaThanhToan = paidByBOQ[item.maBOQ] || 0;
   });
 
   quyetToan.forEach(qt => {
@@ -1797,7 +1809,7 @@ function adminSaveBOQItem(userId, password, item) {
     '', maHopDong, String(item.stt || '').trim(), tenHangMuc, !!item.isHeader,
     String(item.donVi || '').trim(), round3_(item.khoiLuongHopDong), round0_(item.donGia),
     parseInt(item.cap, 10) || 0, item.ngayBatDauKH || '', item.ngayKetThucKH || '',
-    String(item.maPhuLucTao || '').trim(), true
+    String(item.maPhuLucTao || '').trim(), true, String(item.ghiChu || '').trim()
   ];
 
   if (maBOQ) {
@@ -1997,7 +2009,7 @@ function adminTaoDotThanhToan(userId, password, dotThanhToan) {
     dotThanhToan.phanTramThanhToan != null ? Number(dotThanhToan.phanTramThanhToan) : 100,
     String(dotThanhToan.ghiChu || '').trim(), round0_(dotThanhToan.thuHoiTamUngHopDong),
     round0_(dotThanhToan.thuHoiTamUngThiCong), round0_(dotThanhToan.khauTruKhac),
-    String(dotThanhToan.ghiChuKhauTru || '').trim(), true
+    String(dotThanhToan.ghiChuKhauTru || '').trim(), true, round0_(dotThanhToan.giamGiaDot)
   ]);
 
   const chiTietSheet = layHoacTaoSheet_('DotThanhToanChiTiet', DOTTHANHTOAN_CHITIET_HEADERS_);
@@ -2025,6 +2037,8 @@ function adminSuaDieuChinhThanhToan(userId, password, maDotThanhToan, dieuChinh)
         round0_(dieuChinh.thuHoiTamUngHopDong), round0_(dieuChinh.thuHoiTamUngThiCong),
         round0_(dieuChinh.khauTruKhac), String(dieuChinh.ghiChuKhauTru || '').trim()
       ]]);
+      // giamGiaDot nằm ở cột 12 (sau active, cột 11) — không liền kề 4 cột trên nên ghi riêng.
+      sheet.getRange(i + 1, 12).setValue(round0_(dieuChinh.giamGiaDot));
       logActivity(userId, user.name, 'Sửa điều chỉnh Thanh toán', maDotThanhToan);
       return 'Success';
     }
