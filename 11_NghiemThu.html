@@ -13,6 +13,13 @@
    - submitNghiemThu()          : Gửi themNghiemThu() cho 1 hạng mục
    - importNghiemThuFromExcel() : Nhập hàng loạt khối lượng từ file Excel cho 1 ngày, khớp theo
                                   STT+Tên với BOQ (xem khopBOQTheoSttTen_ ở 9_HopDong.html)
+   - renderNghiemThuTheoNgay()  : Vẽ bảng CHỈ những hạng mục BOQ có nghiệm thu ĐÚNG ngày đang chọn
+                                  (kèm đủ chuỗi đầu mục cha để biết thuộc mục nào — không hiện toàn
+                                  bộ cây BOQ). Khối lượng xác nhận/Chênh lệch tính riêng cho ngày đó,
+                                  không lũy kế. Tái dùng tinhChuoiChaBOQ_() ở 10_BOQ.html để dò đúng
+                                  chuỗi đầu mục cha, giữ nguyên thứ tự lưu trong sheet.
+   - openNtEditModal()/luuNtEditRow()/xoaNtEditRow() : Sửa/xóa 1 dòng Nghiệm thu đã ghi của đúng
+                                  ngày đang xem trong bảng trên (không tạo dòng mới như submitNghiemThu()).
    ================================================================ */
 
 let ntState_ = { boq: null };
@@ -45,7 +52,9 @@ function renderNghiemThu() {
 
     document.getElementById('ntNgay').value = formatVN(getTodayDate());
     if (!document.getElementById('ntExcelNgay').value) document.getElementById('ntExcelNgay').value = formatVN(getTodayDate());
+    if (!document.getElementById('ntLogNgay').value) document.getElementById('ntLogNgay').value = formatVN(getTodayDate());
     selectNghiemThuBOQ(sel.value);
+    renderNghiemThuTheoNgay();
 
     // Bảng chọn ngày trên lịch — chỉ khởi tạo 1 lần cho mỗi ô (el._flatpickr), không phải mở modal
     // nên không gọi lại setTimeout mỗi lần render như các modal khác, chỉ cần gọi 1 lần là đủ.
@@ -57,8 +66,132 @@ function renderNghiemThu() {
                 const el = document.getElementById(id);
                 if (el && !el._flatpickr) flatpickr(el, opts);
             });
+            const logEl = document.getElementById('ntLogNgay');
+            // onDayCreate đọc trực tiếp boq/nghiemThu/currentHopDongId (biến toàn cục) MỖI LẦN lịch vẽ
+            // lại ngày (mở lịch/đổi tháng) — không phải giá trị chụp lúc khởi tạo, nên vẫn đúng sau khi
+            // đổi Hợp đồng hoặc tải lại dữ liệu mà không cần huỷ/tạo lại flatpickr.
+            if (logEl && !logEl._flatpickr) {
+                flatpickr(logEl, Object.assign({}, opts, {
+                    onChange: () => renderNghiemThuTheoNgay(),
+                    onDayCreate: (dObj, dStr, fp, dayElem) => {
+                        const d = dayElem.dateObj;
+                        const iso = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                        const boqIds = new Set(boq.filter(b => b.maHopDong === currentHopDongId).map(b => b.maBOQ));
+                        if (nghiemThu.some(n => boqIds.has(n.maBOQ) && n.ngayNghiemThu === iso)) dayElem.classList.add('nt-log-day');
+                    }
+                }));
+            }
         } catch (e) { console.warn(e); }
     }, 100);
+}
+
+// Bảng "Chi tiết khối lượng nghiệm thu theo ngày" — CHỈ hiện hạng mục có nghiệm thu ĐÚNG ngày
+// chọn (kèm đủ chuỗi đầu mục cha để biết thuộc mục nào), không hiện lại toàn bộ cây BOQ. Khối
+// lượng xác nhận/Chênh lệch tính riêng cho ngày đó (không lũy kế các ngày trước). Giữ NGUYÊN thứ
+// tự lưu trong sheet (tái dùng tinhChuoiChaBOQ_() ở 10_BOQ.html để dò đúng chuỗi đầu mục cha) —
+// không tự sắp theo STT vì STT chỉ là nhãn hiển thị tự do, có thể trùng giữa các dòng con.
+function renderNghiemThuTheoNgay() {
+    const tbody = document.getElementById('ntLogBody');
+    if (!tbody) return;
+    const ngayISO = convertDMYtoISO(document.getElementById('ntLogNgay').value.trim());
+    if (!ngayISO) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chọn ngày để xem chi tiết.</td></tr>`;
+        return;
+    }
+    const items = boq.filter(b => b.maHopDong === currentHopDongId);
+    const chains = tinhChuoiChaBOQ_(items);
+    const editable = canEditHopDong();
+
+    // Chỉ giữ lại hạng mục (lá) có ít nhất 1 dòng nghiệm thu đúng ngày chọn, cộng thêm mọi đầu mục
+    // cha của các lá đó (để biết nó thuộc mục nào) — các đầu mục/hạng mục không liên quan bị ẩn hẳn.
+    const activeIdx = new Set();
+    const neededHeaders = new Set();
+    items.forEach((b, idx) => {
+        if (b.isHeader) return;
+        if (nghiemThu.some(n => n.maBOQ === b.maBOQ && n.ngayNghiemThu === ngayISO)) {
+            activeIdx.add(idx);
+            chains[idx].forEach(pid => neededHeaders.add(pid));
+        }
+    });
+    if (activeIdx.size === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu nghiệm thu cho ngày này.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    items.forEach((b, idx) => {
+        if (b.isHeader) {
+            if (!neededHeaders.has(b.maBOQ)) return;
+            html += `<tr class="boq-header-row"><td colspan="8"><b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b></td></tr>`;
+            return;
+        }
+        if (!activeIdx.has(idx)) return;
+
+        const logsNgay = nghiemThu.filter(n => n.maBOQ === b.maBOQ && n.ngayNghiemThu === ngayISO);
+        const xacNhanNgay = Math.round(logsNgay.reduce((s, n) => s + n.khoiLuong, 0) * 1000) / 1000;
+        const chenhLech = Math.round((b.khoiLuongHieuLuc - xacNhanNgay) * 1000) / 1000;
+        // Chênh lệch = Khối lượng HĐ - Khối lượng xác nhận. Âm (xác nhận VƯỢT khối lượng HĐ, cần
+        // chú ý) → đỏ (val-phatsinh); dương/bằng 0 (còn trong hoặc đúng khối lượng HĐ) → xanh lá
+        // (val-thanhtoan) — KHÔNG phải luôn đỏ như trước.
+        const chenhLechClass = chenhLech < 0 ? 'val-phatsinh' : 'val-thanhtoan';
+        const ghiChuNgay = logsNgay.filter(n => n.ghiChu).map(n => n.ghiChu).join('; ');
+        html += `<tr>
+            <td class="text-center">${b.stt || ''}</td>
+            <td>${b.tenHangMuc}</td>
+            <td class="text-center">${b.donVi || '--'}</td>
+            <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
+            <td class="text-right val-hopdong">${khoiLuongHienThi_(xacNhanNgay)}</td>
+            <td class="text-right ${chenhLechClass}">${khoiLuongHienThi_(chenhLech)}</td>
+            <td>${ghiChuNgay || '--'}</td>
+            <td class="text-center">${editable ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="openNtEditModal('${b.maBOQ}', '${ngayISO}')" aria-label="Sửa khối lượng ngày này" title="Sửa khối lượng ngày này"><i class="fa-solid fa-pen"></i></button>` : '--'}</td>
+        </tr>`;
+    });
+    tbody.innerHTML = html || `<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có dữ liệu nghiệm thu cho ngày này.</td></tr>`;
+}
+
+// Sửa/xóa lại đúng (các) dòng Nghiệm thu đã ghi của 1 hạng mục vào ĐÚNG ngày đang xem trong bảng
+// trên — khác submitNghiemThu() (luôn tạo dòng MỚI, cộng dồn). Thường chỉ có 1 dòng/ngày nhưng vẫn
+// liệt kê đủ nếu có nhiều lần nhập trùng ngày (vd nhập tay + nhập Excel cùng ngày).
+function openNtEditModal(maBOQ, ngayISO) {
+    const b = boq.find(x => x.maBOQ === maBOQ);
+    if (!b) return;
+    document.getElementById('ntEditNgayLabel').textContent = formatVN(ngayISO);
+    document.getElementById('ntEditHangMucLabel').textContent = `${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}`;
+    const logs = nghiemThu.filter(n => n.maBOQ === maBOQ && n.ngayNghiemThu === ngayISO);
+    document.getElementById('ntEditList').innerHTML = logs.length === 0
+        ? '<div style="color:var(--text-muted); padding:6px 0;">Không có dữ liệu ngày này.</div>'
+        : logs.map(l => `<div class="form-row-3" style="align-items:end; margin-bottom:10px;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Khối lượng</label>
+                <input type="number" step="any" class="form-control" id="ntEditKL_${l.maNghiemThu}" value="${l.khoiLuong}">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>Ghi chú</label>
+                <input type="text" class="form-control" id="ntEditGC_${l.maNghiemThu}" value="${escapeHtml(l.ghiChu || '')}">
+            </div>
+            <div style="display:flex; gap:6px;">
+                <button class="btn btn-sm" style="background:var(--success);" onclick="luuNtEditRow('${l.maNghiemThu}')"><i class="fa-solid fa-check"></i> Lưu</button>
+                <button class="btn btn-sm btn-danger" onclick="xoaNtEditRow('${l.maNghiemThu}')" aria-label="Xóa dòng nghiệm thu này" title="Xóa"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        </div>`).join('');
+    document.getElementById('ntEditModal').classList.add('active');
+}
+
+function closeNtEditModal() { document.getElementById('ntEditModal').classList.remove('active'); }
+
+function luuNtEditRow(maNghiemThu) {
+    const kl = document.getElementById(`ntEditKL_${maNghiemThu}`).value;
+    const gc = document.getElementById(`ntEditGC_${maNghiemThu}`).value.trim();
+    gsRun('adminSuaNghiemThu', myUserId, myPassword, maNghiemThu, kl, gc)
+        .then(() => { showCustomAlert('Đã cập nhật khối lượng nghiệm thu.', 'success'); closeNtEditModal(); reloadHopDongData(); })
+        .catch(handleBackendError);
+}
+
+function xoaNtEditRow(maNghiemThu) {
+    if (!confirm('Xác nhận XÓA dòng nghiệm thu này?')) return;
+    gsRun('adminXoaNghiemThu', myUserId, myPassword, maNghiemThu)
+        .then(() => { showCustomAlert('Đã xóa dòng nghiệm thu.', 'success'); closeNtEditModal(); reloadHopDongData(); })
+        .catch(handleBackendError);
 }
 
 function selectNghiemThuBOQ(maBOQ) {
@@ -74,8 +207,8 @@ function selectNghiemThuBOQ(maBOQ) {
     const b = ntState_.boq;
     const conLai = Math.max(0, Math.round((b.khoiLuongHieuLuc - b.khoiLuongDaNghiemThu) * 1000) / 1000);
     meta.innerHTML = `<span>ĐVT: <b>${b.donVi || '--'}</b></span>
-        <span>Khối lượng hiệu lực: <b>${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</b></span>
-        <span>Đã nghiệm thu: <b>${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</b></span>
+        <span>Khối lượng hiệu lực: <b class="val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</b></span>
+        <span>Đã nghiệm thu: <b class="val-nghiemthu">${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</b></span>
         <span>Còn lại: <b>${khoiLuongHienThi_(conLai)}</b></span>`;
     btn.disabled = !canEditHopDong();
 
@@ -106,9 +239,9 @@ function submitNghiemThu() {
         .catch(err => { handleBackendError(err); btn.disabled = false; });
 }
 
-// Nhập hàng loạt khối lượng Nghiệm thu từ file Excel (STT | Tên | ĐVT | Khối lượng) cho CÙNG 1
-// ngày — khớp từng dòng với đúng hạng mục BOQ theo STT+Tên, dòng không khớp bị bỏ qua và liệt kê
-// lại để người dùng tự kiểm tra (giống hệt cách app cũ báo notFoundItems).
+// Nhập hàng loạt khối lượng Nghiệm thu từ file Excel (STT | Tên | ĐVT | Khối lượng xác nhận |
+// Ghi chú) cho CÙNG 1 ngày — khớp từng dòng với đúng hạng mục BOQ theo STT+Tên, dòng không khớp
+// bị bỏ qua và liệt kê lại để người dùng tự kiểm tra (giống hệt cách app cũ báo notFoundItems).
 function importNghiemThuFromExcel() {
     if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
     const fileInput = document.getElementById('ntExcelFile');
@@ -125,10 +258,11 @@ function importNghiemThuFromExcel() {
             if (idx === 0) return;
             const stt = row[0], ten = row[1];
             const qty = parseNumberSafely(row[3]);
+            const note = String(row[4] || '').trim();
             if (!ten || isNaN(qty) || qty <= 0) return;
             const item = khopBOQTheoSttTen_(stt, ten);
             if (!item) { khongKhop.push(`[${stt}] ${ten}`); return; }
-            chain = chain.then(() => gsRun('themNghiemThu', myUserId, myPassword, item.maBOQ, ngay, qty, '')
+            chain = chain.then(() => gsRun('themNghiemThu', myUserId, myPassword, item.maBOQ, ngay, qty, note)
                 .then(() => ok++).catch(() => {}));
         });
         chain.then(() => {

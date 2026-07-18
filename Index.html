@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <!-- defer: không chặn parse HTML/chạy script chính — Chart.js/flatpickr chỉ thật sự cần sau
@@ -126,7 +126,7 @@
                 <button class="nav-btn home-tile" onclick="switchTab('dashboard')" style="--tile-c: var(--primary);">
                     <i class="fa-solid fa-chart-pie"></i><span>Tổng quan</span>
                 </button>
-                <button class="nav-btn home-tile" onclick="switchTab('hopdong')" style="--tile-c: #2C93A6;">
+                <button class="nav-btn home-tile" onclick="switchTab('hopdong')" style="--tile-c: #0e7c9c;">
                     <i class="fa-solid fa-file-contract"></i><span>Hợp đồng</span>
                 </button>
             </div>
@@ -134,12 +134,12 @@
                 <button class="nav-btn home-tile" onclick="switchTab('congviectoi')" style="--tile-c: var(--accent);">
                     <i class="fa-solid fa-list-check"></i><span>Công việc cá nhân</span>
                 </button>
-                <button class="nav-btn home-tile" onclick="switchTab('tiendothicong')" style="--tile-c: #A8620E;">
+                <button class="nav-btn home-tile" onclick="switchTab('tiendothicong')" style="--tile-c: #b45309;">
                     <i class="fa-solid fa-chart-gantt"></i><span>Tiến độ</span>
                 </button>
             </div>
             <div class="home-tiles">
-                <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #7A7264;">
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #64748b;">
                     <i class="fa-solid fa-sitemap"></i><span>Gói thầu/Hạng mục</span>
                 </button>
                 <button class="nav-btn home-tile" onclick="switchTab('diemdanh')" style="--tile-c: #b8860b;">
@@ -147,7 +147,7 @@
                 </button>
             </div>
             <div class="home-tiles">
-                <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7C5A8B;">
+                <button class="nav-btn home-tile admin-only" onclick="switchTab('nguoidung')" style="--tile-c: #7c3aed;">
                     <i class="fa-solid fa-users-gear"></i><span>Nhân sự</span>
                 </button>
             </div>
@@ -158,7 +158,7 @@
             <div class="dash-header" style="background: linear-gradient(135deg, var(--navy), var(--primary-dark)); color:white; padding:8px 14px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                 <div>
                     <h2 style="font-size:0.92rem; margin:0;"><i class="fa-solid fa-chart-pie"></i> BÁO CÁO TỔNG — <span id="bc-kpi-total">0</span> công việc</h2>
-                    <p style="font-size:0.7rem; color:#C9D6D2; margin:1px 0 0;">Tự động tổng hợp từ Nhật ký tiến độ · Cập nhật lúc <span id="bcUpdatedAt">--</span></p>
+                    <p style="font-size:0.7rem; color:#cbd5e1; margin:1px 0 0;">Tự động tổng hợp từ Nhật ký tiến độ · Cập nhật lúc <span id="bcUpdatedAt">--</span></p>
                 </div>
                 <button class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="reloadData()"><i class="fa-solid fa-rotate"></i> Làm mới</button>
             </div>
@@ -219,14 +219,14 @@
                             <thead><tr>
                                 <th data-col="stt">STT</th>
                                 <th data-col="mahangmuc" style="min-width:110px;">Mã hạng mục</th>
-                                <th data-col="ten" style="text-align:left; min-width:220px;">Tên công việc</th>
+                                <th data-col="ten" style="min-width:220px;">Tên công việc</th>
                                 <th data-col="nguoiphutrach" style="min-width:100px;">Người phụ trách</th>
                                 <th data-col="chucdanh" style="min-width:90px;">Chức danh</th>
                                 <th data-col="ngaybatdau" style="min-width:100px;">Ngày bắt đầu</th>
                                 <th data-col="ngayketthuc" style="min-width:100px;">Ngày hoàn thành</th>
                                 <th data-col="tiendo" style="min-width:140px;">Tiến độ</th>
                                 <th data-col="tinhtrang" style="min-width:150px;">Tình trạng</th>
-                                <th data-col="ghichu" style="text-align:left; min-width:180px;">Ghi chú</th>
+                                <th data-col="ghichu" style="min-width:180px;">Ghi chú</th>
                             </tr></thead>
                             <tbody id="bcDetailBody"></tbody>
                         </table>
@@ -241,10 +241,10 @@
                         <select id="bcChiPhiHopDongSelect" class="hd-select" onchange="renderBcChiPhi()"></select>
                     </div>
                     <div class="kpi-row">
-                        <div class="kpi-mini"><span>Giá trị Hợp đồng</span><b id="cpKpiTong">0</b></div>
-                        <div class="kpi-mini"><span>Đã thực hiện</span><b id="cpKpiThucHien">0</b></div>
-                        <div class="kpi-mini"><span>Phát sinh (vượt KL)</span><b id="cpKpiPhatSinh">0</b></div>
-                        <div class="kpi-mini"><span>Đã thanh toán</span><b id="cpKpiThanhToan">0</b></div>
+                        <div class="kpi-mini"><span>Giá trị Hợp đồng</span><b id="cpKpiTong" class="val-hopdong">0</b></div>
+                        <div class="kpi-mini"><span>Đã thực hiện</span><b id="cpKpiThucHien" class="val-nghiemthu">0</b></div>
+                        <div class="kpi-mini"><span>Phát sinh (vượt KL)</span><b id="cpKpiPhatSinh" class="val-phatsinh">0</b></div>
+                        <div class="kpi-mini"><span>Đã thanh toán</span><b id="cpKpiThanhToan" class="val-thanhtoan">0</b></div>
                     </div>
                 </div>
 
@@ -276,21 +276,62 @@
 
         <!-- TAB: HỢP ĐỒNG -->
         <section id="hopdong" class="tab-content">
+            <div class="kpi-row">
+                <div class="kpi-box kpi-teal">
+                    <div class="kpi-icon"><i class="fa-solid fa-file-contract"></i></div>
+                    <div class="kpi-body">
+                        <div class="kpi-title">Số hợp đồng</div>
+                        <div class="kpi-value" id="hdKpiSoLuong">0</div>
+                    </div>
+                </div>
+                <div class="kpi-box kpi-blue">
+                    <div class="kpi-icon"><i class="fa-solid fa-sack-dollar"></i></div>
+                    <div class="kpi-body">
+                        <div class="kpi-title">Tổng giá trị HĐ (có VAT)</div>
+                        <div class="kpi-value" id="hdKpiGiaTri">0</div>
+                    </div>
+                </div>
+                <div class="kpi-box kpi-green">
+                    <div class="kpi-icon"><i class="fa-solid fa-money-check-dollar"></i></div>
+                    <div class="kpi-body">
+                        <div class="kpi-title">Đã thanh toán</div>
+                        <div class="kpi-value" id="hdKpiDaTT">0</div>
+                    </div>
+                </div>
+                <div class="kpi-box kpi-red">
+                    <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                    <div class="kpi-body">
+                        <div class="kpi-title">Công nợ còn lại</div>
+                        <div class="kpi-value" id="hdKpiConLai">0</div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header-row">
                     <div class="card-title"><i class="fa-solid fa-file-contract"></i> Danh sách Hợp đồng</div>
                     <button id="btnThemHopDong" class="btn btn-sm" style="background:var(--accent); display:none;" onclick="openHopDongModal()"><i class="fa-solid fa-plus"></i> Thêm Hợp đồng</button>
                 </div>
+                <div class="filter-bar">
+                    <input type="text" id="hdSearch" placeholder="Tìm tên hợp đồng, nhà thầu…" oninput="renderHopDongList()" style="flex:1; min-width:200px;">
+                    <select id="hdFilterGoiThau" class="hd-select" onchange="renderHopDongList()">
+                        <option value="">-- Tất cả Gói thầu --</option>
+                    </select>
+                </div>
                 <div class="table-responsive">
                     <table class="data-table">
-                        <thead><tr>
-                            <th style="text-align:left;">Tên hợp đồng</th>
-                            <th>Nhà thầu</th>
-                            <th>Gói thầu</th>
-                            <th>Ngày ký</th>
-                            <th>Giá trị hiện hành</th>
-                            <th>Hành động</th>
-                        </tr></thead>
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">Tên hợp đồng</th>
+                                <th>Nhà thầu</th>
+                                <th>Gói thầu</th>
+                                <th>Ngày ký</th>
+                                <th>Giá trị hiện hành (có VAT)</th>
+                                <th>Đã thanh toán</th>
+                                <th>Công nợ</th>
+                                <th>Hành động</th>
+                            </tr>
+                        </thead>
                         <tbody id="hopDongBody"></tbody>
                     </table>
                 </div>
@@ -399,7 +440,7 @@
 
                     <details id="ntImportBox" style="margin-top:16px; display:none;">
                         <summary style="cursor:pointer; color:var(--primary-dark); font-weight:600;">Nhập nhanh từ file Excel (nhiều hạng mục cùng lúc)</summary>
-                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo cột: STT | Tên hạng mục | ĐVT | Khối lượng (dòng đầu là tiêu đề). Mỗi dòng khớp với đúng 1 hạng mục BOQ theo STT+Tên, áp dụng cho CÙNG 1 ngày nhập bên dưới.</p>
+                        <p style="font-size:0.78rem; color:var(--text-muted); margin:8px 0;">File Excel theo cột: STT | Tên hạng mục | ĐVT | Khối lượng xác nhận | Ghi chú (dòng đầu là tiêu đề). Mỗi dòng khớp với đúng 1 hạng mục BOQ theo STT+Tên, áp dụng cho CÙNG 1 ngày nhập bên dưới.</p>
                         <div class="form-group" style="margin-bottom:10px; max-width:220px;">
                             <label>Ngày nghiệm thu</label>
                             <input type="text" id="ntExcelNgay" class="form-control" placeholder="dd/mm/yyyy">
@@ -409,6 +450,28 @@
                             <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="importNghiemThuFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
                         </div>
                     </details>
+                </div>
+
+                <div class="card">
+                    <div class="card-header-row">
+                        <div class="card-title"><i class="fa-solid fa-calendar-days"></i> Chi tiết khối lượng nghiệm thu theo ngày</div>
+                        <input type="text" id="ntLogNgay" class="hd-select" placeholder="dd/mm/yyyy" style="text-align:center;" onchange="renderNghiemThuTheoNgay()">
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr>
+                                <th style="width:56px;">STT</th>
+                                <th style="text-align:left;">Tên hạng mục</th>
+                                <th>ĐVT</th>
+                                <th>Khối lượng HĐ</th>
+                                <th>Khối lượng xác nhận</th>
+                                <th>Chênh lệch</th>
+                                <th style="text-align:left;">Ghi chú</th>
+                                <th style="width:56px;">Sửa</th>
+                            </tr></thead>
+                            <tbody id="ntLogBody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </section>
@@ -447,7 +510,7 @@
                     </div>
                     <div class="tt-total-box">
                         <span>Tổng đã thanh toán (thực nhận, lũy kế)</span>
-                        <b id="ttKpiThanhToan">0đ</b>
+                        <b id="ttKpiThanhToan" class="val-thanhtoan">0đ</b>
                     </div>
                 </div>
                 <div class="card">
@@ -1034,6 +1097,18 @@
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveThayDoiModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeThayDoiModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: SỬA NGHIỆM THU THEO NGÀY -->
+    <div id="ntEditModal" class="modal">
+        <div class="modal-content" style="max-width:560px;">
+            <h3 style="margin-bottom:6px; color:var(--primary-dark);"><i class="fa-solid fa-pen"></i> Sửa khối lượng nghiệm thu ngày <span id="ntEditNgayLabel"></span></h3>
+            <p id="ntEditHangMucLabel" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;"></p>
+            <div id="ntEditList"></div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="closeNtEditModal()">Đóng</button>
             </div>
         </div>
     </div>

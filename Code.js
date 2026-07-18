@@ -359,10 +359,12 @@ function getData() {
         if (running >= 99.999) { ngayHoanThanhThucTe = logsOfThis[i].ngayBaoCao; break; }
       }
       cv.trangThaiMau = (cv.ngayKetThucKH && ngayHoanThanhThucTe && ngayHoanThanhThucTe > cv.ngayKetThucKH) ? 'overdue' : 'done';
+      if (cv.trangThaiMau === 'overdue') cv.soNgayTre = soNgayGiuaHaiNgayISO_(ngayHoanThanhThucTe, cv.ngayKetThucKH);
     } else if (cv.ngayBatDauKH && today < cv.ngayBatDauKH) {
       cv.trangThaiMau = 'pending';
     } else {
       cv.trangThaiMau = (cv.ngayKetThucKH && today > cv.ngayKetThucKH) ? 'overdue' : 'inprogress';
+      if (cv.trangThaiMau === 'overdue') cv.soNgayTre = soNgayGiuaHaiNgayISO_(today, cv.ngayKetThucKH);
     }
   });
 
@@ -911,6 +913,19 @@ function sinhLogId_(logSheet, now) {
 }
 
 // Validate mục 3 của spec + ghi 1 dòng NhatKyTienDo. PHẢI được gọi bên trong LockService.
+// Số ngày nguyên giữa 2 chuỗi ngày 'yyyy-MM-dd' (ngaySau - ngayTruoc) — dùng tính "trễ bao nhiêu
+// ngày" hiển thị ở cột Tình trạng (xem getData() bên dưới) và validate ngày báo cáo.
+function soNgayGiuaHaiNgayISO_(ngaySau, ngayTruoc) {
+  if (!ngaySau || !ngayTruoc) return 0;
+  const d1 = new Date(ngaySau + 'T00:00:00Z');
+  const d2 = new Date(ngayTruoc + 'T00:00:00Z');
+  return Math.round((d1.getTime() - d2.getTime()) / 86400000);
+}
+
+// Khoá cứng ngày báo cáo = ĐÚNG hôm nay (không cho chọn lùi/tới ngày khác) và bắt buộc ghi chú lý
+// do khi Công việc đã trễ hạn (today > ngayKetThucKH) — chặn tình trạng nhân sự khai lùi ngày báo
+// cáo để "hô biến" một việc trễ thành đúng hạn. Validate ở ĐÂY (không chỉ ở client) để không thể
+// lách qua bằng cách gọi thẳng API.
 function validateVaGhiNhatKy_(user, maCongViec, ngayBaoCao, phanTram, ghiChu, fileDinhKemArr) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const cvSheet = ss.getSheetByName('CongViec');
@@ -921,6 +936,15 @@ function validateVaGhiNhatKy_(user, maCongViec, ngayBaoCao, phanTram, ghiChu, fi
 
   const phanTramNum = parseFloat(phanTram);
   if (isNaN(phanTramNum)) throw new Error('% không hợp lệ!');
+
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  if (ngayBaoCao !== today) {
+    throw new Error('Ngày báo cáo phải là ngày hôm nay — hệ thống khoá cứng, không cho chọn ngày khác để tránh khai lùi ngày báo cáo!');
+  }
+  const ghiChuTrim = String(ghiChu || '').trim();
+  if (node.ngayKetThucKH && today > node.ngayKetThucKH && !ghiChuTrim) {
+    throw new Error(`Công việc "${node.tenCongViec}" đã trễ hạn (${node.ngayKetThucKH}) — vui lòng ghi chú rõ lý do trễ trước khi gửi báo cáo!`);
+  }
 
   const logSheet = ss.getSheetByName('NhatKyTienDo');
   if (!logSheet) throw new Error('Chưa cấu hình Tab NhatKyTienDo trên Google Sheet!');
@@ -936,7 +960,7 @@ function validateVaGhiNhatKy_(user, maCongViec, ngayBaoCao, phanTram, ghiChu, fi
   const now = new Date();
   const logId = sinhLogId_(logSheet, now);
   logSheet.appendRow([
-    logId, maCongViec, ngayBaoCao || '', phanTramNum, ghiChu || '',
+    logId, maCongViec, ngayBaoCao || '', phanTramNum, ghiChuTrim,
     user.supervisorId, user.name,
     Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss'),
     (fileDinhKemArr || []).join(';'), true
@@ -1918,6 +1942,27 @@ function themNghiemThu(userId, password, maBOQ, ngayNghiemThu, khoiLuong, ghiChu
   } finally {
     lock.releaseLock();
   }
+}
+
+// Sửa lại khối lượng/ghi chú của ĐÚNG 1 dòng Nghiệm thu đã ghi (khác themNghiemThu() luôn tạo dòng
+// mới) — dùng khi Giám sát/QS cần sửa lại số liệu đã nhập sai cho 1 ngày cụ thể (xem openNtEditModal
+// ở 11_NghiemThu.html).
+function adminSuaNghiemThu(userId, password, maNghiemThu, khoiLuong, ghiChu) {
+  const user = kiemTraQuyenHopDong_(userId, password);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NghiemThu');
+  if (!sheet) throw new Error('Chưa cấu hình Tab NghiemThu trên Google Sheet!');
+  const klNum = parseFloat(khoiLuong);
+  if (isNaN(klNum) || klNum <= 0) throw new Error('Khối lượng không hợp lệ!');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(maNghiemThu).trim()) {
+      sheet.getRange(i + 1, 4).setValue(round3_(klNum));
+      sheet.getRange(i + 1, 5).setValue(String(ghiChu || '').trim());
+      logActivity(userId, user.name, 'Sửa Nghiệm thu', maNghiemThu);
+      return 'Success';
+    }
+  }
+  throw new Error('Không tìm thấy dòng Nghiệm thu!');
 }
 
 function adminXoaNghiemThu(userId, password, maNghiemThu) {

@@ -101,9 +101,9 @@ function renderBOQTree() {
             <td style="padding-left:${indent}px;">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge pl-tag">PL</span>' : ''}</td>
             <td class="text-center">${b.donVi || '--'}</td>
             <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHopDong)}</td>
-            <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
+            <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
             <td class="text-right">${tienHienThi_(b.donGiaHieuLuc)}</td>
-            <td class="text-right">${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</td>
+            <td class="text-right val-nghiemthu">${khoiLuongHienThi_(b.khoiLuongDaNghiemThu)}</td>
             <td class="text-center"><span class="bc-badge ${pct >= 100 ? 'done' : 'inprogress'}">${pct}%</span></td>
             <td class="text-center">${formatVN(b.ngayBatDauKH)} - ${formatVN(b.ngayKetThucKH)}</td>
             <td class="text-center">

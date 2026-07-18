@@ -40,6 +40,9 @@ function renderThanhToan() {
     const daThuHoiTC = rounds.reduce((s, r) => s + (r.thuHoiTamUngThiCong || 0), 0);
 
     document.getElementById('ttHopDongTitle').textContent = hd.tenHopDong;
+    // Không tô màu val-hopdong (#1D4ED8) ở đây — dòng này nằm trên nền navy đậm của
+    // .tt-summary-card, xanh dương đậm trên nền navy tương phản quá thấp (dưới chuẩn WCAG AA),
+    // giữ nguyên màu chữ nhạt mặc định của thẻ cho dễ đọc.
     document.getElementById('ttHopDongSub').textContent =
         `Giá trị HĐ hiện hành (trước thuế): ${tienHienThi_(giaTriHD)}đ · VAT ${hd.thueVAT || 0}%`;
     document.getElementById('ttAdvHDGiven').textContent = tienHienThi_(hd.tamUngHopDong) + 'đ';
@@ -70,7 +73,7 @@ function renderThanhToan() {
                 Thực hiện: ${tienHienThi_(bd.thucHien)} · Tạm tính: ${tienHienThi_(bd.tamTinh)} · VAT (${bd.vatRate}%): ${tienHienThi_(bd.thueGTGT)}<br>
                 Thu hồi tạm ứng HĐ: ${tienHienThi_(r.thuHoiTamUngHopDong)} · TC: ${tienHienThi_(r.thuHoiTamUngThiCong)} · Khấu trừ khác: ${tienHienThi_(r.khauTruKhac)}
             </div>
-            <div class="pl-item-note"><b>Giá trị thanh toán kỳ này: ${tienHienThi_(bd.finalValue)}</b></div>
+            <div class="pl-item-note"><b>Giá trị thanh toán kỳ này: <span class="val-thanhtoan">${tienHienThi_(bd.finalValue)}</span></b></div>
         </div>`;
     }).join('');
 }

@@ -39,6 +39,13 @@ const TRANGTHAI_LABEL = {
 };
 const PHAN_LOAI_LABEL = { ho_so: 'I. Phần hồ sơ', thi_cong: 'II. Phần triển khai thi công' };
 
+// Nhãn trạng thái đầy đủ — thêm "(trễ N ngày)" cho trạng thái "overdue" (cv.soNgayTre tính sẵn ở
+// getData() trong Code.js) — dùng chung ở mọi bảng có cột "Tình trạng" thay vì mỗi nơi tự nối chuỗi.
+function trangThaiLabelDayDu_(cv) {
+    const label = TRANGTHAI_LABEL[cv.trangThaiMau] || '--';
+    return (cv.trangThaiMau === 'overdue' && cv.soNgayTre > 0) ? `${label} (trễ ${cv.soNgayTre} ngày)` : label;
+}
+
 function switchTab(tabId) {
     const contents = document.querySelectorAll('.tab-content');
     contents.forEach(content => content.classList.remove('active'));

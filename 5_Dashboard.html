@@ -43,7 +43,7 @@ let bcBarChartInstance = null;
 // pending giờ dùng màu hổ phách (trước là xám #94A3B8) — màu này thừa lại từ trạng thái "Trễ tiến
 // độ nhưng hoàn thành" đã gộp vào "overdue" (Trễ tiến độ), không còn tách riêng nữa (xem getData()
 // ở Code.js và TRANGTHAI_LABEL ở 0_TienIch.html).
-const BC_STATUS_COLORS = { pending: '#E8A93D', inprogress: '#1B7A8C', done: '#4F8B62', overdue: '#C4432E' };
+const BC_STATUS_COLORS = { pending: '#FBBF24', inprogress: '#60A5FA', done: '#34D399', overdue: '#F87171' };
 
 // Chart.js không có sẵn kiểu nhãn % kéo "râu" ra ngoài lát cắt (kiểu Excel/Google Sheets) — tự vẽ
 // bằng 1 plugin nhỏ, không cần thêm thư viện ngoài. Bỏ qua lát cắt = 0 (không có gì để chỉ vào).
@@ -72,7 +72,7 @@ const PIE_OUTSIDE_LABELS_PLUGIN = {
             const goRight = cos >= 0;
             const p3x = p2x + (goRight ? 14 : -14), p3y = p2y;
 
-            ctx.strokeStyle = '#9A9184';
+            ctx.strokeStyle = '#94A3B8';
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(p1x, p1y);
@@ -80,7 +80,7 @@ const PIE_OUTSIDE_LABELS_PLUGIN = {
             ctx.lineTo(p3x, p3y);
             ctx.stroke();
 
-            ctx.fillStyle = '#26313A';
+            ctx.fillStyle = '#334155';
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textBaseline = 'middle';
             ctx.textAlign = goRight ? 'left' : 'right';
@@ -287,34 +287,50 @@ function renderBcDetail() {
     }
 
     let html = '';
-    ['ho_so', 'thi_cong'].forEach(phan => {
-        const group = rows.filter(cv => cv.phanLoai === phan);
-        if (group.length === 0) return;
-        html += `<tr class="bc-group-row"><td colspan="${BC_DETAIL_COLSPAN}">${PHAN_LOAI_LABEL[phan] || phan}</td></tr>`;
-        group.forEach((cv, idx) => {
-            const note = lastNoteOf(cv);
-            const showNote = note && cv.trangThaiMau === 'overdue';
-            const pct = Math.min(cv.luyKe || 0, 100);
-            const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
-            const mau = mauChucDanh(chucDanh);
-            html += `
-            <tr>
-                <td class="text-center" data-col="stt">${BC_PHAN_ROMAN[phan]}.${idx + 1}</td>
-                <td class="text-center" data-col="mahangmuc">${(cv.maHangMucList || []).join(', ') || '--'}</td>
-                <td data-col="ten"><div class="t-name-row"><span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>${commentBadgeHtml(cv)}</div></td>
-                <td class="text-center" data-col="nguoiphutrach">${nameOfUser(cv.nguoiTaoId)}</td>
-                <td class="text-center" data-col="chucdanh">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
-                <td class="text-center" data-col="ngaybatdau">${formatVN(cv.ngayBatDauKH)}</td>
-                <td class="text-center" data-col="ngayketthuc">${formatVN(cv.ngayKetThucKH)}</td>
-                <td class="bc-bar-cell" data-col="tiendo">
-                    <div class="bc-bar-flex">
-                        <div class="bc-bar-track"><div class="bc-bar-fill status-${cv.trangThaiMau}" style="width:${pct}%;"></div></div>
-                        <span class="bc-bar-pct">${cv.luyKe || 0}%</span>
-                    </div>
-                </td>
-                <td class="text-center" data-col="tinhtrang"><span class="bc-badge ${cv.trangThaiMau}">${TRANGTHAI_LABEL[cv.trangThaiMau] || '--'}</span></td>
-                <td class="bc-detail-note" data-col="ghichu">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
-            </tr>`;
+    // Gói thầu là mục CHA (đánh số theo đúng STT hiển thị của goiThau, xem applyLoadedData ở
+    // 0_TienIch.html — mảng goiThau đã sắp sẵn 1->n), Phần hồ sơ/Phần triển khai thi công là mục
+    // CON bên trong — khi xem "Tất cả Gói thầu" ở dropdown phía trên, biết ngay gói nào xếp trước/
+    // sau và mỗi công việc thuộc Gói thầu + Phần nào.
+    const maGoiThauList = [...new Set(rows.map(cv => cv.maGoiThau))].sort((a, b) =>
+        goiThau.findIndex(g => g.maGoiThau === a) - goiThau.findIndex(g => g.maGoiThau === b));
+
+    maGoiThauList.forEach(maGT => {
+        const gtGroup = rows.filter(cv => cv.maGoiThau === maGT);
+        if (gtGroup.length === 0) return;
+        const gt = goiThau.find(g => g.maGoiThau === maGT);
+        html += `<tr class="bc-group-row"><td colspan="${BC_DETAIL_COLSPAN}"><i class="fa-solid fa-folder-open"></i> ${gt && gt.stt ? gt.stt + '. ' : ''}${gt ? gt.tenGoiThau : (maGT || '--')}</td></tr>`;
+
+        let counter = 0;
+        ['ho_so', 'thi_cong'].forEach(phan => {
+            const subGroup = gtGroup.filter(cv => cv.phanLoai === phan);
+            if (subGroup.length === 0) return;
+            html += `<tr class="bc-subgroup-row"><td colspan="${BC_DETAIL_COLSPAN}">${PHAN_LOAI_LABEL[phan] || phan}</td></tr>`;
+            subGroup.forEach(cv => {
+                counter++;
+                const note = lastNoteOf(cv);
+                const showNote = note && cv.trangThaiMau === 'overdue';
+                const pct = Math.min(cv.luyKe || 0, 100);
+                const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
+                const mau = mauChucDanh(chucDanh);
+                html += `
+                <tr>
+                    <td class="text-center" data-col="stt">${BC_PHAN_ROMAN[phan]}.${counter}</td>
+                    <td class="text-center" data-col="mahangmuc">${(cv.maHangMucList || []).join(', ') || '--'}</td>
+                    <td data-col="ten"><div class="t-name-row"><span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>${commentBadgeHtml(cv)}</div></td>
+                    <td class="text-center" data-col="nguoiphutrach">${nameOfUser(cv.nguoiTaoId)}</td>
+                    <td class="text-center" data-col="chucdanh">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
+                    <td class="text-center" data-col="ngaybatdau">${formatVN(cv.ngayBatDauKH)}</td>
+                    <td class="text-center" data-col="ngayketthuc">${formatVN(cv.ngayKetThucKH)}</td>
+                    <td class="bc-bar-cell" data-col="tiendo">
+                        <div class="bc-bar-flex">
+                            <div class="bc-bar-track"><div class="bc-bar-fill status-${cv.trangThaiMau}" style="width:${pct}%;"></div></div>
+                            <span class="bc-bar-pct">${cv.luyKe || 0}%</span>
+                        </div>
+                    </td>
+                    <td class="text-center" data-col="tinhtrang"><span class="bc-badge ${cv.trangThaiMau}">${trangThaiLabelDayDu_(cv)}</span></td>
+                    <td class="bc-detail-note" data-col="ghichu" title="${showNote ? escapeHtml(`${formatVN(note.date)}: ${note.text}`) : ''}">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
+                </tr>`;
+            });
         });
     });
     tbody.innerHTML = html;
@@ -562,8 +578,8 @@ function renderCpSCurveChart_(planMonthlyMap, monthlyMap) {
         data: {
             labels,
             datasets: [
-                { label: 'Kế hoạch lũy kế', data: planData, borderColor: '#E8A93D', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#E8A93D' },
-                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(79,139,98,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
+                { label: 'Kế hoạch lũy kế', data: planData, borderColor: '#FBBF24', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#FBBF24' },
+                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(52,211,153,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
             ]
         },
         options: {

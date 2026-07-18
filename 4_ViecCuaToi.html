@@ -65,7 +65,7 @@ function renderCongViecRow(cv) {
                 <span class="gantt-pct">${cv.luyKe || 0}%</span>
             </div>
         </td>
-        <td class="text-center"><span class="bc-badge ${status}">${TRANGTHAI_LABEL[status] || '--'}</span></td>
+        <td class="text-center"><span class="bc-badge ${status}">${trangThaiLabelDayDu_(cv)}</span></td>
         <td class="text-center">
             ${isDeleted ? `<span class="deleted-label">Đã xóa</span>` : (editable ? `<div class="action-cell">
                 <button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')" aria-label="Sửa công việc" title="Sửa công việc"><i class="fa-solid fa-pen"></i></button>
@@ -120,7 +120,7 @@ function renderCongViecCaNhan() {
         const gtKey = 'gt:' + g.maGoiThau;
         const gtOpen = !collapsedGroups.has(gtKey);
         html += `<tr class="task-group-row" onclick="toggleTaskGroup('${gtKey}')">
-            <td colspan="8"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.tenGoiThau}</td>
+            <td colspan="8"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.stt ? g.stt + '. ' : ''}${g.tenGoiThau}</td>
         </tr>`;
         if (!gtOpen) return;
 
@@ -296,7 +296,12 @@ function myReportableCongViec() {
 function openBaoCaoModal() {
     if (currentRole === 'VIEW') { showCustomAlert('Vui lòng đăng nhập để thao tác!', 'error'); return; }
     document.getElementById('ntdUserLabel').textContent = myUserName || myUserId || '--';
-    document.getElementById('ntdNgay').value = formatVN(getTodayDate());
+    // Khoá cứng Ngày báo cáo = hôm nay, KHÔNG cho chọn ngày khác (kể cả qua lịch) — tránh nhân sự
+    // khai lùi ngày báo cáo để che một công việc thực ra đã trễ tiến độ (server cũng chặn lại ở
+    // validateVaGhiNhatKy_ nếu cố tình gọi thẳng API, xem Code.js).
+    const ngayEl = document.getElementById('ntdNgay');
+    ngayEl.value = formatVN(getTodayDate());
+    ngayEl.disabled = true;
 
     const sel = document.getElementById('ntdGoiThauFilter');
     sel.innerHTML = '<option value="">-- Tất cả Gói thầu --</option>' +
@@ -305,15 +310,6 @@ function openBaoCaoModal() {
 
     renderBaoCaoTable();
     document.getElementById('baoCaoModal').classList.add('active');
-
-    setTimeout(() => {
-        try {
-            if (typeof flatpickr !== 'undefined') {
-                const el = document.getElementById('ntdNgay');
-                if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, defaultDate: new Date() });
-            }
-        } catch (e) { console.warn(e); }
-    }, 100);
 }
 
 function closeBaoCaoModal() {
@@ -332,12 +328,16 @@ function renderBaoCaoTable() {
     }
     tbody.innerHTML = list.map(cv => {
         const hmLabel = (cv.maHangMucList || []).join(', ');
+        // Việc đã qua hạn (ngayKetThucKH) — bắt buộc ghi chú lý do trễ khi báo cáo (xem
+        // validateVaGhiNhatKy_ ở Code.js, chặn luôn ở server nếu thiếu), đánh dấu placeholder rõ
+        // ràng ngay từ đầu để nhân sự biết trước khi gõ % chứ không phải đợi bị chặn mới thấy.
+        const isTre = cv.ngayKetThucKH && getTodayDate() > cv.ngayKetThucKH;
         return `<tr>
-            <td style="text-align:left;">${cv.tenCongViec}</td>
+            <td style="text-align:left;">${cv.tenCongViec}${isTre ? ' <span class="bc-badge overdue">Trễ hạn</span>' : ''}</td>
             <td class="text-center">${hmLabel || '--'}</td>
             <td class="text-center">${cv.luyKe || 0}%</td>
             <td><input type="number" step="0.5" min="0" class="form-control ntd-row-pct" data-cv="${cv.maCongViec}" data-current="${cv.luyKe || 0}" placeholder="0"></td>
-            <td><input type="text" class="form-control ntd-row-note" data-cv="${cv.maCongViec}" placeholder="Ghi chú (nếu có)"></td>
+            <td><input type="text" class="form-control ntd-row-note" data-cv="${cv.maCongViec}" placeholder="${isTre ? 'Bắt buộc: lý do trễ tiến độ' : 'Ghi chú (nếu có)'}"></td>
         </tr>`;
     }).join('');
 }
@@ -348,6 +348,7 @@ function submitBaoCaoHangLoat() {
 
     const payloadArray = [];
     const vuotQua = [];
+    const thieuGhiChu = [];
     document.querySelectorAll('.ntd-row-pct').forEach(input => {
         const addRaw = parseFloat(input.value);
         if (isNaN(addRaw) || addRaw <= 0) return;
@@ -358,12 +359,24 @@ function submitBaoCaoHangLoat() {
             vuotQua.push(cv ? cv.tenCongViec : maCongViec);
             return;
         }
+        const cv = congViec.find(c => c.maCongViec === maCongViec);
         const noteEl = document.querySelector(`.ntd-row-note[data-cv="${maCongViec}"]`);
-        payloadArray.push({ maCongViec, ngayBaoCao: ngay, phanTram: addRaw, ghiChu: noteEl ? noteEl.value.trim() : '', fileDinhKem: [] });
+        const ghiChu = noteEl ? noteEl.value.trim() : '';
+        // Chặn luôn ở client cho gọn (server vẫn chặn lại ở validateVaGhiNhatKy_ nếu lọt qua) —
+        // đã trễ hạn (ngayKetThucKH) mà không ghi lý do thì KHÔNG cho gửi báo cáo này.
+        if (cv && cv.ngayKetThucKH && ngay > cv.ngayKetThucKH && !ghiChu) {
+            thieuGhiChu.push(cv.tenCongViec);
+            return;
+        }
+        payloadArray.push({ maCongViec, ngayBaoCao: ngay, phanTram: addRaw, ghiChu, fileDinhKem: [] });
     });
 
     if (vuotQua.length > 0) {
         showCustomAlert(`Các công việc sau sẽ vượt quá 100% nên KHÔNG được gửi: ${vuotQua.join(', ')}. Vui lòng chỉnh lại % rồi gửi lại.`, 'error');
+        return;
+    }
+    if (thieuGhiChu.length > 0) {
+        showCustomAlert(`Các công việc sau đã trễ tiến độ, bắt buộc ghi chú lý do trễ trước khi gửi: ${thieuGhiChu.join(', ')}.`, 'error');
         return;
     }
     if (payloadArray.length === 0) { showCustomAlert('Chưa nhập % cho công việc nào!', 'error'); return; }
