@@ -1837,12 +1837,17 @@ function adminSaveBOQItem(userId, password, item) {
   ];
 
   if (maBOQ) {
-    const data = sheet.getDataRange().getValues();
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === maBOQ) {
+    // Chỉ đọc cột A (mã) để dò dòng thay vì tải nguyên sheet BOQHangMuc (gồm mọi Hợp đồng) — nhập
+    // Excel hàng loạt gọi hàm này lặp lại cho từng dòng, đọc nguyên sheet mỗi lần khiến việc nhập
+    // nhiều hạng mục cùng lúc rất chậm.
+    const lastRow = sheet.getLastRow();
+    const ids = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 1).getValues() : [];
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === maBOQ) {
+        const rowIdx = i + 2;
         row[0] = maBOQ;
-        row[11] = String(data[i][11] || '').trim(); // giữ nguyên maPhuLucTao gốc, không cho sửa tay
-        sheet.getRange(i + 1, 1, 1, BOQ_HEADERS_.length).setValues([row]);
+        row[11] = String(sheet.getRange(rowIdx, 12).getValue() || '').trim(); // giữ nguyên maPhuLucTao gốc, không cho sửa tay
+        sheet.getRange(rowIdx, 1, 1, BOQ_HEADERS_.length).setValues([row]);
         logActivity(userId, user.name, 'Sửa hạng mục BOQ', `${maBOQ} - ${tenHangMuc}`);
         return maBOQ;
       }
