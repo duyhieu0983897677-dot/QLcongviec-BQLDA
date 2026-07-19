@@ -7,11 +7,183 @@
    của Công việc thuộc Gói thầu, đã có sẵn từ getData()) và % khối
    lượng BOQ đã nghiệm thu (khi HopDong.maGoiThau khớp Gói thầu đó).
 
+   Bên dưới có thêm bảng "Tiến độ chi tiết theo BOQ" — chọn 1 Hợp đồng
+   (dùng chung currentHopDongId với BOQ/Nghiệm thu/Thanh toán/Quyết
+   toán, xem 9_HopDong.html) rồi hiện cây BOQ chỉ 7 cột STT/Tên/ĐVT/
+   Khối lượng/Ngày bắt đầu/Ngày kết thúc/Ghi chú — đúng 2 trường
+   ngayBatDauKH/ngayKetThucKH đã được dùng để tính biểu đồ "Dòng tiền"
+   ở tab Tổng quan (xem distributePlannedValue_ ở 5_Dashboard.html),
+   chỉ là trước giờ chưa có nơi nào hiện 2 trường này cho người xem.
+
    DANH SÁCH HÀM CHÍNH:
-   - renderTienDoThiCong() : Vẽ bảng tiến độ theo từng Gói thầu
+   - renderTienDoThiCong()  : Vẽ bảng tiến độ theo từng Gói thầu + gọi renderTdtcBoqDetail_()
+   - renderTdtcBoqDetail_() : Vẽ cây BOQ chi tiết (STT/Tên/ĐVT/Khối lượng/Ngày BĐ/Ngày KT/Ghi chú)
+                              của Hợp đồng đang chọn (currentHopDongId)
    ================================================================ */
 
+let tdtcExpanded_ = new Set();
+function toggleTdtcHeader_(maBOQ) {
+    if (tdtcExpanded_.has(maBOQ)) tdtcExpanded_.delete(maBOQ); else tdtcExpanded_.add(maBOQ);
+    renderTdtcBoqDetail_();
+}
+
+// maBOQ của dòng đang được sửa Ngày bắt đầu/Ngày kết thúc (chỉ 1 dòng tại 1 thời điểm) — sửa
+// "tiến độ" (lịch) của từng hạng mục BOQ giờ làm riêng ở đây, KHÔNG còn sửa được ở modal BOQ nữa
+// (xem saveBOQItemModal ở 10_BOQ.html, đã bỏ 2 ô Ngày bắt đầu/kết thúc KH).
+let tdtcEditingId_ = '';
+
+function editTdtcRow_(maBOQ) {
+    tdtcEditingId_ = maBOQ;
+    renderTdtcBoqDetail_();
+    setTimeout(() => {
+        try {
+            if (typeof flatpickr === 'undefined') return;
+            const opts = { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true };
+            ['tdtcEditBD', 'tdtcEditKT'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el && !el._flatpickr) flatpickr(el, opts);
+            });
+        } catch (e) { console.warn(e); }
+    }, 50);
+}
+
+function cancelTdtcEdit_() {
+    tdtcEditingId_ = '';
+    renderTdtcBoqDetail_();
+}
+
+// Chỉ gửi lại đúng 2 trường Ngày bắt đầu/Ngày kết thúc thay đổi — mọi trường khác (Tên/ĐVT/Khối
+// lượng/Đơn giá/Ghi chú...) lấy nguyên từ hạng mục hiện có, tránh đụng tới dữ liệu do modal BOQ
+// quản lý. Dùng chung adminSaveBOQItem (Code.js) — không cần thêm hàm backend mới.
+function saveTdtcRow_(maBOQ) {
+    const item = boq.find(b => b.maBOQ === maBOQ);
+    if (!item) return;
+    const ngayBD = convertDMYtoISO(document.getElementById('tdtcEditBD').value.trim()) || '';
+    const ngayKT = convertDMYtoISO(document.getElementById('tdtcEditKT').value.trim()) || '';
+    const payload = Object.assign({}, item, { ngayBatDauKH: ngayBD, ngayKetThucKH: ngayKT });
+    gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
+        .then(() => {
+            tdtcEditingId_ = '';
+            showCustomAlert('Đã lưu tiến độ hạng mục.', 'success');
+            reloadHopDongData();
+        })
+        .catch(handleBackendError);
+}
+
+// Nhập hàng loạt Ngày bắt đầu/Ngày kết thúc từ Excel (STT | Tên hạng mục | Ngày bắt đầu | Ngày kết
+// thúc) — khớp từng dòng với đúng hạng mục BOQ theo STT+Tên (dùng chung khopBOQTheoSttTen_ ở
+// 9_HopDong.html, giống hệt cách Nghiệm thu import), ghi đè đúng 2 trường ngày của hạng mục đó qua
+// adminSaveBOQItem, mọi trường khác giữ nguyên (giống saveTdtcRow_ ở trên).
+function importTdtcFromExcel() {
+    if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
+    const fileInput = document.getElementById('tdtcExcelFile');
+    const file = fileInput.files[0];
+    if (!file) { showCustomAlert('Vui lòng chọn file Excel!', 'error'); return; }
+
+    docFileExcel_(file).then(rows => {
+        let ok = 0;
+        const khongKhop = [];
+        const loiLuu = [];
+        let chain = Promise.resolve();
+        rows.forEach((row, idx) => {
+            if (idx === 0) return;
+            const stt = sttTuExcel_(row[0]), ten = row[1];
+            if (!ten) return;
+            const item = khopBOQTheoSttTen_(stt, ten);
+            if (!item) { khongKhop.push(`[${stt}] ${ten}`); return; }
+            // Ô ngày để trống trong Excel -> giữ nguyên ngày hiện có của hạng mục, không xóa trắng.
+            const ngayBD = row[2] === '' ? (item.ngayBatDauKH || '') : ngayExcelToISO_(row[2]);
+            const ngayKT = row[3] === '' ? (item.ngayKetThucKH || '') : ngayExcelToISO_(row[3]);
+            const payload = Object.assign({}, item, { ngayBatDauKH: ngayBD, ngayKetThucKH: ngayKT });
+            chain = chain.then(() => gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
+                .then(() => ok++).catch(err => loiLuu.push(`[${stt}] ${ten}: ${err.message || err}`)));
+        });
+        chain.then(() => {
+            let msg = `Đã cập nhật tiến độ cho ${ok} hạng mục.`;
+            if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '…' : '');
+            if (loiLuu.length) msg += `\nLỗi khi lưu (${loiLuu.length} dòng): ` + loiLuu.slice(0, 5).join('; ') + (loiLuu.length > 5 ? '…' : '');
+            showCustomAlert(msg, ok > 0 ? 'success' : 'error');
+            fileInput.value = '';
+            if (ok > 0) document.getElementById('tdtcExcelModal').classList.remove('active');
+            reloadHopDongData();
+        });
+    }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
+}
+
+// Không có cột tiền (chỉ Khối lượng/Ngày) nên không cần tienHienThi_()/kiểm tra quyền để XEM — ai
+// xem tab này cũng thấy đủ số liệu; chỉ nút Sửa (đổi Ngày) mới cần canEditHopDong().
+function renderTdtcBoqDetail_() {
+    const tbody = document.getElementById('tdtcBoqBody');
+    if (!tbody) return;
+    const items = boq.filter(b => b.maHopDong === currentHopDongId);
+    const empty = `<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
+    if (items.length === 0) { tbody.innerHTML = empty; return; }
+
+    const editable = canEditHopDong();
+    const chains = tinhChuoiChaBOQ_(items);
+    let html = '';
+    items.forEach((b, idx) => {
+        if (chains[idx].some(pid => !tdtcExpanded_.has(pid))) return;
+        const indent = 16 + (b.cap || 0) * 20;
+        if (b.isHeader) {
+            const isOpen = tdtcExpanded_.has(b.maBOQ);
+            html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="toggleTdtcHeader_('${b.maBOQ}')">
+                <td colspan="8" style="padding-left:${indent}px;">
+                    <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
+                    <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
+                </td>
+            </tr>`;
+            return;
+        }
+        if (b.maBOQ === tdtcEditingId_) {
+            html += `<tr>
+                <td class="text-center">${b.stt || '--'}</td>
+                <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
+                <td class="text-center">${b.donVi || '--'}</td>
+                <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
+                <td><input type="text" id="tdtcEditBD" class="form-control" style="min-width:110px;" placeholder="dd/mm/yyyy" value="${b.ngayBatDauKH ? formatVN(b.ngayBatDauKH) : ''}"></td>
+                <td><input type="text" id="tdtcEditKT" class="form-control" style="min-width:110px;" placeholder="dd/mm/yyyy" value="${b.ngayKetThucKH ? formatVN(b.ngayKetThucKH) : ''}"></td>
+                <td style="text-align:left;">${b.ghiChu || '--'}</td>
+                <td class="text-center">
+                    <div class="action-cell">
+                        <button class="btn btn-sm" style="background:var(--success);" onclick="saveTdtcRow_('${b.maBOQ}')" aria-label="Lưu" title="Lưu"><i class="fa-solid fa-check"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="cancelTdtcEdit_()" aria-label="Hủy" title="Hủy"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+            return;
+        }
+        html += `<tr>
+            <td class="text-center">${b.stt || '--'}</td>
+            <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
+            <td class="text-center">${b.donVi || '--'}</td>
+            <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
+            <td class="text-center">${formatVN(b.ngayBatDauKH)}</td>
+            <td class="text-center">${formatVN(b.ngayKetThucKH)}</td>
+            <td style="text-align:left;">${b.ghiChu || '--'}</td>
+            <td class="text-center">${editable ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="editTdtcRow_('${b.maBOQ}')" aria-label="Sửa tiến độ" title="Sửa tiến độ"><i class="fa-solid fa-pen"></i></button>` : '--'}</td>
+        </tr>`;
+    });
+    tbody.innerHTML = html || empty;
+}
+
 function renderTienDoThiCong() {
+    fillHopDongSelect_('tdtcHopDongSelect');
+    const emptyBox = document.getElementById('tdtcNoHopDong');
+    const content = document.getElementById('tdtcContent');
+    const hd = hopDong.find(h => h.maHopDong === currentHopDongId);
+    renderHopDongSoLine_('tdtcHopDongLine', hd);
+    if (!hd) {
+        if (emptyBox) emptyBox.style.display = '';
+        if (content) content.style.display = 'none';
+    } else {
+        if (emptyBox) emptyBox.style.display = 'none';
+        if (content) content.style.display = '';
+        const importBox = document.getElementById('tdtcImportBox');
+        if (importBox) importBox.style.display = canEditHopDong() ? 'flex' : 'none';
+        renderTdtcBoqDetail_();
+    }
+
     const tbody = document.getElementById('tdtcBody');
     if (goiThau.length === 0) {
         tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:gray; padding:15px;">Chưa có Gói thầu nào.</td></tr>`;

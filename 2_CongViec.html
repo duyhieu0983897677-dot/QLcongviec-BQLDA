@@ -17,6 +17,78 @@
 
 // ---------- CÔNG VIỆC (Admin hoặc Giám sát tự tạo cho mình) ----------
 
+// Danh sách {id, name} đang được @tag trong ô bình luận đang gõ dở — reset mỗi khi mở modal hoặc
+// gửi xong 1 bình luận. cvMentionStart_ = vị trí ký tự "@" của lượt gõ đang gợi ý (để biết vùng cần
+// thay thế khi chọn 1 người trong dropdown).
+let cvCommentTagged_ = [];
+let cvMentionStart_ = -1;
+
+function cvMentionCandidates_(query) {
+    const q = String(query || '').toLowerCase();
+    return users.filter(u => u.id !== mySupervisorId && u.name.toLowerCase().includes(q)).slice(0, 8);
+}
+
+function renderCvMentionDropdown_(list) {
+    const dd = document.getElementById('cvMentionDropdown');
+    if (!list.length) { dd.style.display = 'none'; dd.innerHTML = ''; return; }
+    dd.innerHTML = list.map((u, i) => `<div class="cv-mention-item${i === 0 ? ' active' : ''}" data-id="${u.id}" data-name="${u.name}" onclick="selectCvMention_('${u.id}')">${u.name}</div>`).join('');
+    dd.style.display = 'block';
+}
+
+function onCvCommentInput_(el) {
+    const pos = el.selectionStart;
+    const before = el.value.slice(0, pos);
+    const match = before.match(/@([^\s@]*)$/);
+    if (!match) { cvMentionStart_ = -1; document.getElementById('cvMentionDropdown').style.display = 'none'; return; }
+    cvMentionStart_ = pos - match[0].length;
+    renderCvMentionDropdown_(cvMentionCandidates_(match[1]));
+}
+
+function onCvCommentKeydown_(event) {
+    const dd = document.getElementById('cvMentionDropdown');
+    if (dd.style.display === 'none') return;
+    const items = Array.from(dd.querySelectorAll('.cv-mention-item'));
+    if (!items.length) return;
+    let idx = items.findIndex(it => it.classList.contains('active'));
+    if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        items[idx] && items[idx].classList.remove('active');
+        idx = (idx + 1) % items.length;
+        items[idx].classList.add('active');
+    } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        items[idx] && items[idx].classList.remove('active');
+        idx = (idx - 1 + items.length) % items.length;
+        items[idx].classList.add('active');
+    } else if (event.key === 'Enter' || event.key === 'Tab') {
+        if (idx >= 0) { event.preventDefault(); selectCvMention_(items[idx].getAttribute('data-id')); }
+    } else if (event.key === 'Escape') {
+        dd.style.display = 'none';
+    }
+}
+
+function selectCvMention_(userId) {
+    const u = users.find(x => x.id === userId);
+    if (!u || cvMentionStart_ < 0) return;
+    const input = document.getElementById('cvCommentInput');
+    const pos = input.selectionStart;
+    const insert = '@' + u.name + ' ';
+    input.value = input.value.slice(0, cvMentionStart_) + insert + input.value.slice(pos);
+    const newPos = cvMentionStart_ + insert.length;
+    input.setSelectionRange(newPos, newPos);
+    input.focus();
+    if (!cvCommentTagged_.some(t => t.id === u.id)) cvCommentTagged_.push({ id: u.id, name: u.name });
+    cvMentionStart_ = -1;
+    document.getElementById('cvMentionDropdown').style.display = 'none';
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.cv-comment-input-row')) {
+        const dd = document.getElementById('cvMentionDropdown');
+        if (dd) dd.style.display = 'none';
+    }
+});
+
 function fillCvGoiThauSelect(selectedId) {
     const sel = document.getElementById('cvGoiThau');
     let html = '<option value="">-- Chọn Gói thầu --</option>';
@@ -50,6 +122,20 @@ function onCvGoiThauChange() {
     fillCvHangMucCheckboxes(document.getElementById('cvGoiThau').value, []);
 }
 
+// Tô đậm "@Tên" trong nội dung bình luận cho những người thực sự đã được @tag (dựa vào
+// c.nguoiDuocTag, không suy đoán từ text để tránh tô nhầm khi trùng ký tự "@").
+function cvHighlightMentions_(noiDung, nguoiDuocTag) {
+    if (!nguoiDuocTag || !nguoiDuocTag.length) return noiDung;
+    let html = noiDung;
+    nguoiDuocTag.forEach(id => {
+        const u = users.find(x => x.id === id);
+        if (!u) return;
+        const escaped = u.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        html = html.replace(new RegExp('@' + escaped + '(?!\\w)', 'g'), `<span class="cv-mention">@${u.name}</span>`);
+    });
+    return html;
+}
+
 function renderCvComments(list) {
     const box = document.getElementById('cvCommentList');
     if (!box) return;
@@ -58,7 +144,7 @@ function renderCvComments(list) {
         : list.map(c => `
             <div class="cv-comment-item">
                 <div class="cv-comment-meta"><b>${c.nguoiBinhLuanTen}</b> <span>${c.thoiGian}</span></div>
-                <div class="cv-comment-noidung">${c.noiDung}</div>
+                <div class="cv-comment-noidung">${cvHighlightMentions_(c.noiDung, c.nguoiDuocTag)}</div>
             </div>`).join('');
     box.scrollTop = box.scrollHeight;
 }
@@ -71,9 +157,14 @@ function guiBinhLuanCongViec() {
     const noiDung = input.value.trim();
     if (!maCongViec || !noiDung) return;
 
-    gsRun('themBinhLuanCongViec', myUserId, myPassword, maCongViec, noiDung)
+    // Chỉ gửi kèm những người @tag mà "@Tên" của họ vẫn còn trong nội dung lúc gửi (phòng trường
+    // hợp người dùng chọn @tag rồi xoá tay đoạn đó trước khi bấm gửi).
+    const taggedIds = cvCommentTagged_.filter(t => noiDung.includes('@' + t.name)).map(t => t.id);
+
+    gsRun('themBinhLuanCongViec', myUserId, myPassword, maCongViec, noiDung, taggedIds)
         .then(() => {
             input.value = '';
+            cvCommentTagged_ = [];
             return gsRun('getBinhLuanCongViec', maCongViec);
         })
         .then(json => renderCvComments(JSON.parse(json)))
@@ -88,6 +179,9 @@ function openCongViecModal(maCongViec) {
 
     document.getElementById('cvEditId').value = maCongViec;
     document.getElementById('congViecModalTitle').innerText = 'Sửa công việc';
+    // Modal này chỉ dùng để SỬA (maCongViec luôn có), nên khối Bình luận luôn cần hiện — style mặc
+    // định "display:none" trên thẻ chỉ để tránh nháy khi trang vừa tải xong, chưa kịp chạy JS.
+    document.getElementById('cvCommentSection').style.display = '';
     fillCvGoiThauSelect(cv.maGoiThau);
     fillCvHangMucCheckboxes(cv.maGoiThau, cv.maHangMucList);
     document.getElementById('cvTen').value = cv.tenCongViec;
@@ -102,6 +196,16 @@ function openCongViecModal(maCongViec) {
         giaoBoiInfo.style.display = 'none';
     }
 
+    // Xem việc của người khác (không phải Admin, không phải người phụ trách) — vào được để xem +
+    // bình luận (vd bấm từ thông báo @tag) nhưng KHÔNG cho Sửa, ẩn hẳn nút Lưu cho khỏi nhầm.
+    const isOwner = currentRole === 'ADMIN' || cv.nguoiTaoId === mySupervisorId;
+    document.getElementById('cvBtnLuu').style.display = isOwner ? '' : 'none';
+    document.getElementById('cvReadOnlyBadge').style.display = isOwner ? 'none' : '';
+    ['cvGoiThau', 'cvTen', 'cvBatDau', 'cvKetThuc'].forEach(id => { document.getElementById(id).disabled = !isOwner; });
+    document.querySelectorAll('.cv-hm-cb').forEach(cb => { cb.disabled = !isOwner; });
+
+    cvCommentTagged_ = [];
+    document.getElementById('cvMentionDropdown').style.display = 'none';
     document.getElementById('cvCommentInput').value = '';
     renderCvComments([]);
     gsRun('getBinhLuanCongViec', maCongViec)

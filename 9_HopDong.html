@@ -335,12 +335,15 @@ function ngayExcelToISO_(value) {
 }
 
 // Khớp 1 dòng Excel (STT+Tên) với đúng 1 hạng mục BOQ của Hợp đồng đang chọn — so sánh không phân
-// biệt hoa/thường, bỏ khoảng trắng thừa, giống hệt cách app cũ khớp (importProgressExcel).
+// biệt hoa/thường, bỏ khoảng trắng thừa, giống hệt cách app cũ khớp (importProgressExcel). Nếu STT
+// bỏ trống trong Excel, khớp theo Tên hạng mục — chỉ nhận khi tên đó là duy nhất trong hợp đồng, để
+// tránh khớp nhầm sang hạng mục khác trùng tên.
 function khopBOQTheoSttTen_(stt, ten) {
     const cleanStt = String(stt || '').toLowerCase().replace(/\.$/, '').trim();
     const cleanTen = String(ten || '').toLowerCase().replace(/\s+/g, ' ').trim();
-    return (boq || []).find(b => b.maHopDong === currentHopDongId
-        && String(b.stt || '').toLowerCase().replace(/\.$/, '').trim() === cleanStt
+    const cungTen = (boq || []).filter(b => b.maHopDong === currentHopDongId
         && String(b.tenHangMuc || '').toLowerCase().replace(/\s+/g, ' ').trim() === cleanTen);
+    if (!cleanStt) return cungTen.length === 1 ? cungTen[0] : undefined;
+    return cungTen.find(b => String(b.stt || '').toLowerCase().replace(/\.$/, '').trim() === cleanStt);
 }
 </script>

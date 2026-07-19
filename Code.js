@@ -19,7 +19,9 @@ const CONGVIEC_HEADERS_ = ['maCongViec', 'tenCongViec', 'maGoiThau', 'maHangMucL
 // ThongBao: thông báo 1 chiều gửi cho 1 người (được giao việc / có người bình luận vào việc mình
 // phụ trách). BinhLuanCongViec: bình luận 2 chiều append-only theo từng Công việc.
 const THONGBAO_HEADERS_ = ['id', 'userId', 'loai', 'noiDung', 'maCongViec', 'nguoiGui_id', 'nguoiGui_ten', 'thoiGian', 'daDoc', 'active'];
-const BINHLUAN_HEADERS_ = ['id', 'maCongViec', 'nguoiBinhLuan_id', 'nguoiBinhLuan_ten', 'noiDung', 'thoiGian', 'active'];
+// 'nguoiDuocTag' luôn APPEND ở CUỐI (sau 'active') — không chèn giữa, giữ đúng convention các cột
+// mới thêm khác trong app (xem ghiChu/giamGiaDot).
+const BINHLUAN_HEADERS_ = ['id', 'maCongViec', 'nguoiBinhLuan_id', 'nguoiBinhLuan_ten', 'noiDung', 'thoiGian', 'active', 'nguoiDuocTag'];
 const NHATKY_HEADERS_ = ['logId', 'maCongViec', 'ngayBaoCao', 'phanTramNgay', 'ghiChu',
   'nguoiNhap_id', 'nguoiNhap_ten', 'thoiGianNhap', 'fileDinhKem', 'active'];
 // DiemDanhCuoiTuan: trạng thái điểm danh Thứ 7/CN hiện tại (upsert theo userId+ngay, KHÔNG phải
@@ -664,19 +666,25 @@ function adminSaveCongViec(userId, password, congViec) {
   if (!maGoiThau) throw new Error('Vui lòng chọn Gói thầu!');
   if (!maHangMucJoined) throw new Error('Vui lòng chọn ít nhất 1 Hạng mục!');
 
-  const data = sheet.getDataRange().getValues();
   const maCongViec = String(congViec.maCongViec || '').trim();
 
+  // Chỉ đọc cột A (mã) để dò dòng cần sửa thay vì tải nguyên sheet — sheet CongViec tích lũy nhiều
+  // năm dữ liệu, đọc đủ 12 cột x toàn bộ dòng mỗi lần Lưu (kể cả khi Thêm mới, không dùng tới) là
+  // nguyên nhân chính khiến thao tác Lưu bị chậm.
+  const lastRow = sheet.getLastRow();
   if (maCongViec) {
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][0]).trim() === maCongViec) {
-        if (user.role !== 'ADMIN' && String(data[i][5]).trim() !== user.supervisorId) {
+    const ids = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 1).getValues() : [];
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]).trim() === maCongViec) {
+        const rowIdx = i + 2;
+        const rowData = sheet.getRange(rowIdx, 1, 1, CONGVIEC_HEADERS_.length).getValues()[0];
+        if (user.role !== 'ADMIN' && String(rowData[5]).trim() !== user.supervisorId) {
           throw new Error('Bạn không có quyền sửa Công việc này!');
         }
         // Giữ nguyên phanLoai (cột E), người phụ trách (cột F/G) và người giao (cột K/L) — chỉ cho
         // sửa các field mô tả, không cho đổi tay người phụ trách sau khi đã tạo.
-        sheet.getRange(i + 1, 2, 1, 4).setValues([[tenCongViec, maGoiThau, maHangMucJoined, data[i][4]]]);
-        sheet.getRange(i + 1, 8, 1, 2).setValues([[congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '']]);
+        sheet.getRange(rowIdx, 2, 1, 4).setValues([[tenCongViec, maGoiThau, maHangMucJoined, rowData[4]]]);
+        sheet.getRange(rowIdx, 8, 1, 2).setValues([[congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '']]);
         logActivity(userId, user.name, 'Sửa Công việc', `Sửa ${maCongViec} - ${tenCongViec}`);
         return 'Success';
       }
@@ -740,14 +748,18 @@ function adminDeleteCongViec(userId, password, maCongViec) {
   const user = login(userId, password);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CongViec');
   if (!sheet) throw new Error('Chưa cấu hình Tab CongViec trên Google Sheet!');
-  const data = sheet.getDataRange().getValues();
+  const lastRow = sheet.getLastRow();
+  const ids = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 1).getValues() : [];
+  const maTrim = String(maCongViec).trim();
 
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === String(maCongViec).trim()) {
-      if (user.role !== 'ADMIN' && String(data[i][5]).trim() !== user.supervisorId) {
-        throw new Error('Bạn không có quyền xoá Công việc này!');
+  for (let i = 0; i < ids.length; i++) {
+    if (String(ids[i][0]).trim() === maTrim) {
+      const rowIdx = i + 2;
+      if (user.role !== 'ADMIN') {
+        const nguoiTaoId = String(sheet.getRange(rowIdx, 6).getValue()).trim();
+        if (nguoiTaoId !== user.supervisorId) throw new Error('Bạn không có quyền xoá Công việc này!');
       }
-      sheet.getRange(i + 1, 10).setValue(false);
+      sheet.getRange(rowIdx, 10).setValue(false);
       logActivity(userId, user.name, 'Xoá Công việc', `Xoá ${maCongViec}`);
       return 'Success';
     }
@@ -853,7 +865,8 @@ function readBinhLuanRows_(sheet) {
       nguoiBinhLuanId: String(r[2] || '').trim(),
       nguoiBinhLuanTen: String(r[3] || '').trim(),
       noiDung: String(r[4] || '').trim(),
-      thoiGian: formatDateTimeCell_(r[5])
+      thoiGian: formatDateTimeCell_(r[5]),
+      nguoiDuocTag: String(r[7] || '').split(',').map(s => s.trim()).filter(Boolean)
     });
   });
   return result;
@@ -867,7 +880,10 @@ function getBinhLuanCongViec(maCongViec) {
   return JSON.stringify(list);
 }
 
-function themBinhLuanCongViec(userId, password, maCongViec, noiDung) {
+// Mọi nhân sự đã đăng nhập (không chỉ người phụ trách/Admin) đều bình luận được vào bất kỳ Công
+// việc nào — để hỗ trợ phối hợp qua @tag; Sửa/Xóa Công việc vẫn chỉ dành cho người phụ trách/Admin
+// (xem adminSaveCongViec/adminXoaCongViec), không đổi.
+function themBinhLuanCongViec(userId, password, maCongViec, noiDung, taggedUserIds) {
   const user = login(userId, password);
   const noiDungTrim = String(noiDung || '').trim();
   if (!noiDungTrim) throw new Error('Vui lòng nhập nội dung bình luận!');
@@ -876,20 +892,28 @@ function themBinhLuanCongViec(userId, password, maCongViec, noiDung) {
   if (!cvSheet) throw new Error('Chưa cấu hình Tab CongViec trên Google Sheet!');
   const cv = readCongViecRows_(cvSheet, true).find(c => c.maCongViec === String(maCongViec || '').trim());
   if (!cv) throw new Error('Không tìm thấy Công việc!');
-  if (user.role !== 'ADMIN' && cv.nguoiTaoId !== user.supervisorId) {
-    throw new Error('Bạn không có quyền bình luận vào Công việc này!');
-  }
+
+  const allUsers = listSupervisors();
+  const validIds = new Set(allUsers.map(u => u.id));
+  const taggedIds = Array.from(new Set((taggedUserIds || []).map(t => String(t || '').trim()).filter(t => t && validIds.has(t) && t !== user.supervisorId)));
 
   const blSheet = layHoacTaoSheet_('BinhLuanCongViec', BINHLUAN_HEADERS_);
   const id = sinhMaTuTang_(blSheet, 'BL', new Date());
-  blSheet.appendRow([id, cv.maCongViec, user.supervisorId, user.name, noiDungTrim, new Date(), true]);
+  blSheet.appendRow([id, cv.maCongViec, user.supervisorId, user.name, noiDungTrim, new Date(), true, taggedIds.join(',')]);
   logActivity(userId, user.name, 'Bình luận Công việc', `${cv.maCongViec}: ${noiDungTrim}`);
 
+  // Người được @tag nhận thông báo riêng, rõ ràng hơn là "có người bình luận" chung chung.
+  taggedIds.forEach(id2 => {
+    guiThongBao_(id2, 'tag', `${user.name} đã nhắc bạn trong công việc "${cv.tenCongViec}": ${noiDungTrim}`, cv.maCongViec, user.supervisorId, user.name);
+  });
+
   // Báo cho mọi người từng liên quan tới Công việc này (người phụ trách, người giao — nếu có, và
-  // mọi người đã từng bình luận), trừ chính người vừa bình luận.
+  // mọi người đã từng bình luận), trừ chính người vừa bình luận và trừ người đã nhận thông báo 'tag'
+  // ở trên (tránh nhận 2 thông báo trùng ý cho cùng 1 bình luận).
   const nguoiLienQuan = new Set([cv.nguoiTaoId, cv.nguoiGiaoId].filter(Boolean));
   readBinhLuanRows_(blSheet).forEach(c => { if (c.maCongViec === cv.maCongViec) nguoiLienQuan.add(c.nguoiBinhLuanId); });
   nguoiLienQuan.delete(user.supervisorId);
+  taggedIds.forEach(id2 => nguoiLienQuan.delete(id2));
   nguoiLienQuan.forEach(id2 => {
     guiThongBao_(id2, 'binh_luan', `${user.name} vừa bình luận vào "${cv.tenCongViec}"`, cv.maCongViec, user.supervisorId, user.name);
   });

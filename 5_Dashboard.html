@@ -50,7 +50,7 @@ const BC_STATUS_COLORS = { pending: '#FBBF24', inprogress: '#60A5FA', done: '#34
 const PIE_OUTSIDE_LABELS_PLUGIN = {
     id: 'pieOutsideLabels',
     afterDraw(chart) {
-        if (chart.config.type !== 'pie') return;
+        if (chart.config.type !== 'pie' && chart.config.type !== 'doughnut') return;
         const { ctx } = chart;
         const meta = chart.getDatasetMeta(0);
         const values = chart.data.datasets[0].data;
@@ -85,6 +85,52 @@ const PIE_OUTSIDE_LABELS_PLUGIN = {
             ctx.textBaseline = 'middle';
             ctx.textAlign = goRight ? 'left' : 'right';
             ctx.fillText(pct + '%', p3x + (goRight ? 4 : -4), p3y);
+        });
+        ctx.restore();
+    }
+};
+
+// Ghi chú số tiền (dạng gọn "x Tỷ"/"x Tr", xem formatTienGon_) kèm mũi tên tại điểm CUỐI CÙNG có dữ
+// liệu của mỗi đường trong biểu đồ S-curve dòng tiền — "Kế hoạch" (đi tới cuối trục, sát mép phải)
+// nghiêng chú thích sang TRÁI để không bị tràn ra ngoài khung; "Thực tế" (dừng sớm hơn ở tháng có dữ
+// liệu thực tế gần nhất, xem renderCpSCurveChart_) nghiêng sang PHẢI, tận dụng khoảng trống giữa
+// điểm dừng và đường Kế hoạch vẫn còn tiếp diễn phía sau.
+const LINE_ENDPOINT_LABELS_PLUGIN = {
+    id: 'lineEndpointLabels',
+    afterDraw(chart) {
+        if (chart.config.type !== 'line') return;
+        const { ctx } = chart;
+        const endpoints = [
+            { datasetIndex: 0, dir: -1, color: '#B45309' },
+            { datasetIndex: 1, dir: 1, color: '#047857' }
+        ];
+        ctx.save();
+        endpoints.forEach(ep => {
+            const dataset = chart.data.datasets[ep.datasetIndex];
+            if (!dataset) return;
+            const values = dataset.data;
+            let lastIdx = -1;
+            for (let i = values.length - 1; i >= 0; i--) { if (values[i] !== null && values[i] !== undefined) { lastIdx = i; break; } }
+            if (lastIdx < 0) return;
+            const point = chart.getDatasetMeta(ep.datasetIndex).data[lastIdx];
+            if (!point) return;
+            const x = point.x, y = point.y;
+            const midX = x + ep.dir * 14, midY = y - 20;
+            const endX = midX + ep.dir * 26, endY = midY;
+
+            ctx.strokeStyle = ep.color;
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            ctx.lineTo(midX, midY);
+            ctx.lineTo(endX, endY);
+            ctx.stroke();
+
+            ctx.fillStyle = ep.color;
+            ctx.font = '700 11px Inter, sans-serif';
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = ep.dir > 0 ? 'left' : 'right';
+            ctx.fillText(formatTienGon_(values[lastIdx]), endX + (ep.dir > 0 ? 4 : -4), endY);
         });
         ctx.restore();
     }
@@ -133,7 +179,7 @@ function renderBcCharts() {
     const pieCanvas = document.getElementById('bcPieChart');
     if (bcPieChartInstance) bcPieChartInstance.destroy();
     bcPieChartInstance = new Chart(pieCanvas.getContext('2d'), {
-        type: 'pie',
+        type: 'doughnut',
         plugins: [PIE_OUTSIDE_LABELS_PLUGIN],
         data: {
             labels: ['Chờ thực hiện', 'Đang thực hiện', 'Hoàn thành', 'Trễ tiến độ'],
@@ -143,11 +189,14 @@ function renderBcCharts() {
             }]
         },
         options: {
+            cutout: '62%',
             // Chừa khoảng trống quanh vòng tròn để "râu" + nhãn % không bị cắt ở mép canvas.
-            layout: { padding: 44 },
+            layout: { padding: 64 },
             // Bỏ legend mặc định của Chart.js (canh giữa trong canvas) — dùng legend HTML riêng bên
             // dưới (giống báo cáo Chi phí) để 2 báo cáo đồng bộ giao diện: chấm màu + nhãn canh trái.
-            plugins: { legend: { display: false } }
+            // Tắt luôn tooltip khi rê chuột — hộp tooltip mặc định đè lên đúng vị trí nhãn % vẽ tay
+            // (PIE_OUTSIDE_LABELS_PLUGIN), làm số bị che mất; thông tin đó legend bên dưới đã có sẵn.
+            plugins: { legend: { display: false }, tooltip: { enabled: false } }
         }
     });
 
@@ -492,7 +541,7 @@ function renderCpPieChart_(tExec, tRem) {
     const canvas = document.getElementById('cpPieChart');
     if (cpPieChartInstance) cpPieChartInstance.destroy();
     cpPieChartInstance = new Chart(canvas.getContext('2d'), {
-        type: 'pie',
+        type: 'doughnut',
         plugins: [PIE_OUTSIDE_LABELS_PLUGIN],
         data: {
             labels: ['Sản lượng đã thực hiện', 'Giá trị còn lại'],
@@ -500,9 +549,10 @@ function renderCpPieChart_(tExec, tRem) {
         },
         options: {
             responsive: true, maintainAspectRatio: false,
+            cutout: '62%',
             // Đồng bộ với biểu đồ "Báo cáo Công việc": chừa khoảng trống quanh vòng tròn cho "râu" + %.
-            layout: { padding: 44 },
-            plugins: { legend: { display: false } }
+            layout: { padding: 64 },
+            plugins: { legend: { display: false }, tooltip: { enabled: false } }
         }
     });
 
@@ -566,24 +616,37 @@ function renderCpSCurveChart_(planMonthlyMap, monthlyMap) {
         months = [d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')];
     }
 
+    // Đường "Thực tế" chỉ vẽ tới tháng gần nhất CÓ dữ liệu nghiệm thu rồi ngắt hẳn (null, không vẽ
+    // tiếp phẳng đến hết trục) — những tháng sau đó chưa có gì để báo cáo thì không nên coi như
+    // "0 đồng thực tế" trên biểu đồ. Đường "Kế hoạch" vẫn đi hết toàn bộ trục như cũ.
+    const actualMonthsSorted = Object.keys(monthlyMap).sort();
+    const lastActualMonth = actualMonthsSorted.length ? actualMonthsSorted[actualMonthsSorted.length - 1] : null;
+
     let cumPlan = 0, cumActual = 0;
     const labels = months.map(m => { const p = m.split('-'); return p[1] + '/' + p[0]; });
     const planData = months.map(m => { cumPlan += (planMonthlyMap[m] || 0); return Math.round(cumPlan); });
-    const actualData = months.map(m => { cumActual += (monthlyMap[m] || 0); return Math.round(cumActual); });
+    const actualData = months.map(m => {
+        if (!lastActualMonth || m > lastActualMonth) return null;
+        cumActual += (monthlyMap[m] || 0);
+        return Math.round(cumActual);
+    });
 
     const canvas = document.getElementById('cpSCurveChart');
     if (cpSCurveChartInstance) cpSCurveChartInstance.destroy();
     cpSCurveChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'line',
+        plugins: [LINE_ENDPOINT_LABELS_PLUGIN],
         data: {
             labels,
             datasets: [
                 { label: 'Kế hoạch lũy kế', data: planData, borderColor: '#FBBF24', borderDash: [6, 4], borderWidth: 2, fill: false, tension: 0.25, pointRadius: 3, pointBackgroundColor: '#FBBF24' },
-                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(52,211,153,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done }
+                { label: 'Thực tế lũy kế', data: actualData, borderColor: BC_STATUS_COLORS.done, backgroundColor: 'rgba(52,211,153,0.12)', borderWidth: 2, fill: true, tension: 0.25, pointRadius: 3, pointBackgroundColor: BC_STATUS_COLORS.done, spanGaps: false }
             ]
         },
         options: {
             responsive: true, maintainAspectRatio: false,
+            // Chừa khoảng trống trên/2 bên cho chú thích mũi tên cuối mỗi đường (LINE_ENDPOINT_LABELS_PLUGIN).
+            layout: { padding: { top: 30, left: 46, right: 46 } },
             plugins: {
                 legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
                 tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.raw.toLocaleString('vi-VN') + ' đ' } }

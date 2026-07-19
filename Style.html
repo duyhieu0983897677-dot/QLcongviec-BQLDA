@@ -107,6 +107,14 @@
         .cv-comment-noidung { font-size: 0.85rem; color: var(--text-main); margin-top: 2px; white-space: pre-wrap; }
         .cv-comment-input-row { display: flex; gap: 8px; align-items: flex-end; }
         .cv-comment-input-row textarea { flex: 1; resize: vertical; }
+        .cv-comment-noidung .cv-mention { color: var(--primary); font-weight: 600; }
+        .cv-mention-dropdown {
+            position: absolute; bottom: 100%; left: 0; margin-bottom: 4px; min-width: 200px; max-height: 180px;
+            overflow-y: auto; background: #fff; border: 1px solid var(--border); border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 20;
+        }
+        .cv-mention-item { padding: 7px 12px; font-size: 0.85rem; cursor: pointer; }
+        .cv-mention-item:hover, .cv-mention-item.active { background: var(--bg-hover, #F1F5F9); }
 
         body.view-only-mode .admin-element { display: none !important; }
         body:not(.view-only-mode) .locked-element { display: none !important; }
@@ -328,6 +336,9 @@
            gạch ngang tên + mờ cả dòng thay vì ẩn hẳn, để vẫn thấy lịch sử. */
         .task-row.deleted { opacity: 0.5; }
         .task-row.deleted .t-name { text-decoration: line-through; }
+        /* Chớp sáng dòng Công việc khi nhảy tới từ chuông thông báo (xem scrollToAndHighlightTask_). */
+        @keyframes taskRowFlash { 0%, 40% { background: rgba(37,99,235,0.16); } 100% { background: transparent; } }
+        .task-row.task-row-flash td { animation: taskRowFlash 1.8s ease-out; }
         .deleted-label { font-size: 0.76rem; font-style: italic; color: var(--text-muted); }
 
         .gantt-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 130px; }

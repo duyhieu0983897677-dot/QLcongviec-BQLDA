@@ -35,6 +35,12 @@ function canEditCongViec(cv) {
     return currentRole === 'ADMIN' || cv.nguoiTaoId === mySupervisorId;
 }
 
+// id ổn định cho từng dòng Công việc — dùng để cuộn tới + chớp sáng khi mở từ thông báo (xem
+// scrollToAndHighlightTask_ ở cuối file).
+function taskRowElId_(maCongViec) {
+    return 'task-row-' + maCongViec;
+}
+
 function renderCongViecRow(cv) {
     const status = cv.trangThaiMau;
     const meta = (cv.maHangMucList || []).map(id => {
@@ -47,7 +53,7 @@ function renderCongViecRow(cv) {
     const editable = !isDeleted && canEditCongViec(cv);
     const chucDanh = chucDanhOfUser(cv.nguoiTaoId);
     const mau = mauChucDanh(chucDanh);
-    return `<tr class="task-row${isDeleted ? ' deleted' : ''}">
+    return `<tr id="${taskRowElId_(cv.maCongViec)}" class="task-row${isDeleted ? ' deleted' : ''}">
         <td class="task-name-cell" style="padding-left:48px;">
             <div class="t-name-row">
                 <span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>
@@ -70,7 +76,9 @@ function renderCongViecRow(cv) {
             ${isDeleted ? `<span class="deleted-label">Đã xóa</span>` : (editable ? `<div class="action-cell">
                 <button class="btn btn-sm" style="background:var(--primary);" onclick="openCongViecModal('${cv.maCongViec}')" aria-label="Sửa công việc" title="Sửa công việc"><i class="fa-solid fa-pen"></i></button>
                 <button class="btn btn-sm btn-danger" onclick="deleteCongViec('${cv.maCongViec}')" aria-label="Xóa công việc" title="Xóa công việc"><i class="fa-solid fa-trash"></i></button>
-            </div>` : '')}
+            </div>` : `<div class="action-cell">
+                <button class="btn btn-sm" style="background:var(--text-muted);" onclick="openCongViecModal('${cv.maCongViec}')" aria-label="Xem & bình luận" title="Xem & bình luận (không phải việc của bạn)"><i class="fa-solid fa-eye"></i></button>
+            </div>`)}
         </td>
     </tr>`;
 }
@@ -323,7 +331,7 @@ function renderBaoCaoTable() {
 
     const tbody = document.getElementById('ntdTableBody');
     if (list.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:gray; padding:15px;">Không có công việc nào để báo cáo.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:gray; padding:15px;">Không có công việc nào để báo cáo.</td></tr>`;
         return;
     }
     tbody.innerHTML = list.map(cv => {
@@ -334,6 +342,7 @@ function renderBaoCaoTable() {
         const isTre = cv.ngayKetThucKH && getTodayDate() > cv.ngayKetThucKH;
         return `<tr>
             <td style="text-align:left;">${cv.tenCongViec}${isTre ? ' <span class="bc-badge overdue">Trễ hạn</span>' : ''}</td>
+            <td class="admin-only text-center">${cv.nguoiTaoTen || '--'}</td>
             <td class="text-center">${hmLabel || '--'}</td>
             <td class="text-center">${cv.luyKe || 0}%</td>
             <td><input type="number" step="0.5" min="0" class="form-control ntd-row-pct" data-cv="${cv.maCongViec}" data-current="${cv.luyKe || 0}" placeholder="0"></td>
@@ -392,5 +401,31 @@ function submitBaoCaoHangLoat() {
             reloadCongViecData();
         })
         .catch(handleBackendError);
+}
+
+// ---------- CUỘN TỚI + CHỚP SÁNG 1 CÔNG VIỆC (gọi từ chuông thông báo, xem 8_ThongBao.html) ----------
+
+// Bấm từ thông báo phải LUÔN thấy được dòng đích — nên bỏ hết bộ lọc đang áp dụng + tự mở rộng
+// nhóm Gói thầu/Phần đang thu gọn của đúng Công việc đó trước khi vẽ lại bảng.
+function scrollToAndHighlightTask_(maCongViec) {
+    const cv = congViec.find(c => c.maCongViec === maCongViec);
+    if (!cv) return;
+
+    ['filterGoiThau', 'filterPhanLoai', 'filterGS', 'filterTrangThaiMau', 'filterSearch'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    collapsedGroups.delete('gt:' + cv.maGoiThau);
+    collapsedGroups.delete('gt:' + cv.maGoiThau + ':' + cv.phanLoai);
+
+    renderCongViecCaNhan();
+
+    setTimeout(() => {
+        const el = document.getElementById(taskRowElId_(maCongViec));
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('task-row-flash');
+        setTimeout(() => el.classList.remove('task-row-flash'), 1800);
+    }, 60);
 }
 </script>

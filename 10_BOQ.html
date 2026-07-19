@@ -198,22 +198,10 @@ function openBOQItemModal(maBOQ) {
     document.getElementById('boqDonVi').value = item ? item.donVi : '';
     document.getElementById('boqKhoiLuong').value = item ? item.khoiLuongHopDong : '';
     setTienValue_(document.getElementById('boqDonGia'), item ? item.donGia : '');
-    document.getElementById('boqNgayBD').value = item && item.ngayBatDauKH ? formatVN(item.ngayBatDauKH) : '';
-    document.getElementById('boqNgayKT').value = item && item.ngayKetThucKH ? formatVN(item.ngayKetThucKH) : '';
     document.getElementById('boqGhiChu').value = item ? (item.ghiChu || '') : '';
     document.getElementById('boqBtnXoa').style.display = item ? '' : 'none';
     toggleBOQHeaderFields();
     document.getElementById('boqItemModal').classList.add('active');
-    setTimeout(() => {
-        try {
-            if (typeof flatpickr !== 'undefined') {
-                ['boqNgayBD', 'boqNgayKT'].forEach(id => {
-                    const el = document.getElementById(id);
-                    if (!el._flatpickr) flatpickr(el, { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true });
-                });
-            }
-        } catch (e) { console.warn(e); }
-    }, 100);
 }
 
 function toggleBOQHeaderFields() {
@@ -224,8 +212,13 @@ function toggleBOQHeaderFields() {
 function closeBOQItemModal() { document.getElementById('boqItemModal').classList.remove('active'); }
 
 function saveBOQItemModal() {
+    // Ngày bắt đầu/Ngày kết thúc KH KHÔNG còn sửa ở modal này — quản lý riêng ở tab "Tiến độ"
+    // (xem renderTdtcBoqDetail_ ở 14_TienDoThiCong.html). Giữ nguyên giá trị đang có của hạng mục
+    // (nếu là sửa) để lưu ở đây không vô tình xoá trắng ngày đã đặt bên tab Tiến độ.
+    const maBOQ = document.getElementById('boqEditId').value;
+    const existing = maBOQ ? boq.find(b => b.maBOQ === maBOQ) : null;
     const payload = {
-        maBOQ: document.getElementById('boqEditId').value,
+        maBOQ,
         maHopDong: currentHopDongId,
         stt: document.getElementById('boqStt').value.trim(),
         tenHangMuc: document.getElementById('boqTen').value.trim(),
@@ -234,8 +227,8 @@ function saveBOQItemModal() {
         donVi: document.getElementById('boqDonVi').value.trim(),
         khoiLuongHopDong: parseNumberSafely(document.getElementById('boqKhoiLuong').value) || 0,
         donGia: parseTienInput_(document.getElementById('boqDonGia').value) || 0,
-        ngayBatDauKH: convertDMYtoISO(document.getElementById('boqNgayBD').value.trim()) || '',
-        ngayKetThucKH: convertDMYtoISO(document.getElementById('boqNgayKT').value.trim()) || '',
+        ngayBatDauKH: existing ? (existing.ngayBatDauKH || '') : '',
+        ngayKetThucKH: existing ? (existing.ngayKetThucKH || '') : '',
         ghiChu: document.getElementById('boqGhiChu').value.trim()
     };
     if (!payload.tenHangMuc) { showCustomAlert('Vui lòng nhập Tên hạng mục!', 'error'); return; }

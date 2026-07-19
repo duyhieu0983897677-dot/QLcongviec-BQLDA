@@ -78,9 +78,14 @@ function moThongBao(thongBaoId) {
             .catch(handleBackendError);
     }
 
+    // Nhảy tới đúng dòng Công việc ở tab "Công việc cá nhân" (danh sách này hiện đủ Công việc của
+    // mọi người, không riêng của mình) và chớp sáng lên — KHÔNG mở popup Sửa nữa, đỡ cảm giác bị
+    // ép vào 1 hành động; ai cần sửa/bình luận thì tự bấm nút Sửa trên dòng đó.
+    // Trước đây bấm vào đây bị chuyển nhầm sang tab "Gói thầu/Hạng mục" (switchTab('danhsach')) —
+    // lỗi không lộ ra vì popup che mất tab sai bên dưới.
     if (tb.maCongViec) {
-        switchTab('danhsach');
-        openCongViecModal(tb.maCongViec);
+        switchTab('congviectoi');
+        scrollToAndHighlightTask_(tb.maCongViec);
     }
 }
 </script>

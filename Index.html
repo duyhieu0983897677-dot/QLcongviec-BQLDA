@@ -714,6 +714,42 @@
                     </table>
                 </div>
             </div>
+
+            <div class="card">
+                <div class="card-header-row">
+                    <div>
+                        <div class="card-title"><i class="fa-solid fa-list-check"></i> Tiến độ chi tiết theo BOQ</div>
+                        <div id="tdtcHopDongLine" class="hd-line"></div>
+                    </div>
+                    <select id="tdtcHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderTienDoThiCong();"></select>
+                </div>
+            </div>
+            <div id="tdtcNoHopDong" class="card" style="text-align:center; padding:24px;">
+                <p style="color:var(--text-muted); margin:0;">Chưa chọn Hợp đồng — chọn ở dropdown phía trên.</p>
+            </div>
+            <div id="tdtcContent">
+                <div class="card">
+                    <div id="tdtcImportBox" style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--border); display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Có nhiều hạng mục cần cập nhật tiến độ cùng lúc?</span>
+                        <button class="btn btn-sm" style="background:transparent; color:var(--primary-dark); border:1px solid var(--border); width:auto;" onclick="document.getElementById('tdtcExcelModal').classList.add('active')"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt từ Excel</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead><tr>
+                                <th style="width:56px;">STT</th>
+                                <th style="text-align:left;">Tên hạng mục</th>
+                                <th>ĐVT</th>
+                                <th>Khối lượng</th>
+                                <th>Ngày bắt đầu</th>
+                                <th>Ngày kết thúc</th>
+                                <th style="text-align:left;">Ghi chú</th>
+                                <th>Hành động</th>
+                            </tr></thead>
+                            <tbody id="tdtcBoqBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- TAB: ĐIỂM DANH & PHÉP — ai cũng xem được, chỉ Admin/Thư ký BQLDA sửa được -->
@@ -862,14 +898,16 @@
                     <i class="fa-solid fa-comments"></i> Bình luận
                 </label>
                 <div id="cvCommentList" class="cv-comment-list"></div>
-                <div class="cv-comment-input-row">
-                    <textarea id="cvCommentInput" class="form-control" rows="2" placeholder="Nhập bình luận…"></textarea>
+                <div class="cv-comment-input-row" style="position:relative;">
+                    <textarea id="cvCommentInput" class="form-control" rows="2" placeholder="Nhập bình luận… (gõ @ để nhắc đồng nghiệp)" oninput="onCvCommentInput_(this)" onkeydown="onCvCommentKeydown_(event)"></textarea>
                     <button class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="guiBinhLuanCongViec()" aria-label="Gửi bình luận" title="Gửi bình luận"><i class="fa-solid fa-paper-plane"></i></button>
+                    <div id="cvMentionDropdown" class="cv-mention-dropdown" style="display:none;"></div>
                 </div>
             </div>
 
             <div class="modal-actions">
-                <button class="btn" style="background:var(--success);" onclick="saveCongViecModal()">Lưu</button>
+                <span id="cvReadOnlyBadge" style="display:none; font-size:0.8rem; color:var(--text-muted); align-self:center;"><i class="fa-solid fa-eye"></i> Chỉ xem &amp; bình luận (không phải việc của bạn)</span>
+                <button id="cvBtnLuu" class="btn" style="background:var(--success);" onclick="saveCongViecModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeCongViecModal()">Hủy</button>
             </div>
         </div>
@@ -921,7 +959,7 @@
 
     <!-- MODAL: BÁO CÁO TIẾN ĐỘ HÀNG LOẠT (Nhật ký tiến độ) — bảng ngang, nhiều Công việc 1 lần -->
     <div id="baoCaoModal" class="modal">
-        <div class="modal-content" style="max-width:920px;">
+        <div class="modal-content" style="max-width:1200px;">
             <h3 style="margin-bottom:4px; color:var(--primary-dark);"><i class="fa-solid fa-clipboard-list"></i> Báo cáo tiến độ</h3>
             <p style="font-size:0.82rem; color:var(--text-muted); margin-bottom:12px;">Đăng nhập: <b id="ntdUserLabel">--</b> — nhập % hoàn thành hôm nay cho từng công việc bên dưới, để trống dòng nào thì bỏ qua dòng đó.</p>
             <div class="filter-bar">
@@ -933,14 +971,15 @@
                     <input type="text" id="ntdNgay" class="form-control" style="width:140px;" placeholder="dd/mm/yyyy">
                 </label>
             </div>
-            <div class="table-responsive" style="max-height:420px; overflow-y:auto;">
+            <div class="table-responsive" style="max-height:480px; overflow-y:auto;">
                 <table class="data-table">
                     <thead><tr>
-                        <th style="text-align:left; min-width:200px;">Công việc</th>
+                        <th style="text-align:left; min-width:220px;">Công việc</th>
+                        <th class="admin-only" style="min-width:130px;">Người phụ trách</th>
                         <th style="min-width:100px;">Hạng mục</th>
                         <th style="min-width:80px;">Đã đạt</th>
-                        <th style="min-width:110px;">% Thêm hôm nay</th>
-                        <th style="min-width:160px; text-align:left;">Ghi chú</th>
+                        <th style="min-width:72px;">% Thêm hôm nay</th>
+                        <th style="min-width:200px; text-align:left;">Ghi chú</th>
                     </tr></thead>
                     <tbody id="ntdTableBody"></tbody>
                 </table>
@@ -954,7 +993,7 @@
 
     <!-- MODAL: THÊM CÔNG VIỆC HÀNG LOẠT (1 hoặc nhiều dòng cùng lúc) -->
     <div id="themCongViecHangLoatModal" class="modal">
-        <div class="modal-content" style="max-width:1000px;">
+        <div class="modal-content" style="max-width:1200px;">
             <h3 style="margin-bottom:12px; color:var(--primary-dark);"><i class="fa-solid fa-list-check"></i> Thêm công việc</h3>
             <div style="display:flex; gap:16px; flex-wrap:wrap; margin-bottom:12px;">
                 <div id="cvhlGiaoChoGroup" class="form-group admin-only" style="margin-bottom:0; max-width:320px; flex:1; min-width:220px;">
@@ -1083,16 +1122,6 @@
                         <input type="text" inputmode="numeric" id="boqDonGia" class="form-control" oninput="formatTienLive_(this)">
                     </div>
                 </div>
-                <div class="form-row-3">
-                    <div class="form-group">
-                        <label>Ngày bắt đầu KH</label>
-                        <input type="text" id="boqNgayBD" class="form-control" placeholder="dd/mm/yyyy">
-                    </div>
-                    <div class="form-group">
-                        <label>Ngày kết thúc KH</label>
-                        <input type="text" id="boqNgayKT" class="form-control" placeholder="dd/mm/yyyy">
-                    </div>
-                </div>
                 <div class="form-group" style="margin-bottom:10px;">
                     <label>Ghi chú</label>
                     <input type="text" id="boqGhiChu" class="form-control">
@@ -1215,6 +1244,22 @@
             <div class="modal-actions">
                 <button class="btn btn-danger" onclick="document.getElementById('ntExcelModal').classList.remove('active')">Hủy</button>
                 <button class="btn" onclick="importNghiemThuFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: NHẬP HÀNG LOẠT TIẾN ĐỘ (Ngày bắt đầu/kết thúc BOQ) TỪ EXCEL -->
+    <div id="tdtcExcelModal" class="modal">
+        <div class="modal-content" style="max-width:440px;">
+            <h3 style="margin-bottom:6px; color:var(--primary-dark);"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt tiến độ từ Excel</h3>
+            <p style="font-size:0.78rem; color:var(--text-muted); margin:0 0 14px;">Cột: STT | Tên hạng mục | Ngày bắt đầu | Ngày kết thúc (dòng đầu là tiêu đề). Mỗi dòng khớp 1 hạng mục BOQ theo STT+Tên, ghi đè Ngày bắt đầu/Ngày kết thúc của đúng hạng mục đó.</p>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Chọn file Excel</label>
+                <input type="file" id="tdtcExcelFile" accept=".xlsx,.xls,.csv" class="form-control">
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" onclick="document.getElementById('tdtcExcelModal').classList.remove('active')">Hủy</button>
+                <button class="btn" onclick="importTdtcFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
             </div>
         </div>
     </div>
