@@ -1225,6 +1225,13 @@ function thangCong_(thang, soThang) {
 // allUsers/ccByThang_ do getChamCongThang() đọc + nhóm sẵn truyền vào — KHÔNG tự đọc lại
 // ChamCongThang ở đây nữa (trước đây hàm này đọc 1 lần, rồi getChamCongThang() đọc lại lần 2 NGUYÊN
 // SHEET đó ngay sau khi hàm này chạy xong, lãng phí 1 lượt đọc trùng mỗi lần mở tab/đổi tháng).
+// Trả về LUÔN mảng allPhep đã gồm cả các dòng vừa chốt thêm (nếu có) — trước đây hàm này chỉ ghi
+// vào Sheet rồi thôi, buộc getChamCongThang() phải đọc lại NGUYÊN sheet PhepThang lần thứ 2 ngay sau
+// đó để lấy đúng dữ liệu mới nhất, dù dữ liệu đó vốn đã có sẵn trong bộ nhớ ở đây rồi — mỗi lượt đọc
+// sheet tốn ~0,4-1 giây CỐ ĐỊNH ở nền tảng Apps Script bất kể sheet nhỏ hay lớn (đã đo thực tế: 23
+// nhân sự/317 dòng ChamCongThang vẫn mất 3,8 giây tổng cộng cho getChamCongThang, chủ yếu do CÁC LƯỢT
+// ĐỌC SHEET RIÊNG LẺ, không phải do khối lượng dữ liệu) — bớt được 1 lượt đọc trùng là bớt được ~1
+// giây mỗi lần mở tab/đổi tháng.
 function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
   const phepSheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
 
@@ -1239,6 +1246,7 @@ function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
     if (!lastRow) {
       // Chưa từng có dòng nào — chỉ bắt đầu từ tháng hiện tại, không truy hồi lùi các tháng trước.
       rowsToAppend.push([u.id, thangHienTai, 1, 0, new Date()]);
+      allPhep.push({ userId: u.id, thang: thangHienTai, phepDauThang: 1, soNgayNghi: 0 });
       return;
     }
 
@@ -1251,6 +1259,7 @@ function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
       thangDangXet = thangCong_(thangDangXet, 1);
       const phepDauThangMoi = Math.round((tongCongThangDo + 1) * 10) / 10;
       rowsToAppend.push([u.id, thangDangXet, phepDauThangMoi, 0, new Date()]);
+      allPhep.push({ userId: u.id, thang: thangDangXet, phepDauThang: phepDauThangMoi, soNgayNghi: 0 });
       tongCongThangDo = phepDauThangMoi + tinhPhepChiTietTuChamCong_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet).congTruPhepThang;
     }
   });
@@ -1258,6 +1267,8 @@ function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
   if (rowsToAppend.length) {
     phepSheet.getRange(phepSheet.getLastRow() + 1, 1, rowsToAppend.length, PHEP_HEADERS_.length).setValues(rowsToAppend);
   }
+
+  return allPhep;
 }
 
 // Chỉ Admin (không áp dụng cho Thư ký BQLDA) được sửa trực tiếp "Phép + bù" — dùng để nhập số dư
@@ -1422,6 +1433,13 @@ function tinhPhepChiTietTuChamCong_(allCC, userId, thang) {
 }
 
 // thang: 'yyyy-MM', bỏ trống = tháng hiện tại. KHÔNG cần đăng nhập để xem (giống getData()).
+//
+// Đã đo thực tế (23 nhân sự, 317 dòng ChamCongThang, chỉ 1 tháng dữ liệu — rất nhỏ) mà vẫn mất ~3,8
+// giây: phần lớn là do CÁC LƯỢT ĐỌC SHEET RIÊNG LẺ (mỗi lượt ~0,4-1 giây CỐ ĐỊNH ở nền tảng Apps
+// Script, không phụ thuộc sheet nhỏ hay lớn), không phải do vòng lặp tính toán. Vì vậy tối ưu quan
+// trọng nhất là GIẢM SỐ LƯỢT ĐỌC SHEET, không phải tối ưu thuật toán — hàm này chỉ còn đọc đúng 3
+// sheet 1 lần mỗi sheet: DanhSachUser (qua listSupervisors), ChamCongThang, PhepThang (qua
+// chotPhepDenThangHienTai_, đã trả thẳng dữ liệu mới nhất, KHÔNG đọc lại PhepThang lần 2 như trước).
 function getChamCongThang(thang) {
   const thangXem = String(thang || '').trim() || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
 
@@ -1430,14 +1448,13 @@ function getChamCongThang(thang) {
   const allUsers = listSupervisors();
   // Đọc + nhóm theo tháng ĐÚNG 1 LẦN cho cả lượt gọi này — chotPhepDenThangHienTai_() và vòng lặp
   // allUsers.map() bên dưới đều tra theo tháng qua Map (O(1)/tháng) thay vì mỗi nơi tự .filter() lại
-  // NGUYÊN mảng toàn bộ lịch sử chấm công (xem chú thích ở nhomChamCongTheoThang_()) — đây là thay
-  // đổi chính giúp tab Chấm công đỡ chậm dần khi lịch sử chấm công tích lũy nhiều tháng.
+  // NGUYÊN mảng toàn bộ lịch sử chấm công (xem chú thích ở nhomChamCongTheoThang_()) — có lợi khi
+  // lịch sử chấm công tích lũy nhiều tháng, dù đây không phải chi phí chính hiện tại (xem trên).
   const allCC = readChamCongRows_(layHoacTaoSheet_('ChamCongThang', CHAMCONG_HEADERS_));
   const ccByThang_ = nhomChamCongTheoThang_(allCC);
-  chotPhepDenThangHienTai_(allUsers, ccByThang_); // tái dùng cơ chế tự chốt "Phép đầu tháng" đã có, không tính lại ở đây
+  // Trả thẳng allPhep đã gồm dòng vừa chốt thêm (nếu có) — KHÔNG đọc lại PhepThang lần 2.
+  const allPhep = chotPhepDenThangHienTai_(allUsers, ccByThang_);
 
-  // Đọc SAU khi chốt (chotPhepDenThangHienTai_ có thể vừa ghi thêm dòng PhepThang mới cho tháng này).
-  const allPhep = readPhepThangRows_(layHoacTaoSheet_('PhepThang', PHEP_HEADERS_));
   const ccThang = ccByThang_.get(thangXem) || [];
 
   const rows = allUsers.map(u => {
