@@ -260,10 +260,10 @@ function saveHopDongModal() {
 
     btnLuu.disabled = true;
     gsRun('adminSaveHopDong', myUserId, myPassword, payload)
-        .then(() => {
+        .then(newId => {
             showCustomAlert('Đã lưu Hợp đồng.', 'success');
             closeHopDongModal();
-            reloadHopDongData();
+            reloadHopDongChiTiet_(newId);
         })
         .catch(handleBackendError)
         .finally(() => { btnLuu.disabled = false; });
@@ -274,7 +274,7 @@ function deleteHopDong(maHopDong) {
     if (!hd) return;
     if (!confirm(`Xác nhận XÓA Hợp đồng "${hd.tenHopDong}"? (BOQ/Nghiệm thu/Thanh toán liên quan vẫn được giữ lại)`)) return;
     gsRun('adminXoaHopDong', myUserId, myPassword, maHopDong)
-        .then(() => { showCustomAlert('Đã xóa Hợp đồng.', 'success'); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã xóa Hợp đồng.', 'success'); reloadHopDongChiTiet_(maHopDong); })
         .catch(handleBackendError);
 }
 

@@ -2007,6 +2007,61 @@ function getHopDongData() {
   return JSON.stringify({ hopDong, boq, phuLuc, phuLucThayDoi, nghiemThu, dotThanhToan, dotThanhToanChiTiet, quyetToan });
 }
 
+// Giống getHopDongData() nhưng CHỈ đọc/tính lại dữ liệu của ĐÚNG 1 Hợp đồng — dùng để tải lại sau
+// khi Lưu ở BOQ/Phụ lục/Nghiệm thu/Thanh toán/Quyết toán/Tiến độ (mọi thao tác Lưu ở các tab đó đều
+// biết chắc đang sửa Hợp đồng nào qua currentHopDongId). getHopDongData() ở trên vẫn phải giữ
+// nguyên (đọc + tính lại TOÀN BỘ hệ thống) vì tab "Hợp đồng" cần tổng hợp giá trị/đã thanh toán của
+// MỌI Hợp đồng cùng lúc — nhưng gọi lại nguyên hàm đó sau MỌI lần Lưu, kể cả khi chỉ sửa 1 Hợp đồng,
+// khiến việc tính lại hiệu lực/quyết toán tốn công theo TOÀN BỘ dữ liệu tích lũy cả dự án (càng
+// nhiều Hợp đồng/BOQ/Nghiệm thu qua các năm càng chậm dần), dù chỉ vừa sửa 1 dòng — đây chính là lý
+// do "bấm Lưu xong load lâu". Cùng 8 lượt đọc sheet (chi phí đọc Google Sheets không đổi vì Sheets
+// API luôn phải đọc nguyên cột), nhưng vòng lặp tính hiệu lực + payload JSON trả về client chỉ còn
+// tỉ lệ với 1 Hợp đồng thay vì cả hệ thống. Trả kèm maHopDong để client biết chính xác đang gộp dữ
+// liệu của Hợp đồng nào vào cache (xem applyLoadedHopDongChiTiet_ ở 0_TienIch.html).
+function getHopDongChiTietMotHopDong(maHopDong) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const maHD = String(maHopDong || '').trim();
+
+  const hopDongAll = readHopDongRows_(ss.getSheetByName('HopDong'));
+  const hd = hopDongAll.find(h => h.maHopDong === maHD);
+  const hopDong = hd ? [hd] : [];
+
+  const boq = readBOQRows_(ss.getSheetByName('BOQHangMuc')).filter(b => b.maHopDong === maHD);
+  const boqIds_ = new Set(boq.map(b => b.maBOQ));
+
+  const phuLuc = readPhuLucRows_(ss.getSheetByName('PhuLucHopDong'), true).filter(p => p.maHopDong === maHD);
+  const phuLucIds_ = new Set(phuLuc.map(p => p.maPhuLuc));
+  const phuLucThayDoi = readPhuLucThayDoiRows_(ss.getSheetByName('PhuLucThayDoi')).filter(ch => phuLucIds_.has(ch.maPhuLuc));
+
+  const nghiemThu = readNghiemThuRows_(ss.getSheetByName('NghiemThu')).filter(n => boqIds_.has(n.maBOQ));
+  const dotThanhToan = readDotThanhToanRows_(ss.getSheetByName('DotThanhToan')).filter(d => d.maHopDong === maHD);
+  const dotIds_ = new Set(dotThanhToan.map(d => d.maDotThanhToan));
+  const dotThanhToanChiTiet = readDotThanhToanChiTietRows_(ss.getSheetByName('DotThanhToanChiTiet')).filter(c => dotIds_.has(c.maDotThanhToan));
+  const quyetToan = readQuyetToanRows_(ss.getSheetByName('QuyetToan')).filter(q => q.maHopDong === maHD);
+
+  const activePhuLucIds_ = new Set(phuLuc.filter(p => p.active).map(p => p.maPhuLuc));
+  const phuLucThayDoiHieuLuc_ = phuLucThayDoi.filter(ch => activePhuLucIds_.has(ch.maPhuLuc));
+  const effectiveQtyMap = tinhKhoiLuongHieuLuc_(boq, phuLucThayDoiHieuLuc_);
+  const donGiaHieuLucMap = tinhDonGiaHieuLuc_(boq, phuLucThayDoiHieuLuc_);
+  const executedByBOQ = {};
+  nghiemThu.forEach(n => { executedByBOQ[n.maBOQ] = Math.round(((executedByBOQ[n.maBOQ] || 0) + n.khoiLuong) * 1000) / 1000; });
+  const paidByBOQ = {};
+  dotThanhToanChiTiet.forEach(c => { paidByBOQ[c.maBOQ] = Math.round(((paidByBOQ[c.maBOQ] || 0) + c.khoiLuong) * 1000) / 1000; });
+
+  boq.forEach(item => {
+    item.khoiLuongHieuLuc = effectiveQtyMap[item.maBOQ] != null ? effectiveQtyMap[item.maBOQ] : item.khoiLuongHopDong;
+    item.donGiaHieuLuc = donGiaHieuLucMap[item.maBOQ] != null ? donGiaHieuLucMap[item.maBOQ] : item.donGia;
+    item.khoiLuongDaNghiemThu = executedByBOQ[item.maBOQ] || 0;
+    item.khoiLuongDaThanhToan = paidByBOQ[item.maBOQ] || 0;
+  });
+
+  quyetToan.forEach(qt => {
+    Object.assign(qt, tinhQuyetToanHopDong_(qt.maHopDong, { hopDong, boq, dotThanhToan, dotThanhToanChiTiet }));
+  });
+
+  return JSON.stringify({ maHopDong: maHD, hopDong, boq, phuLuc, phuLucThayDoi, nghiemThu, dotThanhToan, dotThanhToanChiTiet, quyetToan });
+}
+
 // --- CRUD Hợp đồng ---
 function adminSaveHopDong(userId, password, hopDong) {
   const user = kiemTraQuyenHopDong_(userId, password);

@@ -198,14 +198,14 @@ function luuNtEditRow(maNghiemThu) {
     const kl = document.getElementById(`ntEditKL_${maNghiemThu}`).value;
     const gc = document.getElementById(`ntEditGC_${maNghiemThu}`).value.trim();
     gsRun('adminSuaNghiemThu', myUserId, myPassword, maNghiemThu, kl, gc)
-        .then(() => { showCustomAlert('Đã cập nhật khối lượng nghiệm thu.', 'success'); closeNtEditModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã cập nhật khối lượng nghiệm thu.', 'success'); closeNtEditModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
 function xoaNtEditRow(maNghiemThu) {
     if (!confirm('Xác nhận XÓA dòng nghiệm thu này?')) return;
     gsRun('adminXoaNghiemThu', myUserId, myPassword, maNghiemThu)
-        .then(() => { showCustomAlert('Đã xóa dòng nghiệm thu.', 'success'); closeNtEditModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã xóa dòng nghiệm thu.', 'success'); closeNtEditModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
@@ -249,7 +249,7 @@ function submitNghiemThu() {
             showCustomAlert('Đã ghi Nghiệm thu.', 'success');
             document.getElementById('ntKhoiLuong').value = '';
             document.getElementById('ntGhiChu').value = '';
-            reloadHopDongData();
+            reloadHopDongChiTiet_(currentHopDongId);
         })
         .catch(err => { handleBackendError(err); btn.disabled = false; });
 }
@@ -286,7 +286,7 @@ function importNghiemThuFromExcel() {
             showCustomAlert(msg, ok > 0 ? 'success' : 'error');
             fileInput.value = '';
             if (ok > 0) document.getElementById('ntExcelModal').classList.remove('active');
-            reloadHopDongData();
+            reloadHopDongChiTiet_(currentHopDongId);
         });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }

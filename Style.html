@@ -17,6 +17,10 @@
             --font-mono: 'Inter', sans-serif;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        /* Ẩn khỏi màn hình nhưng vẫn đọc được bằng trình đọc màn hình — dùng cho <label> của các ô
+           chỉ có placeholder làm gợi ý (VD: ô Đăng nhập/Đổi mật khẩu), placeholder không thay được
+           <label> cho screen reader. */
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); padding-bottom: 80px; scroll-behavior: smooth; }
         /* Trình duyệt KHÔNG tự cho button/select/input/textarea kế thừa font của body (mặc định dùng
            font hệ thống) — thiếu dòng này thì mọi nút bấm + dropdown trong app hiện font khác hẳn
