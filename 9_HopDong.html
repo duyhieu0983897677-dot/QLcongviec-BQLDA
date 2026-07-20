@@ -243,6 +243,8 @@ function closeHopDongModal() {
 }
 
 function saveHopDongModal() {
+    const btnLuu = document.getElementById('hdBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const payload = {
         maHopDong: document.getElementById('hdEditId').value,
         tenHopDong: document.getElementById('hdTen').value.trim(),
@@ -256,13 +258,15 @@ function saveHopDongModal() {
     };
     if (!payload.tenHopDong) { showCustomAlert('Vui lòng nhập Tên hợp đồng!', 'error'); return; }
 
+    btnLuu.disabled = true;
     gsRun('adminSaveHopDong', myUserId, myPassword, payload)
         .then(() => {
             showCustomAlert('Đã lưu Hợp đồng.', 'success');
             closeHopDongModal();
             reloadHopDongData();
         })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; });
 }
 
 function deleteHopDong(maHopDong) {

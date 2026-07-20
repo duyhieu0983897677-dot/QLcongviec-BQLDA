@@ -212,6 +212,8 @@ function toggleBOQHeaderFields() {
 function closeBOQItemModal() { document.getElementById('boqItemModal').classList.remove('active'); }
 
 function saveBOQItemModal() {
+    const btnLuu = document.getElementById('boqBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     // Ngày bắt đầu/Ngày kết thúc KH KHÔNG còn sửa ở modal này — quản lý riêng ở tab "Tiến độ"
     // (xem renderTdtcBoqDetail_ ở 14_TienDoThiCong.html). Giữ nguyên giá trị đang có của hạng mục
     // (nếu là sửa) để lưu ở đây không vô tình xoá trắng ngày đã đặt bên tab Tiến độ.
@@ -233,9 +235,11 @@ function saveBOQItemModal() {
     };
     if (!payload.tenHangMuc) { showCustomAlert('Vui lòng nhập Tên hạng mục!', 'error'); return; }
 
+    btnLuu.disabled = true;
     gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
         .then(() => { showCustomAlert('Đã lưu hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongData(); })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; });
 }
 
 function deleteBOQItem(maBOQ) {
@@ -359,6 +363,8 @@ function toggleThayDoiFields() {
 }
 
 function saveThayDoiModal() {
+    const btnLuu = document.getElementById('tdBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const loai = document.getElementById('tdLoai').value;
     const klRaw = parseNumberSafely(document.getElementById('tdKhoiLuong').value);
     const donGiaMoiRaw = document.getElementById('tdDonGiaMoi').value.trim();
@@ -378,9 +384,11 @@ function saveThayDoiModal() {
         if (loai === 'THAY_THE') payload.khoiLuongMoi = klRaw; else payload.khoiLuongDieuChinh = klRaw;
     }
 
+    btnLuu.disabled = true;
     gsRun('adminThemThayDoiPhuLuc', myUserId, myPassword, thayDoiPhuLucId_, payload)
         .then(() => { showCustomAlert('Đã thêm thay đổi vào Phụ lục.', 'success'); closeThayDoiModal(); reloadHopDongData(); })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; });
 }
 
 // --- Nhập nhanh BOQ từ file Excel thật (.xlsx/.xls/.csv) ---
@@ -392,10 +400,11 @@ function importBOQFromExcel() {
     const fileInput = document.getElementById('boqExcelFile');
     const file = fileInput.files[0];
     if (!file) { showCustomAlert('Vui lòng chọn file Excel!', 'error'); return; }
+    const btn = document.getElementById('boqImportBtn');
+    if (btn.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
 
     docFileExcel_(file).then(rows => {
-        let ok = 0;
-        let chain = Promise.resolve();
+        const payloads = [];
         rows.forEach((row, idx) => {
             if (idx === 0) return; // bỏ dòng tiêu đề
             const stt = sttTuExcel_(row[0]);
@@ -409,21 +418,33 @@ function importBOQFromExcel() {
             const level = layCapTuSTT_(stt);
             const isHeader = level === 0 || level === 1 || (isNaN(qty) && isNaN(price));
 
-            chain = chain.then(() => gsRun('adminSaveBOQItem', myUserId, myPassword, {
+            payloads.push({
                 maHopDong: currentHopDongId, stt, tenHangMuc: ten, isHeader,
                 cap: level === -1 ? (isHeader ? 0 : 2) : level,
                 donVi: isHeader ? '' : String(row[2] || '').trim(),
                 khoiLuongHopDong: (isHeader || isNaN(qty)) ? 0 : qty,
                 donGia: (isHeader || isNaN(price)) ? 0 : price,
                 ngayBatDauKH: ngayExcelToISO_(row[6]), ngayKetThucKH: ngayExcelToISO_(row[7])
-            }).then(() => ok++).catch(() => {}));
+            });
         });
-        chain.then(() => {
-            showCustomAlert(`Đã nhập ${ok} dòng vào BOQ.`, ok > 0 ? 'success' : 'error');
-            fileInput.value = '';
-            if (ok > 0) document.getElementById('boqExcelModal').classList.remove('active');
-            reloadHopDongData();
-        });
+        if (payloads.length === 0) { showCustomAlert('Không có dòng hợp lệ để nhập!', 'error'); return; }
+
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Đang nhập…';
+        // Gộp toàn bộ các dòng thành 1 lượt gọi duy nhất (adminSaveBOQItemHangLoat) thay vì gọi lặp
+        // adminSaveBOQItem() từng dòng — file Excel nhiều dòng trước đây là N round-trip riêng lên
+        // Apps Script, rất chậm khi nhập nhiều hạng mục cùng lúc.
+        gsRun('adminSaveBOQItemHangLoat', myUserId, myPassword, payloads)
+            .then(resultsJson => {
+                const ok = JSON.parse(resultsJson).filter(r => r.ok).length;
+                showCustomAlert(`Đã nhập ${ok} dòng vào BOQ.`, ok > 0 ? 'success' : 'error');
+                fileInput.value = '';
+                if (ok > 0) document.getElementById('boqExcelModal').classList.remove('active');
+                reloadHopDongData();
+            })
+            .catch(handleBackendError)
+            .finally(() => { btn.disabled = false; btn.innerHTML = origText; });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }
 </script>

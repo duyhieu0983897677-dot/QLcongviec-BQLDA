@@ -744,6 +744,112 @@ function adminSaveCongViec(userId, password, congViec) {
   return newId;
 }
 
+// payloadArray: mảng { tenCongViec, maGoiThau, maHangMucList, nguoiDuocGiaoId, phanLoai,
+// ngayBatDauKH, ngayKetThucKH } — GIỐNG HỆT tham số congViec của adminSaveCongViec() ở trên, chỉ
+// khác là LUÔN tạo mới (modal "Thêm công việc hàng loạt" ở 4_ViecCuaToi.html không có sửa). Gộp
+// login + đọc DanhSachUser + sinh mã + ghi Sheet thành ĐÚNG 1 lượt gọi từ client thay vì client gọi
+// lặp adminSaveCongViec() từng dòng (N dòng = N round-trip riêng lên Apps Script, mỗi lượt round-trip
+// tốn 1-3s do kiến trúc google.script.run — đây là nguyên nhân chính khiến "Thêm công việc" (luôn là
+// bảng nhiều dòng) cảm giác lưu rất lâu). Trả về JSON mảng kết quả song song với payloadArray, mỗi
+// phần tử { ok, maCongViec } hoặc { ok:false, error } — 1 dòng lỗi không làm hỏng các dòng còn lại.
+function adminSaveCongViecHangLoat(userId, password, payloadArray) {
+  const user = login(userId, password);
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CongViec');
+  if (!sheet) throw new Error('Chưa cấu hình Tab CongViec trên Google Sheet!');
+
+  const allUsers = listSupervisors();
+  const now = new Date();
+  const nowStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+  const prefix = 'CV-' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyyMMdd') + '-';
+
+  const lastRow = sheet.getLastRow();
+  let maxSTT = 0;
+  if (lastRow >= 2) {
+    const ids = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    ids.forEach(r => {
+      const id = String(r[0] || '');
+      if (id.indexOf(prefix) === 0) {
+        const stt = parseInt(id.slice(prefix.length), 10);
+        if (!isNaN(stt) && stt > maxSTT) maxSTT = stt;
+      }
+    });
+  }
+
+  const results = [];
+  const newRows = [];
+  const logRows = [];
+  const thongBaoList = [];
+
+  (payloadArray || []).forEach(congViec => {
+    try {
+      const tenCongViec = String(congViec.tenCongViec || '').trim();
+      const maGoiThau = String(congViec.maGoiThau || '').trim();
+      const maHangMucJoined = (congViec.maHangMucList || []).map(s => String(s).trim()).filter(Boolean).join(',');
+      if (!tenCongViec) throw new Error('Vui lòng nhập Tên công việc!');
+      if (!maGoiThau) throw new Error('Vui lòng chọn Gói thầu!');
+      if (!maHangMucJoined) throw new Error('Vui lòng chọn ít nhất 1 Hạng mục!');
+
+      let nguoiPhuTrachId = user.supervisorId;
+      let nguoiPhuTrachTen = user.name;
+      let nguoiGiaoId = '';
+      let nguoiGiaoTen = '';
+
+      const nguoiDuocGiaoId = String(congViec.nguoiDuocGiaoId || '').trim();
+      if (nguoiDuocGiaoId && nguoiDuocGiaoId !== user.supervisorId) {
+        if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền giao việc cho người khác!');
+        const target = allUsers.find(u => u.id === nguoiDuocGiaoId);
+        if (!target) throw new Error('Không tìm thấy nhân sự được giao!');
+        nguoiPhuTrachId = target.id;
+        nguoiPhuTrachTen = target.name;
+        nguoiGiaoId = user.supervisorId;
+        nguoiGiaoTen = user.name;
+      }
+
+      const nguoiPhuTrach = allUsers.find(u => u.id === nguoiPhuTrachId);
+      const phanMacDinh = String((nguoiPhuTrach && nguoiPhuTrach.phanMacDinh) || '').trim();
+      if (!phanMacDinh) {
+        throw new Error(nguoiGiaoId
+          ? `Nhân sự "${nguoiPhuTrachTen}" chưa được Quản trị gán Phần mặc định (Chức danh). Vui lòng gán trước khi giao việc.`
+          : 'Tài khoản của bạn chưa được Quản trị gán Phần mặc định (Chức danh). Vui lòng liên hệ Quản trị trước khi tự tạo Công việc.');
+      }
+
+      let phanLoai = phanMacDinh;
+      if (phanMacDinh === 'ca_hai') {
+        phanLoai = String(congViec.phanLoai || '').trim();
+        if (phanLoai !== 'ho_so' && phanLoai !== 'thi_cong') {
+          throw new Error(`Nhân sự "${nguoiPhuTrachTen}" được gán "Cả hai" — vui lòng chọn Phần (Hồ sơ/Thi công) cho công việc này!`);
+        }
+      }
+
+      maxSTT++;
+      const newId = prefix + String(maxSTT).padStart(3, '0');
+      newRows.push([
+        newId, tenCongViec, maGoiThau, maHangMucJoined, phanLoai,
+        nguoiPhuTrachId, nguoiPhuTrachTen,
+        congViec.ngayBatDauKH || '', congViec.ngayKetThucKH || '', true,
+        nguoiGiaoId, nguoiGiaoTen
+      ]);
+      logRows.push([nowStr, `${user.name} (${userId})`, 'Thêm Công việc', `Thêm ${newId} - ${tenCongViec}`]);
+      if (nguoiGiaoId) thongBaoList.push({ nguoiPhuTrachId, tenCongViec, newId, nguoiGiaoId, nguoiGiaoTen });
+      results.push({ ok: true, maCongViec: newId });
+    } catch (e) {
+      results.push({ ok: false, error: e.message });
+    }
+  });
+
+  if (newRows.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, CONGVIEC_HEADERS_.length).setValues(newRows);
+  }
+  if (logRows.length) {
+    const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NhatKy');
+    if (logSheet) logSheet.getRange(logSheet.getLastRow() + 1, 1, logRows.length, 4).setValues(logRows);
+  }
+  thongBaoList.forEach(tb => guiThongBao_(tb.nguoiPhuTrachId, 'giao_viec',
+    `Bạn được giao công việc mới: "${tb.tenCongViec}"`, tb.newId, tb.nguoiGiaoId, tb.nguoiGiaoTen));
+
+  return JSON.stringify(results);
+}
+
 function adminDeleteCongViec(userId, password, maCongViec) {
   const user = login(userId, password);
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('CongViec');
@@ -1860,6 +1966,86 @@ function adminSaveBOQItem(userId, password, item) {
   sheet.appendRow(row);
   logActivity(userId, user.name, 'Thêm hạng mục BOQ', `${newId} - ${tenHangMuc}`);
   return newId;
+}
+
+// itemArray: mảng tham số item giống hệt adminSaveBOQItem() ở trên — có thể trộn lẫn Sửa (có maBOQ,
+// dùng bởi import Excel Tiến độ — xem importTdtcFromExcel ở 14_TienDoThiCong.html) và Thêm mới (rỗng
+// maBOQ, dùng bởi import Excel BOQ — xem importBOQFromExcel ở 10_BOQ.html) trong cùng 1 lượt gọi. Gộp
+// thành 1 lần đọc cột A (dò mã) + 1 lần ghi hàng loạt thay vì client gọi lặp adminSaveBOQItem() từng
+// dòng — file Excel nhiều dòng trước đây là N round-trip riêng lên Apps Script, rất chậm khi import.
+// Trả về JSON mảng kết quả song song với itemArray, mỗi phần tử { ok, maBOQ } hoặc { ok:false, error }.
+function adminSaveBOQItemHangLoat(userId, password, itemArray) {
+  const user = kiemTraQuyenHopDong_(userId, password);
+  const sheet = layHoacTaoSheet_('BOQHangMuc', BOQ_HEADERS_);
+  const lastRow = sheet.getLastRow();
+  const existing = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, 12).getValues() : [];
+  const idIndex = new Map(); // maBOQ -> { rowIdx, maPhuLucTao }
+  existing.forEach((r, i) => {
+    const id = String(r[0] || '').trim();
+    if (id) idIndex.set(id, { rowIdx: i + 2, maPhuLucTao: String(r[11] || '').trim() });
+  });
+
+  const now = new Date();
+  const nowStr = Utilities.formatDate(now, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
+  const fullPrefix = 'BOQ-' + Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyyMMdd') + '-';
+  let maxSTT = 0;
+  existing.forEach(r => {
+    const id = String(r[0] || '');
+    if (id.indexOf(fullPrefix) === 0) {
+      const stt = parseInt(id.slice(fullPrefix.length), 10);
+      if (!isNaN(stt) && stt > maxSTT) maxSTT = stt;
+    }
+  });
+
+  const results = [];
+  const newRows = [];
+  const logRows = [];
+
+  (itemArray || []).forEach(item => {
+    try {
+      const maHopDong = String(item.maHopDong || '').trim();
+      if (!maHopDong) throw new Error('Thiếu mã Hợp đồng!');
+      const tenHangMuc = String(item.tenHangMuc || '').trim();
+      if (!tenHangMuc) throw new Error('Vui lòng nhập Tên hạng mục!');
+
+      const maBOQ = String(item.maBOQ || '').trim();
+      const row = [
+        '', maHopDong, String(item.stt || '').trim(), tenHangMuc, !!item.isHeader,
+        String(item.donVi || '').trim(), round3_(item.khoiLuongHopDong), round0_(item.donGia),
+        parseInt(item.cap, 10) || 0, item.ngayBatDauKH || '', item.ngayKetThucKH || '',
+        String(item.maPhuLucTao || '').trim(), true, String(item.ghiChu || '').trim()
+      ];
+
+      if (maBOQ) {
+        const found = idIndex.get(maBOQ);
+        if (!found) throw new Error('Không tìm thấy Hạng mục BOQ!');
+        row[0] = maBOQ;
+        row[11] = found.maPhuLucTao; // giữ nguyên maPhuLucTao gốc, không cho sửa tay
+        sheet.getRange(found.rowIdx, 1, 1, BOQ_HEADERS_.length).setValues([row]);
+        logRows.push([nowStr, `${user.name} (${userId})`, 'Sửa hạng mục BOQ', `${maBOQ} - ${tenHangMuc}`]);
+        results.push({ ok: true, maBOQ });
+      } else {
+        maxSTT++;
+        const newId = fullPrefix + String(maxSTT).padStart(3, '0');
+        row[0] = newId;
+        newRows.push(row);
+        logRows.push([nowStr, `${user.name} (${userId})`, 'Thêm hạng mục BOQ', `${newId} - ${tenHangMuc}`]);
+        results.push({ ok: true, maBOQ: newId });
+      }
+    } catch (e) {
+      results.push({ ok: false, error: e.message });
+    }
+  });
+
+  if (newRows.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, newRows.length, BOQ_HEADERS_.length).setValues(newRows);
+  }
+  if (logRows.length) {
+    const logSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NhatKy');
+    if (logSheet) logSheet.getRange(logSheet.getLastRow() + 1, 1, logRows.length, 4).setValues(logRows);
+  }
+
+  return JSON.stringify(results);
 }
 
 function adminXoaBOQItem(userId, password, maBOQ) {

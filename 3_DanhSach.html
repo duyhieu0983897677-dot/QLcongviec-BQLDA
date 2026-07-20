@@ -114,6 +114,8 @@ function closeHangMucModal() {
 // Cho phép đổi Mã hạng mục — backend (adminSaveHangMuc) tự cập nhật dây chuyền mọi Gói thầu/
 // Công việc/Hạng mục con đang tham chiếu mã cũ, tránh mồ côi tham chiếu.
 function saveHangMucModal() {
+    const btnLuu = document.getElementById('hmBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const maHangMuc = document.getElementById('hmMaHangMuc').value.trim();
     const tenHangMuc = document.getElementById('hmTen').value.trim();
     const oldMaHangMuc = document.getElementById('hmEditId').value;
@@ -130,13 +132,15 @@ function saveHangMucModal() {
         parentId: document.getElementById('hmParentId').value
     };
 
+    btnLuu.disabled = true;
     gsRun('adminSaveHangMuc', myUserId, myPassword, node)
         .then(() => {
             closeHangMucModal();
             showCustomAlert('Đã lưu Hạng mục.', 'success');
             reloadCongViecData();
         })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; });
 }
 
 function deleteHangMuc(maHangMuc) {
@@ -215,19 +219,23 @@ function closeGoiThauModal() {
 }
 
 function saveGoiThauModal() {
+    const btnLuu = document.getElementById('gtBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const maGoiThau = document.getElementById('gtEditId').value;
     const tenGoiThau = document.getElementById('gtTen').value.trim();
     if (!tenGoiThau) { showCustomAlert('Vui lòng nhập Tên gói thầu!', 'error'); return; }
     const maHangMucList = Array.from(document.querySelectorAll('.gt-hm-cb:checked')).map(cb => cb.value);
     const stt = parseInt(document.getElementById('gtStt').value, 10) || 0;
 
+    btnLuu.disabled = true;
     gsRun('adminSaveGoiThau', myUserId, myPassword, { maGoiThau, tenGoiThau, maHangMucList, stt })
         .then(() => {
             closeGoiThauModal();
             showCustomAlert('Đã lưu Gói thầu.', 'success');
             reloadCongViecData();
         })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; });
 }
 
 function deleteGoiThau(maGoiThau) {

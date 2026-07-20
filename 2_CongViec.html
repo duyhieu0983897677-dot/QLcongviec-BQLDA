@@ -231,6 +231,8 @@ function closeCongViecModal() {
 }
 
 function saveCongViecModal() {
+    const btnLuu = document.getElementById('cvBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const maCongViec = document.getElementById('cvEditId').value;
     const maGoiThau = document.getElementById('cvGoiThau').value;
     const maHangMucList = Array.from(document.querySelectorAll('.cv-hm-cb:checked')).map(cb => cb.value);
@@ -245,13 +247,15 @@ function saveCongViecModal() {
         ngayKetThucKH: convertDMYtoISO(document.getElementById('cvKetThuc').value.trim()) || ''
     };
 
+    btnLuu.disabled = true;
     gsRun('adminSaveCongViec', myUserId, myPassword, payload)
         .then(() => {
             closeCongViecModal();
             showCustomAlert('Đã lưu công việc.', 'success');
             reloadCongViecData();
         })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; });
 }
 
 function deleteCongViec(maCongViec) {

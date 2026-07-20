@@ -6,7 +6,8 @@
    tab "Gói thầu/Hạng mục" cũ sang đây) + 2 modal:
    - "Thêm công việc": bảng nhiều dòng, mỗi dòng 1 Công việc (Gói thầu-
      Hạng mục-Tên-Ngày BĐ-Ngày KT), thêm được 1 hoặc nhiều dòng cùng
-     lúc, lưu hàng loạt (lặp gọi adminSaveCongViec từng dòng). Mỗi dòng
+     lúc, lưu hàng loạt qua ĐÚNG 1 lượt gọi adminSaveCongViecHangLoat
+     (gộp mọi dòng thành 1 lần ghi Sheet — xem Code.js). Mỗi dòng
      chọn được 1/nhiều/tất cả Hạng mục của Gói thầu (checkbox cuộn dọc,
      giống fillCvHangMucCheckboxes ở 2_CongViec.html nhưng có thêm
      "Chọn tất cả" vì đây là màn thêm nhanh hàng loạt).
@@ -252,6 +253,8 @@ function closeThemCongViecHangLoatModal() {
 }
 
 function luuCongViecHangLoat() {
+    const btnLuu = document.getElementById('cvhlBtnLuu');
+    if (btnLuu.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const rows = Array.from(document.querySelectorAll('#cvhlBody tr'));
     if (rows.length === 0) { showCustomAlert('Chưa có dòng nào để lưu!', 'error'); return; }
 
@@ -278,16 +281,23 @@ function luuCongViecHangLoat() {
     }
     if (payloads.length === 0) { showCustomAlert('Chưa nhập dòng công việc nào hợp lệ!', 'error'); return; }
 
-    let ok = 0, fail = 0;
-    let chain = Promise.resolve();
-    payloads.forEach(p => {
-        chain = chain.then(() => gsRun('adminSaveCongViec', myUserId, myPassword, p).then(() => ok++).catch(() => fail++));
-    });
-    chain.then(() => {
-        showCustomAlert(`Đã thêm ${ok} công việc${fail ? `, ${fail} dòng lỗi` : ''}.`, fail ? 'error' : 'success');
-        closeThemCongViecHangLoatModal();
-        reloadCongViecData();
-    });
+    const origText = btnLuu.innerHTML;
+    btnLuu.disabled = true;
+    btnLuu.innerHTML = 'Đang lưu…';
+    // Gộp toàn bộ các dòng thành 1 lượt gọi duy nhất (adminSaveCongViecHangLoat) thay vì gọi lặp
+    // adminSaveCongViec() từng dòng — trước đây N dòng = N round-trip riêng lên Apps Script, mỗi lượt
+    // round-trip tốn 1-3s nên Thêm nhiều dòng cùng lúc rất chậm.
+    gsRun('adminSaveCongViecHangLoat', myUserId, myPassword, payloads)
+        .then(resultsJson => {
+            const results = JSON.parse(resultsJson);
+            const ok = results.filter(r => r.ok).length;
+            const fail = results.length - ok;
+            showCustomAlert(`Đã thêm ${ok} công việc${fail ? `, ${fail} dòng lỗi` : ''}.`, fail ? 'error' : 'success');
+            closeThemCongViecHangLoatModal();
+            reloadCongViecData();
+        })
+        .catch(handleBackendError)
+        .finally(() => { btnLuu.disabled = false; btnLuu.innerHTML = origText; });
 }
 
 // ---------- BÁO CÁO TIẾN ĐỘ HÀNG LOẠT (bảng ngang, nhiều Công việc 1 lần) ----------

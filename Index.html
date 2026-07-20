@@ -832,7 +832,7 @@
                 <select id="hmParentId" class="form-control"></select>
             </div>
             <div class="modal-actions">
-                <button class="btn" style="background:var(--success);" onclick="saveHangMucModal()">Lưu</button>
+                <button id="hmBtnLuu" class="btn" style="background:var(--success);" onclick="saveHangMucModal()">Lưu</button>
                 <button id="hmDeleteBtn" class="btn btn-danger" onclick="deleteHangMucFromModal()" style="display:none;">Xóa</button>
                 <button class="btn" style="background:var(--text-muted);" onclick="closeHangMucModal()">Hủy</button>
             </div>
@@ -862,7 +862,7 @@
             </div>
             <p style="font-size:0.78rem; color:var(--text-muted);">Mỗi Gói thầu tự động có 2 phần cố định: <b>I. Phần hồ sơ</b> và <b>II. Phần triển khai thi công</b> — Công việc do nhân sự tự tạo sẽ tự rơi vào đúng phần theo Chức danh của người tạo.</p>
             <div class="modal-actions">
-                <button class="btn" style="background:var(--success);" onclick="saveGoiThauModal()">Lưu</button>
+                <button id="gtBtnLuu" class="btn" style="background:var(--success);" onclick="saveGoiThauModal()">Lưu</button>
                 <button id="gtDeleteBtn" class="btn btn-danger" onclick="deleteGoiThauFromModal()" style="display:none;">Xóa</button>
                 <button class="btn" style="background:var(--text-muted);" onclick="closeGoiThauModal()">Hủy</button>
             </div>
@@ -1025,7 +1025,7 @@
             </div>
             <button type="button" class="btn btn-sm" style="background:var(--accent); margin-top:8px;" onclick="themDongCongViec()"><i class="fa-solid fa-plus"></i> Thêm dòng</button>
             <div class="modal-actions" style="margin-top:14px;">
-                <button class="btn" style="background:var(--success);" onclick="luuCongViecHangLoat()">Lưu tất cả</button>
+                <button id="cvhlBtnLuu" class="btn" style="background:var(--success);" onclick="luuCongViecHangLoat()">Lưu tất cả</button>
                 <button class="btn" style="background:var(--text-muted);" onclick="closeThemCongViecHangLoatModal()">Hủy</button>
             </div>
         </div>
@@ -1073,7 +1073,7 @@
                 <input type="text" inputmode="numeric" id="hdGiamGia" class="form-control" oninput="formatTienLive_(this)">
             </div>
             <div class="modal-actions">
-                <button class="btn" style="background:var(--success);" onclick="saveHopDongModal()">Lưu</button>
+                <button id="hdBtnLuu" class="btn" style="background:var(--success);" onclick="saveHopDongModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeHopDongModal()">Hủy</button>
             </div>
         </div>
@@ -1129,7 +1129,7 @@
             </div>
             <div class="modal-actions">
                 <button id="boqBtnXoa" class="btn btn-danger" style="display:none; margin-right:auto; width:auto;" onclick="deleteBOQItem(document.getElementById('boqEditId').value)"><i class="fa-solid fa-trash"></i> Xóa hạng mục</button>
-                <button class="btn" style="background:var(--success);" onclick="saveBOQItemModal()">Lưu</button>
+                <button id="boqBtnLuu" class="btn" style="background:var(--success);" onclick="saveBOQItemModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeBOQItemModal()">Hủy</button>
             </div>
         </div>
@@ -1194,7 +1194,7 @@
                 <input type="number" step="any" id="tdDonGiaMoi" class="form-control">
             </div>
             <div class="modal-actions">
-                <button class="btn" style="background:var(--success);" onclick="saveThayDoiModal()">Lưu</button>
+                <button id="tdBtnLuu" class="btn" style="background:var(--success);" onclick="saveThayDoiModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeThayDoiModal()">Hủy</button>
             </div>
         </div>
@@ -1223,7 +1223,7 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-danger" onclick="document.getElementById('boqExcelModal').classList.remove('active')">Hủy</button>
-                <button class="btn" onclick="importBOQFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập vào BOQ</button>
+                <button id="boqImportBtn" class="btn" onclick="importBOQFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập vào BOQ</button>
             </div>
         </div>
     </div>
@@ -1259,7 +1259,7 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-danger" onclick="document.getElementById('tdtcExcelModal').classList.remove('active')">Hủy</button>
-                <button class="btn" onclick="importTdtcFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
+                <button id="tdtcImportBtn" class="btn" onclick="importTdtcFromExcel()"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt</button>
             </div>
         </div>
     </div>

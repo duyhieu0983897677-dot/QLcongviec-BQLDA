@@ -55,36 +55,40 @@ function cancelTdtcEdit_() {
 // Chỉ gửi lại đúng 2 trường Ngày bắt đầu/Ngày kết thúc thay đổi — mọi trường khác (Tên/ĐVT/Khối
 // lượng/Đơn giá/Ghi chú...) lấy nguyên từ hạng mục hiện có, tránh đụng tới dữ liệu do modal BOQ
 // quản lý. Dùng chung adminSaveBOQItem (Code.js) — không cần thêm hàm backend mới.
-function saveTdtcRow_(maBOQ) {
+function saveTdtcRow_(maBOQ, btnEl) {
+    if (btnEl.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
     const item = boq.find(b => b.maBOQ === maBOQ);
     if (!item) return;
     const ngayBD = convertDMYtoISO(document.getElementById('tdtcEditBD').value.trim()) || '';
     const ngayKT = convertDMYtoISO(document.getElementById('tdtcEditKT').value.trim()) || '';
     const payload = Object.assign({}, item, { ngayBatDauKH: ngayBD, ngayKetThucKH: ngayKT });
+    btnEl.disabled = true;
     gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
         .then(() => {
             tdtcEditingId_ = '';
             showCustomAlert('Đã lưu tiến độ hạng mục.', 'success');
             reloadHopDongData();
         })
-        .catch(handleBackendError);
+        .catch(handleBackendError)
+        .finally(() => { btnEl.disabled = false; });
 }
 
 // Nhập hàng loạt Ngày bắt đầu/Ngày kết thúc từ Excel (STT | Tên hạng mục | Ngày bắt đầu | Ngày kết
 // thúc) — khớp từng dòng với đúng hạng mục BOQ theo STT+Tên (dùng chung khopBOQTheoSttTen_ ở
-// 9_HopDong.html, giống hệt cách Nghiệm thu import), ghi đè đúng 2 trường ngày của hạng mục đó qua
-// adminSaveBOQItem, mọi trường khác giữ nguyên (giống saveTdtcRow_ ở trên).
+// 9_HopDong.html, giống hệt cách Nghiệm thu import), ghi đè đúng 2 trường ngày của hạng mục đó, mọi
+// trường khác giữ nguyên (giống saveTdtcRow_ ở trên) — gửi cả loạt qua 1 lượt adminSaveBOQItemHangLoat
+// (Code.js) thay vì gọi lặp từng dòng.
 function importTdtcFromExcel() {
     if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
     const fileInput = document.getElementById('tdtcExcelFile');
     const file = fileInput.files[0];
     if (!file) { showCustomAlert('Vui lòng chọn file Excel!', 'error'); return; }
+    const btn = document.getElementById('tdtcImportBtn');
+    if (btn.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
 
     docFileExcel_(file).then(rows => {
-        let ok = 0;
         const khongKhop = [];
-        const loiLuu = [];
-        let chain = Promise.resolve();
+        const matched = []; // { stt, ten, payload }
         rows.forEach((row, idx) => {
             if (idx === 0) return;
             const stt = sttTuExcel_(row[0]), ten = row[1];
@@ -95,18 +99,41 @@ function importTdtcFromExcel() {
             const ngayBD = row[2] === '' ? (item.ngayBatDauKH || '') : ngayExcelToISO_(row[2]);
             const ngayKT = row[3] === '' ? (item.ngayKetThucKH || '') : ngayExcelToISO_(row[3]);
             const payload = Object.assign({}, item, { ngayBatDauKH: ngayBD, ngayKetThucKH: ngayKT });
-            chain = chain.then(() => gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
-                .then(() => ok++).catch(err => loiLuu.push(`[${stt}] ${ten}: ${err.message || err}`)));
+            matched.push({ stt, ten, payload });
         });
-        chain.then(() => {
-            let msg = `Đã cập nhật tiến độ cho ${ok} hạng mục.`;
+
+        if (matched.length === 0) {
+            let msg = 'Không có dòng nào khớp với BOQ hiện có.';
             if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '…' : '');
-            if (loiLuu.length) msg += `\nLỗi khi lưu (${loiLuu.length} dòng): ` + loiLuu.slice(0, 5).join('; ') + (loiLuu.length > 5 ? '…' : '');
-            showCustomAlert(msg, ok > 0 ? 'success' : 'error');
-            fileInput.value = '';
-            if (ok > 0) document.getElementById('tdtcExcelModal').classList.remove('active');
-            reloadHopDongData();
-        });
+            showCustomAlert(msg, 'error');
+            return;
+        }
+
+        const origText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = 'Đang nhập…';
+        // Gộp toàn bộ các dòng thành 1 lượt gọi duy nhất (adminSaveBOQItemHangLoat) thay vì gọi lặp
+        // adminSaveBOQItem() từng dòng — file Excel nhiều dòng trước đây là N round-trip riêng lên
+        // Apps Script, rất chậm khi cập nhật tiến độ nhiều hạng mục cùng lúc.
+        gsRun('adminSaveBOQItemHangLoat', myUserId, myPassword, matched.map(m => m.payload))
+            .then(resultsJson => {
+                const results = JSON.parse(resultsJson);
+                const loiLuu = [];
+                let ok = 0;
+                results.forEach((r, i) => {
+                    if (r.ok) ok++;
+                    else loiLuu.push(`[${matched[i].stt}] ${matched[i].ten}: ${r.error || ''}`);
+                });
+                let msg = `Đã cập nhật tiến độ cho ${ok} hạng mục.`;
+                if (khongKhop.length) msg += `\nKhông khớp BOQ (${khongKhop.length} dòng): ` + khongKhop.slice(0, 5).join(', ') + (khongKhop.length > 5 ? '…' : '');
+                if (loiLuu.length) msg += `\nLỗi khi lưu (${loiLuu.length} dòng): ` + loiLuu.slice(0, 5).join('; ') + (loiLuu.length > 5 ? '…' : '');
+                showCustomAlert(msg, ok > 0 ? 'success' : 'error');
+                fileInput.value = '';
+                if (ok > 0) document.getElementById('tdtcExcelModal').classList.remove('active');
+                reloadHopDongData();
+            })
+            .catch(handleBackendError)
+            .finally(() => { btn.disabled = false; btn.innerHTML = origText; });
     }).catch(err => showCustomAlert('Lỗi đọc file Excel: ' + err.message, 'error'));
 }
 
@@ -146,7 +173,7 @@ function renderTdtcBoqDetail_() {
                 <td style="text-align:left;">${b.ghiChu || '--'}</td>
                 <td class="text-center">
                     <div class="action-cell">
-                        <button class="btn btn-sm" style="background:var(--success);" onclick="saveTdtcRow_('${b.maBOQ}')" aria-label="Lưu" title="Lưu"><i class="fa-solid fa-check"></i></button>
+                        <button class="btn btn-sm" style="background:var(--success);" onclick="saveTdtcRow_('${b.maBOQ}', this)" aria-label="Lưu" title="Lưu"><i class="fa-solid fa-check"></i></button>
                         <button class="btn btn-sm btn-danger" onclick="cancelTdtcEdit_()" aria-label="Hủy" title="Hủy"><i class="fa-solid fa-xmark"></i></button>
                     </div>
                 </td>
