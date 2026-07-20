@@ -169,7 +169,7 @@ function renderChamCongTable() {
       <td class="cc-sumcol cc-readonly">${currentRole === 'ADMIN'
         ? `<input type="number" class="dd-input-sm" step="0.5" value="${r.phepDauThang}" onchange="savePhepDauThangCC('${r.userId}', this)">`
         : ccFmt1_(r.phepDauThang)}</td>
-      <td class="cc-sumcol"><span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(r.congCuoiTuan)}</span>/${ccFmt1_(ccData.quotaThu7)}</td>
+      <td class="cc-sumcol"><span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${quotaOk ? '✓' : '✗'} ${ccFmt1_(r.congCuoiTuan)}</span>/${ccFmt1_(ccData.quotaThu7)}</td>
       <td class="cc-sumcol">${ccFmtDelta_(r.congTruPhepThang)}</td>
       <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
       <td class="cc-sumcol">${ccFmt1_(r.congThucLam)}</td>
@@ -328,7 +328,7 @@ function openChiTietCongModal(userId) {
     ['Phép đầu tháng', ccFmt1_(row.phepDauThang)],
     ['Công Thứ 7', ccFmt1_(row.congThu7)],
     ['Công Chủ Nhật', ccFmt1_(row.congChuNhat)],
-    ['Cuối tuần (T7+CN)', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(row.congCuoiTuan)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
+    ['Cuối tuần (T7+CN)', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${quotaOk ? '✓' : '✗'} ${ccFmt1_(row.congCuoiTuan)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
     ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (0 công cuối tuần tháng này)</span>' : ' — <span class="cc-q-ok">được miễn trừ</span>') : '')]
   ].map(([lbl, val]) => `<div class="cc-brk-row"><span class="cc-brk-lbl">${lbl}</span><span>${val}</span></div>`).join('');
 
