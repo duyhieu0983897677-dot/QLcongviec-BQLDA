@@ -204,6 +204,15 @@ function formatThangCell_(v) {
   return String(v).trim();
 }
 
+// Cột giờ tăng ca (gioBatDauTC/gioKetThucTC) ghi bằng chuỗi 'HH:mm' nhưng Google Sheets tự nhận diện
+// là giờ và âm thầm đổi thành giá trị Date (ngày 30/12/1899 — mốc epoch giờ của Sheets) — cùng lỗi
+// với formatDateCell_/formatThangCell_ ở trên, đọc lại bằng String() sẽ ra cả chuỗi ngày tháng rác.
+function formatTimeCell_(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm');
+  return String(v).trim();
+}
+
 function formatDateTimeCell_(v) {
   if (!v) return '';
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm:ss');
@@ -1351,7 +1360,7 @@ function readChamCongRows_(sheet) {
     let buoi = '';
     if (buoiRaw === 'P') buoi = 'P';
     else { const n = Number(buoiRaw); if (n === 1 || n === 0.5) buoi = n; }
-    result.push({ userId, ngay, buoi, gioBatDauTC: String(r[3] || '').trim(), gioKetThucTC: String(r[4] || '').trim() });
+    result.push({ userId, ngay, buoi, gioBatDauTC: formatTimeCell_(r[3]), gioKetThucTC: formatTimeCell_(r[4]) });
   });
   return result;
 }
@@ -1442,7 +1451,7 @@ function capNhatChamCongHangLoat(userId, password, danhSachChamCong, danhSachTan
   existing.forEach((r, i) => {
     const uid = String(r[0] || '').trim(), ngay = formatDateCell_(r[1]);
     if (!uid || !ngay) return;
-    state.set(uid + '|' + ngay, { rowIdx: i + 2, userId: uid, ngay, buoi: r[2], gioBD: String(r[3] || '').trim(), gioKT: String(r[4] || '').trim() });
+    state.set(uid + '|' + ngay, { rowIdx: i + 2, userId: uid, ngay, buoi: r[2], gioBD: formatTimeCell_(r[3]), gioKT: formatTimeCell_(r[4]) });
   });
   function layHoacTao_(targetId, ngay) {
     const key = targetId + '|' + ngay;
