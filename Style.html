@@ -251,7 +251,7 @@
         /* Rê chuột vào 1 hàng — nổi bật + đậm chữ để dò đúng hàng của ai khi bảng có nhiều cột ngày */
         #ccTable tbody tr:hover td { background: #EAEFF7; font-weight: 700; }
         #ccTable tbody tr:hover .cc-sumcol { background: #E1E9FB; }
-        .cc-stt, .cc-name { position: sticky; z-index: 2; background: var(--card-bg); }
+        .cc-stt, .cc-name { position: sticky; z-index: 2; background: var(--card-bg); border-left: 3px solid transparent; }
         .cc-stt { left: 0; min-width: 32px; }
         .cc-name { left: 32px; min-width: 168px; text-align: left; font-weight: 600; padding-left: 8px !important; box-shadow: 2px 0 4px rgba(15,23,42,0.05); }
         #ccTable thead th.cc-stt, #ccTable thead th.cc-name { background: #f8fafc; z-index: 3; }
@@ -265,7 +265,7 @@
         /* Hàng của chính người đang đăng nhập — luôn sáng để nhận ra ngay, không cần rê chuột */
         #ccTable tbody tr.cc-my-row td { background: #EAF2FF; }
         #ccTable tbody tr.cc-my-row .cc-sumcol { background: #DCEAFF; }
-        #ccTable tbody tr.cc-my-row .cc-stt, #ccTable tbody tr.cc-my-row .cc-name { background: #EAF2FF; border-left: 3px solid var(--primary); }
+        #ccTable tbody tr.cc-my-row .cc-stt, #ccTable tbody tr.cc-my-row .cc-name { background: #EAF2FF; border-left-color: var(--primary); }
         #ccTable tbody tr.cc-my-row .cc-name { font-weight: 800; color: var(--primary-dark); }
         #ccTable tbody tr.cc-my-row .cc-name-badge { font-size: 0.68rem; font-weight: 700; color: var(--primary); background: #DCEAFF; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
         #ccTable tbody tr.cc-my-row:hover td { background: #D7E6FF; }
