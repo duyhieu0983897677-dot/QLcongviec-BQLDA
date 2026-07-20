@@ -721,7 +721,7 @@
                         <div class="card-title"><i class="fa-solid fa-list-check"></i> Tiến độ chi tiết theo BOQ</div>
                         <div id="tdtcHopDongLine" class="hd-line"></div>
                     </div>
-                    <select id="tdtcHopDongSelect" class="hd-select" onchange="currentHopDongId=this.value; renderTienDoThiCong();"></select>
+                    <select id="tdtcHopDongSelect" class="hd-select" onchange="tdtcChonHopDong_(this.value, this)"></select>
                 </div>
             </div>
             <div id="tdtcNoHopDong" class="card" style="text-align:center; padding:24px;">
@@ -729,6 +729,14 @@
             </div>
             <div id="tdtcContent">
                 <div class="card">
+                    <div id="tdtcEditBox" style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--border); display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Bấm "Sửa tiến độ" để chỉnh Ngày bắt đầu/kết thúc nhiều hạng mục cùng lúc, xong rồi bấm "Lưu thay đổi".</span>
+                        <div style="display:flex; gap:8px;">
+                            <button id="tdtcBtnSua" class="btn btn-sm" style="background:var(--primary); width:auto;" onclick="toggleTdtcEditMode_()"><i class="fa-solid fa-pen"></i> Sửa tiến độ</button>
+                            <button id="tdtcBtnHuy" class="btn btn-sm btn-danger" style="width:auto; display:none;" onclick="huyTdtcEditMode_()"><i class="fa-solid fa-xmark"></i> Hủy</button>
+                            <button id="tdtcBtnLuu" class="btn btn-sm" style="background:var(--success); width:auto; display:none;" disabled onclick="luuThayDoiTienDo_()"><i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi</button>
+                        </div>
+                    </div>
                     <div id="tdtcImportBox" style="margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--border); display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
                         <span style="font-size:0.85rem; color:var(--text-muted);">Có nhiều hạng mục cần cập nhật tiến độ cùng lúc?</span>
                         <button class="btn btn-sm" style="background:transparent; color:var(--primary-dark); border:1px solid var(--border); width:auto;" onclick="document.getElementById('tdtcExcelModal').classList.add('active')"><i class="fa-solid fa-file-import"></i> Nhập hàng loạt từ Excel</button>
@@ -743,7 +751,6 @@
                                 <th>Ngày bắt đầu</th>
                                 <th>Ngày kết thúc</th>
                                 <th style="text-align:left;">Ghi chú</th>
-                                <th>Hành động</th>
                             </tr></thead>
                             <tbody id="tdtcBoqBody"></tbody>
                         </table>

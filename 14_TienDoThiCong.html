@@ -19,6 +19,9 @@
    - renderTienDoThiCong()  : Vẽ bảng tiến độ theo từng Gói thầu + gọi renderTdtcBoqDetail_()
    - renderTdtcBoqDetail_() : Vẽ cây BOQ chi tiết (STT/Tên/ĐVT/Khối lượng/Ngày BĐ/Ngày KT/Ghi chú)
                               của Hợp đồng đang chọn (currentHopDongId)
+   - toggleTdtcEditMode_()/huyTdtcEditMode_() : Bật/tắt chế độ sửa Ngày BĐ/KT cho TOÀN BỘ bảng
+   - tdtcOnDateChange_()    : Gõ xong 1 ô ngày — CHỈ sửa cục bộ vào tdtcPending_
+   - luuThayDoiTienDo_()    : Gộp toàn bộ tdtcPending_ thành 1 lượt gọi adminSaveBOQItemHangLoat
    ================================================================ */
 
 let tdtcExpanded_ = new Set();
@@ -27,56 +30,127 @@ function toggleTdtcHeader_(maBOQ) {
     renderTdtcBoqDetail_();
 }
 
-// maBOQ của dòng đang được sửa Ngày bắt đầu/Ngày kết thúc (chỉ 1 dòng tại 1 thời điểm) — sửa
-// "tiến độ" (lịch) của từng hạng mục BOQ giờ làm riêng ở đây, KHÔNG còn sửa được ở modal BOQ nữa
+// Sửa "tiến độ" (lịch) của từng hạng mục BOQ làm riêng ở đây, KHÔNG còn sửa được ở modal BOQ nữa
 // (xem saveBOQItemModal ở 10_BOQ.html, đã bỏ 2 ô Ngày bắt đầu/kết thúc KH).
-let tdtcEditingId_ = '';
+//
+// Giống hệt cơ chế "Lưu thay đổi" ở tab Chấm công (xem 15_ChamCong.html): bấm "Sửa tiến độ" bật
+// chế độ sửa cho TOÀN BỘ bảng cùng lúc (không phải từng dòng một), gõ xong bao nhiêu dòng tùy ý —
+// mỗi thay đổi CHỈ cập nhật cục bộ vào tdtcPending_ (không gọi server, không load lại) — đến khi
+// bấm "Lưu thay đổi" mới gộp thành ĐÚNG 1 lượt gọi adminSaveBOQItemHangLoat rồi mới load lại.
+let tdtcEditMode_ = false;
+let tdtcPending_ = {}; // maBOQ -> { ngayBatDauKH, ngayKetThucKH } — thay đổi CHƯA lưu
 
-function editTdtcRow_(maBOQ) {
-    tdtcEditingId_ = maBOQ;
-    renderTdtcBoqDetail_();
+function tdtcIsDirty_() { return Object.keys(tdtcPending_).length > 0; }
+
+function tdtcCapNhatNutLuu_() {
+    const btn = document.getElementById('tdtcBtnLuu');
+    if (!btn) return;
+    const soLuong = Object.keys(tdtcPending_).length;
+    btn.disabled = soLuong === 0;
+    btn.innerHTML = soLuong > 0
+        ? `<i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi (${soLuong})`
+        : `<i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi`;
+}
+
+function tdtcSetEditButtons_(dangSua) {
+    const btnSua = document.getElementById('tdtcBtnSua');
+    const btnHuy = document.getElementById('tdtcBtnHuy');
+    const btnLuu = document.getElementById('tdtcBtnLuu');
+    if (btnSua) btnSua.style.display = dangSua ? 'none' : '';
+    if (btnHuy) btnHuy.style.display = dangSua ? '' : 'none';
+    if (btnLuu) btnLuu.style.display = dangSua ? '' : 'none';
+}
+
+function tdtcInitFlatpickr_() {
     setTimeout(() => {
         try {
             if (typeof flatpickr === 'undefined') return;
             const opts = { dateFormat: 'd/m/Y', locale: (flatpickr.l10ns && flatpickr.l10ns.vi) ? 'vi' : undefined, allowInput: true };
-            ['tdtcEditBD', 'tdtcEditKT'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el && !el._flatpickr) flatpickr(el, opts);
+            document.querySelectorAll('.tdtc-edit-inp').forEach(el => {
+                if (!el._flatpickr) flatpickr(el, opts);
             });
         } catch (e) { console.warn(e); }
     }, 50);
 }
 
-function cancelTdtcEdit_() {
-    tdtcEditingId_ = '';
+function toggleTdtcEditMode_() {
+    tdtcEditMode_ = true;
+    tdtcPending_ = {};
     renderTdtcBoqDetail_();
 }
 
-// Chỉ gửi lại đúng 2 trường Ngày bắt đầu/Ngày kết thúc thay đổi — mọi trường khác (Tên/ĐVT/Khối
-// lượng/Đơn giá/Ghi chú...) lấy nguyên từ hạng mục hiện có, tránh đụng tới dữ liệu do modal BOQ
-// quản lý. Dùng chung adminSaveBOQItem (Code.js) — không cần thêm hàm backend mới.
-function saveTdtcRow_(maBOQ, btnEl) {
-    if (btnEl.disabled) return; // chặn bấm lặp trong lúc đang chờ phản hồi server
+function huyTdtcEditMode_() {
+    if (tdtcIsDirty_() && !confirm('Bạn có thay đổi tiến độ chưa lưu. Hủy sẽ MẤT các thay đổi này, tiếp tục?')) return;
+    tdtcEditMode_ = false;
+    tdtcPending_ = {};
+    renderTdtcBoqDetail_();
+}
+
+// Chỉ sửa cục bộ trên trình duyệt (tdtcPending_) — KHÔNG gọi server, KHÔNG load lại bảng.
+function tdtcOnDateChange_(maBOQ, field, value) {
     const item = boq.find(b => b.maBOQ === maBOQ);
     if (!item) return;
-    const ngayBD = convertDMYtoISO(document.getElementById('tdtcEditBD').value.trim()) || '';
-    const ngayKT = convertDMYtoISO(document.getElementById('tdtcEditKT').value.trim()) || '';
-    const payload = Object.assign({}, item, { ngayBatDauKH: ngayBD, ngayKetThucKH: ngayKT });
-    btnEl.disabled = true;
-    gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
-        .then(() => {
-            tdtcEditingId_ = '';
-            showCustomAlert('Đã lưu tiến độ hạng mục.', 'success');
+    if (!tdtcPending_[maBOQ]) tdtcPending_[maBOQ] = { ngayBatDauKH: item.ngayBatDauKH || '', ngayKetThucKH: item.ngayKetThucKH || '' };
+    tdtcPending_[maBOQ][field] = convertDMYtoISO(String(value || '').trim()) || '';
+    tdtcCapNhatNutLuu_();
+}
+
+// Gộp TOÀN BỘ tdtcPending_ thành 1 lượt gọi adminSaveBOQItemHangLoat (Code.js — hàm sẵn có, dùng
+// chung với import Excel hàng loạt) rồi mới load lại — đây là lúc DUY NHẤT màn sửa tiến độ này gọi
+// server để ghi dữ liệu. Chỉ gửi đúng 2 trường Ngày bắt đầu/Ngày kết thúc thay đổi, mọi trường khác
+// (Tên/ĐVT/Khối lượng/Đơn giá/Ghi chú...) lấy nguyên từ hạng mục hiện có.
+function luuThayDoiTienDo_() {
+    const btn = document.getElementById('tdtcBtnLuu');
+    if (btn.disabled) return;
+    const keys = Object.keys(tdtcPending_);
+    if (keys.length === 0) return;
+
+    const payloads = keys.map(maBOQ => {
+        const item = boq.find(b => b.maBOQ === maBOQ);
+        return item ? Object.assign({}, item, tdtcPending_[maBOQ]) : null;
+    }).filter(Boolean);
+
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu…';
+
+    gsRun('adminSaveBOQItemHangLoat', myUserId, myPassword, payloads)
+        .then(resultsJson => {
+            const results = JSON.parse(resultsJson);
+            let ok = 0;
+            const loi = [];
+            results.forEach((r, i) => {
+                if (r.ok) ok++;
+                else loi.push(`${payloads[i].tenHangMuc || payloads[i].maBOQ}: ${r.error || ''}`);
+            });
+            let msg = `Đã lưu tiến độ ${ok} hạng mục.`;
+            if (loi.length) msg += `\nLỗi (${loi.length}): ` + loi.slice(0, 5).join('; ') + (loi.length > 5 ? '…' : '');
+            showCustomAlert(msg, loi.length ? (ok > 0 ? 'success' : 'error') : 'success');
+            tdtcPending_ = {};
+            tdtcEditMode_ = false;
             reloadHopDongData();
         })
         .catch(handleBackendError)
-        .finally(() => { btnEl.disabled = false; });
+        .finally(() => { btn.disabled = false; btn.innerHTML = origText; tdtcCapNhatNutLuu_(); });
+}
+
+// Đổi Hợp đồng đang xem trong tab Tiến độ — chặn nếu đang có thay đổi tiến độ chưa lưu để tránh
+// mất dữ liệu đang gõ dở (giống chặn đổi tháng khi đang chấm công ở 15_ChamCong.html).
+function tdtcChonHopDong_(maHopDong, selectEl) {
+    if (tdtcIsDirty_() && !confirm('Bạn có thay đổi tiến độ chưa lưu. Đổi Hợp đồng sẽ MẤT các thay đổi này, tiếp tục?')) {
+        selectEl.value = currentHopDongId;
+        return;
+    }
+    tdtcEditMode_ = false;
+    tdtcPending_ = {};
+    currentHopDongId = maHopDong;
+    renderTienDoThiCong();
 }
 
 // Nhập hàng loạt Ngày bắt đầu/Ngày kết thúc từ Excel (STT | Tên hạng mục | Ngày bắt đầu | Ngày kết
 // thúc) — khớp từng dòng với đúng hạng mục BOQ theo STT+Tên (dùng chung khopBOQTheoSttTen_ ở
 // 9_HopDong.html, giống hệt cách Nghiệm thu import), ghi đè đúng 2 trường ngày của hạng mục đó, mọi
-// trường khác giữ nguyên (giống saveTdtcRow_ ở trên) — gửi cả loạt qua 1 lượt adminSaveBOQItemHangLoat
+// trường khác giữ nguyên (giống luuThayDoiTienDo_ ở trên) — gửi cả loạt qua 1 lượt adminSaveBOQItemHangLoat
 // (Code.js) thay vì gọi lặp từng dòng.
 function importTdtcFromExcel() {
     if (!currentHopDongId) { showCustomAlert('Chưa chọn Hợp đồng!', 'error'); return; }
@@ -138,15 +212,18 @@ function importTdtcFromExcel() {
 }
 
 // Không có cột tiền (chỉ Khối lượng/Ngày) nên không cần tienHienThi_()/kiểm tra quyền để XEM — ai
-// xem tab này cũng thấy đủ số liệu; chỉ nút Sửa (đổi Ngày) mới cần canEditHopDong().
+// xem tab này cũng thấy đủ số liệu; chỉ chế độ Sửa (đổi Ngày) mới cần canEditHopDong().
 function renderTdtcBoqDetail_() {
     const tbody = document.getElementById('tdtcBoqBody');
+    const editable = canEditHopDong();
+    tdtcSetEditButtons_(editable && tdtcEditMode_);
+    tdtcCapNhatNutLuu_();
     if (!tbody) return;
     const items = boq.filter(b => b.maHopDong === currentHopDongId);
-    const empty = `<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
+    const empty = `<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
     if (items.length === 0) { tbody.innerHTML = empty; return; }
 
-    const editable = canEditHopDong();
+    const dangSua = editable && tdtcEditMode_;
     const chains = tinhChuoiChaBOQ_(items);
     let html = '';
     items.forEach((b, idx) => {
@@ -155,43 +232,31 @@ function renderTdtcBoqDetail_() {
         if (b.isHeader) {
             const isOpen = tdtcExpanded_.has(b.maBOQ);
             html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="toggleTdtcHeader_('${b.maBOQ}')">
-                <td colspan="8" style="padding-left:${indent}px;">
+                <td colspan="7" style="padding-left:${indent}px;">
                     <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
                     <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
                 </td>
             </tr>`;
             return;
         }
-        if (b.maBOQ === tdtcEditingId_) {
-            html += `<tr>
-                <td class="text-center">${b.stt || '--'}</td>
-                <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
-                <td class="text-center">${b.donVi || '--'}</td>
-                <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
-                <td><input type="text" id="tdtcEditBD" class="form-control" style="min-width:110px;" placeholder="dd/mm/yyyy" value="${b.ngayBatDauKH ? formatVN(b.ngayBatDauKH) : ''}"></td>
-                <td><input type="text" id="tdtcEditKT" class="form-control" style="min-width:110px;" placeholder="dd/mm/yyyy" value="${b.ngayKetThucKH ? formatVN(b.ngayKetThucKH) : ''}"></td>
-                <td style="text-align:left;">${b.ghiChu || '--'}</td>
-                <td class="text-center">
-                    <div class="action-cell">
-                        <button class="btn btn-sm" style="background:var(--success);" onclick="saveTdtcRow_('${b.maBOQ}', this)" aria-label="Lưu" title="Lưu"><i class="fa-solid fa-check"></i></button>
-                        <button class="btn btn-sm btn-danger" onclick="cancelTdtcEdit_()" aria-label="Hủy" title="Hủy"><i class="fa-solid fa-xmark"></i></button>
-                    </div>
-                </td>
-            </tr>`;
-            return;
-        }
+        const oNgayBD = dangSua
+            ? `<input type="text" class="form-control tdtc-edit-inp" style="min-width:110px;" placeholder="dd/mm/yyyy" value="${b.ngayBatDauKH ? formatVN(b.ngayBatDauKH) : ''}" onchange="tdtcOnDateChange_('${b.maBOQ}','ngayBatDauKH', this.value)">`
+            : formatVN(b.ngayBatDauKH);
+        const oNgayKT = dangSua
+            ? `<input type="text" class="form-control tdtc-edit-inp" style="min-width:110px;" placeholder="dd/mm/yyyy" value="${b.ngayKetThucKH ? formatVN(b.ngayKetThucKH) : ''}" onchange="tdtcOnDateChange_('${b.maBOQ}','ngayKetThucKH', this.value)">`
+            : formatVN(b.ngayKetThucKH);
         html += `<tr>
             <td class="text-center">${b.stt || '--'}</td>
             <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
             <td class="text-center">${b.donVi || '--'}</td>
             <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
-            <td class="text-center">${formatVN(b.ngayBatDauKH)}</td>
-            <td class="text-center">${formatVN(b.ngayKetThucKH)}</td>
+            <td${dangSua ? '' : ' class="text-center"'}>${oNgayBD}</td>
+            <td${dangSua ? '' : ' class="text-center"'}>${oNgayKT}</td>
             <td style="text-align:left;">${b.ghiChu || '--'}</td>
-            <td class="text-center">${editable ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="editTdtcRow_('${b.maBOQ}')" aria-label="Sửa tiến độ" title="Sửa tiến độ"><i class="fa-solid fa-pen"></i></button>` : '--'}</td>
         </tr>`;
     });
     tbody.innerHTML = html || empty;
+    if (dangSua) tdtcInitFlatpickr_();
 }
 
 function renderTienDoThiCong() {
@@ -208,6 +273,8 @@ function renderTienDoThiCong() {
         if (content) content.style.display = '';
         const importBox = document.getElementById('tdtcImportBox');
         if (importBox) importBox.style.display = canEditHopDong() ? 'flex' : 'none';
+        const editBox = document.getElementById('tdtcEditBox');
+        if (editBox) editBox.style.display = canEditHopDong() ? 'flex' : 'none';
         renderTdtcBoqDetail_();
     }
 
