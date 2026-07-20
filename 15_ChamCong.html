@@ -130,7 +130,7 @@ function renderChamCongTable() {
 
   let row1 = '<tr><th class="cc-stt" rowspan="2">STT</th><th class="cc-name" rowspan="2" style="text-align:left;">Họ và tên</th>' +
     '<th class="cc-sumcol cc-readonly" rowspan="2">Phép đầu<br><small>tháng trước</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Thứ 7<br><small>đã làm/cần</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Cuối tuần<br><small>đã làm/cần</small></th>' +
     '<th class="cc-sumcol" rowspan="2">Cộng/Trừ<br><small>phép tháng</small></th>' +
     '<th class="cc-sumcol cc-highlight" rowspan="2">Phép cuối<br><small>tháng (dự kiến)</small></th>' +
     '<th class="cc-sumcol" rowspan="2">Số công<br><small>thực làm</small></th>' +
@@ -154,7 +154,8 @@ function renderChamCongTable() {
   }
 
   document.getElementById('ccBody').innerHTML = rows.map((r, idx) => {
-    const quotaOk = r.congThu7 >= ccData.quotaThu7;
+    const quotaOk = r.congCuoiTuan >= ccData.quotaThu7;
+    const laToi = r.userId === myUserId;
     let cells = `<td class="cc-stt">${idx + 1}</td>
       <td class="cc-name">
         <div class="cc-name-inner">
@@ -162,12 +163,13 @@ function renderChamCongTable() {
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </button>
           <span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')">${r.hoTen}</span>
+          ${laToi ? '<span class="cc-name-badge">Bạn</span>' : ''}
         </div>
       </td>
       <td class="cc-sumcol cc-readonly">${currentRole === 'ADMIN'
         ? `<input type="number" class="dd-input-sm" step="0.5" value="${r.phepDauThang}" onchange="savePhepDauThangCC('${r.userId}', this)">`
         : ccFmt1_(r.phepDauThang)}</td>
-      <td class="cc-sumcol"><span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(r.congThu7)}</span>/${ccFmt1_(ccData.quotaThu7)}</td>
+      <td class="cc-sumcol"><span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(r.congCuoiTuan)}</span>/${ccFmt1_(ccData.quotaThu7)}</td>
       <td class="cc-sumcol">${ccFmtDelta_(r.congTruPhepThang)}</td>
       <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
       <td class="cc-sumcol">${ccFmt1_(r.congThucLam)}</td>
@@ -198,7 +200,7 @@ function renderChamCongTable() {
         </div>
       </td>`;
     }
-    return `<tr>${cells}</tr>`;
+    return `<tr class="${laToi ? 'cc-my-row' : ''}">${cells}</tr>`;
   }).join('');
 }
 
@@ -321,12 +323,13 @@ function openChiTietCongModal(userId) {
   document.getElementById('detModalTitle').textContent = row.hoTen;
   document.getElementById('detModalSub').textContent = 'Chi tiết công — Tháng ' + ccData.thang.split('-').reverse().join('/');
 
-  const quotaOk = row.congThu7 >= ccData.quotaThu7;
+  const quotaOk = row.congCuoiTuan >= ccData.quotaThu7;
   const rowsHtml = [
     ['Phép đầu tháng', ccFmt1_(row.phepDauThang)],
-    ['Công Thứ 7', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(row.congThu7)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
+    ['Công Thứ 7', ccFmt1_(row.congThu7)],
     ['Công Chủ Nhật', ccFmt1_(row.congChuNhat)],
-    ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (0 công Thứ 7 tháng này)</span>' : ' — <span class="cc-q-ok">được miễn trừ</span>') : '')]
+    ['Cuối tuần (T7+CN)', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(row.congCuoiTuan)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
+    ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (0 công cuối tuần tháng này)</span>' : ' — <span class="cc-q-ok">được miễn trừ</span>') : '')]
   ].map(([lbl, val]) => `<div class="cc-brk-row"><span class="cc-brk-lbl">${lbl}</span><span>${val}</span></div>`).join('');
 
   document.getElementById('detModalBreakdown').innerHTML = rowsHtml + `

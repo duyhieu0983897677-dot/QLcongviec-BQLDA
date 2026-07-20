@@ -239,7 +239,7 @@
 
         /* --- Chấm công & Tăng ca (bảng rộng nhiều cột ngày, 2 cột đầu ghim khi cuộn ngang) --- */
         #ccTable { border-collapse: separate; border-spacing: 0; font-size: 0.82rem; min-width: 100%; }
-        #ccTable th, #ccTable td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-faint); }
+        #ccTable th, #ccTable td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
         #ccTable thead th { background: #f8fafc; color: var(--primary-dark); font-weight: 700; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.3px; text-align: center; padding: 8px 5px; white-space: nowrap; vertical-align: middle; }
         #ccTable thead tr:last-child th { padding: 6px 1px 8px; font-size: 0.66rem; }
         .cc-d-num { display: block; font-size: 0.78rem; font-weight: 800; color: var(--text-main); }
@@ -248,17 +248,29 @@
         #ccTable thead th.cc-weekend .cc-d-dow { color: #B8860B; }
 
         #ccTable td { padding: 3px; text-align: center; }
-        #ccTable tbody tr:hover td { background: #f8fafc; }
+        /* Rê chuột vào 1 hàng — nổi bật + đậm chữ để dò đúng hàng của ai khi bảng có nhiều cột ngày */
+        #ccTable tbody tr:hover td { background: #EAEFF7; font-weight: 700; }
+        #ccTable tbody tr:hover .cc-sumcol { background: #E1E9FB; }
         .cc-stt, .cc-name { position: sticky; z-index: 2; background: var(--card-bg); }
         .cc-stt { left: 0; min-width: 32px; }
         .cc-name { left: 32px; min-width: 168px; text-align: left; font-weight: 600; padding-left: 8px !important; box-shadow: 2px 0 4px rgba(15,23,42,0.05); }
         #ccTable thead th.cc-stt, #ccTable thead th.cc-name { background: #f8fafc; z-index: 3; }
-        #ccTable tbody tr:hover .cc-name, #ccTable tbody tr:hover .cc-stt { background: #f1f5f9; }
+        #ccTable tbody tr:hover .cc-name, #ccTable tbody tr:hover .cc-stt { background: #EAEFF7; }
         .cc-name-inner { display: flex; align-items: center; gap: 7px; }
         .cc-eye-btn { width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
         .cc-eye-btn:hover { color: var(--primary-dark); border-color: var(--primary); }
         .cc-name-text { cursor: pointer; }
         .cc-name-text:hover { color: var(--primary-dark); text-decoration: underline; }
+
+        /* Hàng của chính người đang đăng nhập — luôn sáng để nhận ra ngay, không cần rê chuột */
+        #ccTable tbody tr.cc-my-row td { background: #EAF2FF; }
+        #ccTable tbody tr.cc-my-row .cc-sumcol { background: #DCEAFF; }
+        #ccTable tbody tr.cc-my-row .cc-stt, #ccTable tbody tr.cc-my-row .cc-name { background: #EAF2FF; border-left: 3px solid var(--primary); }
+        #ccTable tbody tr.cc-my-row .cc-name { font-weight: 800; color: var(--primary-dark); }
+        #ccTable tbody tr.cc-my-row .cc-name-badge { font-size: 0.68rem; font-weight: 700; color: var(--primary); background: #DCEAFF; border-radius: 4px; padding: 1px 5px; margin-left: 4px; }
+        #ccTable tbody tr.cc-my-row:hover td { background: #D7E6FF; }
+        #ccTable tbody tr.cc-my-row:hover .cc-sumcol { background: #CBDEFF; }
+        #ccTable tbody tr.cc-my-row:hover .cc-stt, #ccTable tbody tr.cc-my-row:hover .cc-name { background: #D7E6FF; }
 
         .cc-sumcol { min-width: 68px; font-weight: 800; color: var(--primary-dark); background: #f5f8ff; font-size: 0.83rem; }
         .cc-sumcol.cc-readonly { color: var(--text-muted); font-weight: 700; background: var(--card-bg); }

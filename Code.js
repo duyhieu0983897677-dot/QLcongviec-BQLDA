@@ -207,10 +207,16 @@ function formatThangCell_(v) {
 // Cột giờ tăng ca (gioBatDauTC/gioKetThucTC) ghi bằng chuỗi 'HH:mm' nhưng Google Sheets tự nhận diện
 // là giờ và âm thầm đổi thành giá trị Date (ngày 30/12/1899 — mốc epoch giờ của Sheets) — cùng lỗi
 // với formatDateCell_/formatThangCell_ ở trên, đọc lại bằng String() sẽ ra cả chuỗi ngày tháng rác.
+// Một số dòng cũ (nhập TRƯỚC khi có hàm này) đã lỡ bị đọc + ghi ngược lại đúng chuỗi rác đó dưới dạng
+// text thường (không còn là Date nữa) — CỐ parse lại bằng new Date() không đáng tin (offset giờ lịch
+// sử của Đông Dương lệch vài phút, ra giờ sai mà nhìn tưởng đúng), nên coi mọi giá trị không đúng
+// đúng dạng 'H:mm' là dữ liệu hỏng, trả rỗng để giao diện coi như chưa nhập — vào lại popup Tăng ca
+// nhập lại là Sheet ghi giá trị sạch, tự hết lỗi từ đó về sau.
 function formatTimeCell_(v) {
   if (!v) return '';
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm');
-  return String(v).trim();
+  const s = String(v).trim();
+  return /^\d{1,2}:\d{2}$/.test(s) ? s : '';
 }
 
 function formatDateTimeCell_(v) {
@@ -1298,10 +1304,13 @@ function adminCapNhatPhepDauThang(userId, password, targetUserId, thang, phepDau
 //
 // Quy tắc cộng/trừ Phép mỗi tháng (xem tinhPhepChiTietTuChamCong_, dùng chung cho cả hiển thị "dự
 // kiến" ở getChamCongThang lẫn chốt số THẬT ở chotPhepDenThangHienTai_ khi sang tháng mới):
-//   Cộng/Trừ phép tháng = Công Chủ Nhật + (Công Thứ 7 − Định mức Thứ 7) − Số ngày đánh dấu P
-//   Định mức Thứ 7 = 0,5 công × số Thứ 7 trong tháng. Số ngày P CHỈ bị trừ khi cả tháng đó có 0 công
-//   Thứ 7 (không đi làm buổi Thứ 7 nào) — hễ có đi làm Thứ 7 (dù không dư định mức) thì mọi ngày P
-//   trong tháng đó được miễn, không trừ phép (theo yêu cầu thực tế của BQLDA).
+//   Cộng/Trừ phép tháng = (Công Thứ 7 + Công Chủ Nhật − Định mức Thứ 7) − Số ngày đánh dấu P
+//   Định mức Thứ 7 = 0,5 công × số Thứ 7 trong tháng — nhưng Chủ Nhật được tính GỘP CHUNG 1 định mức
+//   với Thứ 7 (đi làm Chủ Nhật thay Thứ 7 vẫn coi là đủ định mức, không bắt buộc đúng ngày Thứ 7),
+//   phần vượt định mức cuối tuần (Thứ 7 + Chủ Nhật) mới cộng thêm vào Phép. Số ngày P CHỈ bị trừ khi
+//   cả tháng đó có 0 công cuối tuần (không đi làm Thứ 7 lẫn Chủ Nhật buổi nào) — hễ có đi làm cuối
+//   tuần (Thứ 7 hoặc Chủ Nhật, dù không dư định mức) thì mọi ngày P trong tháng đó được miễn, không
+//   trừ phép (theo yêu cầu thực tế của BQLDA).
 // =======================================================
 
 const CHAMCONG_HEADERS_ = ['userId', 'ngay', 'buoi', 'gioBatDauTC', 'gioKetThucTC'];
@@ -1365,9 +1374,13 @@ function readChamCongRows_(sheet) {
   return result;
 }
 
-// { quotaThu7, congThu7, congChuNhat, soNgayP, phepTruDoP, congTruPhepThang } cho 1 nhân sự/1 tháng —
-// DÙNG CHUNG bởi getChamCongThang (hiển thị "dự kiến") và chotPhepDenThangHienTai_ (chốt số THẬT khi
-// sang tháng mới), để không lệch công thức giữa 2 nơi.
+// { quotaThu7, congThu7, congChuNhat, congCuoiTuan, soNgayP, phepTruDoP, congTruPhepThang } cho 1
+// nhân sự/1 tháng — DÙNG CHUNG bởi getChamCongThang (hiển thị "dự kiến") và chotPhepDenThangHienTai_
+// (chốt số THẬT khi sang tháng mới), để không lệch công thức giữa 2 nơi.
+// congCuoiTuan = congThu7 + congChuNhat: Chủ Nhật được tính GỘP CHUNG 1 định mức với Thứ 7 (làm Chủ
+// Nhật thay Thứ 7 vẫn đủ định mức bình thường, không bắt buộc phải đúng ngày Thứ 7) — phần vượt định
+// mức cuối tuần mới cộng vào Phép; ngày P chỉ bị trừ khi CẢ THÁNG không đi làm cuối tuần buổi nào
+// (Thứ 7 lẫn Chủ Nhật đều 0), không riêng gì Thứ 7 như trước.
 function tinhPhepChiTietTuChamCong_(allCC, userId, thang) {
   const { saturdays, sundays } = layThu7CNTrongThang_(thang);
   const quotaThu7 = Math.round(saturdays.length * 0.5 * 10) / 10;
@@ -1379,11 +1392,16 @@ function tinhPhepChiTietTuChamCong_(allCC, userId, thang) {
   const soNum_ = v => (typeof v === 'number' ? v : 0);
   const congThu7 = Math.round(saturdays.reduce((s, d) => s + soNum_(cc[d]), 0) * 10) / 10;
   const congChuNhat = Math.round(sundays.reduce((s, d) => s + soNum_(cc[d]), 0) * 10) / 10;
+  const congCuoiTuan = Math.round((congThu7 + congChuNhat) * 10) / 10;
   const soNgayP = Object.values(cc).filter(v => v === 'P').length;
-  const phepTruDoP = congThu7 > 0 ? 0 : soNgayP;
-  const congTruPhepThang = Math.round((congChuNhat + (congThu7 - quotaThu7) - phepTruDoP) * 10) / 10;
+  const phepTruDoP = congCuoiTuan > 0 ? 0 : soNgayP;
+  const congTruPhepThang = Math.round((congCuoiTuan - quotaThu7 - phepTruDoP) * 10) / 10;
+  // Công cuối tuần chỉ tính vào "công thực làm" TỐI ĐA bằng định mức (VD 4 Thứ 7 => tối đa 4 nửa =
+  // 2 công); phần vượt định mức không cộng thêm vào công thực làm nữa mà đã được cộng sang Phép ở
+  // congTruPhepThang phía trên rồi (tránh tính 2 lần).
+  const congCuoiTuanThucLam = Math.min(congCuoiTuan, quotaThu7);
 
-  return { quotaThu7, congThu7, congChuNhat, soNgayP, phepTruDoP, congTruPhepThang };
+  return { quotaThu7, congThu7, congChuNhat, congCuoiTuan, congCuoiTuanThucLam, soNgayP, phepTruDoP, congTruPhepThang };
 }
 
 // thang: 'yyyy-MM', bỏ trống = tháng hiện tại. KHÔNG cần đăng nhập để xem (giống getData()).
@@ -1408,7 +1426,13 @@ function getChamCongThang(thang) {
     });
 
     const chiTiet = tinhPhepChiTietTuChamCong_(allCC, u.id, thangXem);
-    const congThucLam = Object.values(cc).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+    // Công thực làm = công các ngày trong tuần + công cuối tuần đã bị chặn trần theo định mức (phần
+    // cuối tuần vượt định mức được cộng sang Phép thay vì tính vào công thực làm, xem congCuoiTuanThucLam).
+    const congNgayThuong = Object.entries(cc).reduce((s, [ngay, v]) => {
+      if (saturdays.includes(ngay) || sundays.includes(ngay)) return s;
+      return s + (typeof v === 'number' ? v : 0);
+    }, 0);
+    const congThucLam = congNgayThuong + chiTiet.congCuoiTuanThucLam;
     const tongGioTC = Object.values(tc).reduce((s, e) => s + tinhGioTangCa_(e.start, e.end).quyDoi, 0);
 
     return {
@@ -1416,6 +1440,7 @@ function getChamCongThang(thang) {
       cc, tc,
       congThu7: chiTiet.congThu7,
       congChuNhat: chiTiet.congChuNhat,
+      congCuoiTuan: chiTiet.congCuoiTuan,
       soNgayP: chiTiet.soNgayP,
       phepTruDoP: chiTiet.phepTruDoP,
       congTruPhepThang: chiTiet.congTruPhepThang,
