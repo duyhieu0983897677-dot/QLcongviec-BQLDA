@@ -1,0 +1,374 @@
+<script>
+/* ================================================================
+   FILE 15: 15_ChamCong.html
+   ------------------------------------------------------------------
+   PHẠM VI: Tab "Chấm công & Tăng ca" — chấm công CẢ THÁNG (thay hẳn tab
+   "Điểm danh & Phép" cũ, vốn chỉ chấm được Thứ 7/CN và trùng với tab
+   này) + tăng ca theo giờ bắt đầu/kết thúc (tự tách hệ số theo mốc
+   22h). Ai cũng xem được (giống getData() không cần đăng nhập); chỉ
+   Admin hoặc Chức danh "Thư ký BQLDA" chấm công / sửa tăng ca được
+   (canEditChamCong()) — riêng "Phép đầu tháng" chỉ Admin sửa được.
+
+   Dữ liệu tải riêng theo tháng qua getChamCongThang(thang) — server đã
+   tính sẵn mọi cột tổng hợp (Công Thứ 7/Định mức, Cộng-Trừ phép, Phép
+   cuối tháng, Số công thực làm, Giờ/Ngày công tăng ca quy đổi), client
+   chỉ vẽ lại, không tự tính lại nghiệp vụ (xem Code.js: getChamCongThang).
+
+   Bấm 1 ô CHỈ sửa cục bộ trên trình duyệt (không gọi server, không load lại) — mọi thay đổi gom vào
+   ccPendingCC/ccPendingTC, đến khi bấm nút "Lưu thay đổi" (luuThayDoiChamCong) mới gộp thành ĐÚNG 1
+   lượt gọi capNhatChamCongHangLoat rồi mới load lại bảng 1 lần. Tránh tình trạng bấm xong 1 ô là bị
+   giật/load lại ngay, rất khó chấm công liên tiếp nhiều ô/nhiều người.
+
+   DANH SÁCH HÀM CHÍNH:
+   - renderChamCong()        : Điểm vào, đặt tháng mặc định rồi tải dữ liệu
+   - loadChamCong(thang)     : Gọi getChamCongThang, lưu kết quả, xoá pending rồi vẽ lại bảng
+   - renderChamCongTable()   : Dựng thead (cột tổng hợp + từng ngày) + tbody
+   - toggleChamCongCell()    : Bấm ô chấm công 1 ngày, xoay vòng trống→1→0,5→P→trống — CHỈ sửa cục bộ
+   - openTangCaModal()       : Mở popup nhập giờ tăng ca cho 1 ngày, có breakdown 22h trực tiếp
+   - saveTangCaModal()/deleteTangCaModal() : Ghi nhận tăng ca của popup đang mở — CHỈ sửa cục bộ
+   - luuThayDoiChamCong()    : Gộp toàn bộ pending thành 1 lượt gọi server rồi mới load lại
+   - openChiTietCongModal()  : Mở popup xem đầy đủ thông tin công của 1 nhân sự (ai cũng xem được)
+   - savePhepDauThangCC()    : Chỉ Admin — sửa trực tiếp "Phép đầu tháng" (adminCapNhatPhepDauThang)
+   ================================================================ */
+
+let ccCurrentThang = '';
+let ccData = null;
+let ccModalCtx = null; // { userId, ngay } của popup Tăng ca đang mở
+let ccPendingCC = {};  // key "userId|ngay" -> { targetUserId, ngay, buoi } — chấm công CHƯA lưu
+let ccPendingTC = {};  // key "userId|ngay" -> { targetUserId, ngay, gioBatDau, gioKetThuc } — tăng ca CHƯA lưu
+
+function chuanHoaChucDanhClient_(s) {
+  return String(s || '').trim().toLowerCase();
+}
+function canEditChamCong() {
+  return currentRole === 'ADMIN' || chuanHoaChucDanhClient_(myChucDanh) === 'thư ký bqlda';
+}
+
+function ccKey_(userId, ngay) { return userId + '|' + ngay; }
+function ccIsDirty_() { return Object.keys(ccPendingCC).length > 0 || Object.keys(ccPendingTC).length > 0; }
+function ccSoLuongPending_() {
+  const keys = new Set([...Object.keys(ccPendingCC), ...Object.keys(ccPendingTC)]);
+  return keys.size;
+}
+
+function ccCapNhatNutLuu_() {
+  const btn = document.getElementById('ccBtnLuu');
+  if (!btn) return;
+  const soLuong = ccSoLuongPending_();
+  btn.disabled = soLuong === 0;
+  btn.innerHTML = soLuong > 0
+    ? `<i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi (${soLuong})`
+    : `<i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi`;
+}
+
+function ccFmt1_(n) { return (Math.round((Number(n) || 0) * 10) / 10).toString().replace('.', ','); }
+function ccFmt2_(n) { return (Math.round((Number(n) || 0) * 100) / 100).toString().replace('.', ','); }
+function ccFmtDelta_(n) {
+  const r = Math.round((Number(n) || 0) * 10) / 10;
+  const cls = r > 0 ? 'cc-delta-pos' : (r < 0 ? 'cc-delta-neg' : 'cc-delta-zero');
+  return `<span class="${cls}">${r > 0 ? '+' : ''}${ccFmt1_(r)}</span>`;
+}
+
+// Mirror đúng logic tinhGioTangCa_() ở Code.js — chỉ để hiện breakdown ngay trong popup trước khi
+// lưu; số liệu THẬT vẫn do server tính lại khi loadChamCong() sau khi lưu.
+function ccTinhGioTangCa_(gioBatDau, gioKetThuc) {
+  if (!gioBatDau || !gioKetThuc) return { gioThuong: 0, gioDem: 0, quyDoi: 0, quaNgay: false };
+  const toMin = s => { const p = s.split(':'); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); };
+  let s = toMin(gioBatDau), e = toMin(gioKetThuc);
+  const quaNgay = e <= s;
+  if (quaNgay) e += 1440;
+  const boundary = 22 * 60;
+  let gioThuong, gioDem;
+  if (e <= boundary) { gioThuong = e - s; gioDem = 0; }
+  else if (s >= boundary) { gioThuong = 0; gioDem = e - s; }
+  else { gioThuong = boundary - s; gioDem = e - boundary; }
+  gioThuong /= 60; gioDem /= 60;
+  return { gioThuong, gioDem, quyDoi: gioThuong + gioDem * 2, quaNgay };
+}
+
+function renderChamCong() {
+  const picker = document.getElementById('ccThangPicker');
+  if (!ccCurrentThang) {
+    const now = new Date();
+    ccCurrentThang = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  }
+  picker.value = ccCurrentThang;
+  picker.onchange = () => {
+    if (ccIsDirty_() && !confirm('Bạn có thay đổi chấm công/tăng ca chưa lưu. Chuyển tháng sẽ MẤT các thay đổi này, tiếp tục?')) {
+      picker.value = ccCurrentThang;
+      return;
+    }
+    ccCurrentThang = picker.value;
+    loadChamCong(ccCurrentThang);
+  };
+  loadChamCong(ccCurrentThang);
+}
+
+function loadChamCong(thang) {
+  document.getElementById('ccBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Đang tải…</td></tr>';
+  ccPendingCC = {}; ccPendingTC = {};
+  gsRun('getChamCongThang', thang)
+    .then(json => { ccData = JSON.parse(json); renderChamCongTable(); ccCapNhatNutLuu_(); })
+    .catch(handleBackendError);
+}
+
+function ccDowLabel_(ngayISO) {
+  const d = new Date(ngayISO + 'T00:00:00');
+  return ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
+}
+function ccIsWeekend_(ngayISO) {
+  const dow = new Date(ngayISO + 'T00:00:00').getDay();
+  return dow === 0 || dow === 6;
+}
+
+function renderChamCongTable() {
+  if (!ccData) return;
+  const editable = canEditChamCong();
+  document.getElementById('ccBtnLuu').style.display = editable ? '' : 'none';
+  const thang = ccData.thang;
+  const soNgay = ccData.soNgay;
+
+  let row1 = '<tr><th class="cc-stt" rowspan="2">STT</th><th class="cc-name" rowspan="2" style="text-align:left;">Họ và tên</th>' +
+    '<th class="cc-sumcol cc-readonly" rowspan="2">Phép đầu<br><small>tháng trước</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Thứ 7<br><small>đã làm/cần</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Cộng/Trừ<br><small>phép tháng</small></th>' +
+    '<th class="cc-sumcol cc-highlight" rowspan="2">Phép cuối<br><small>tháng (dự kiến)</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Số công<br><small>thực làm</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Giờ TC<br><small>quy đổi</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Ngày công<br><small>TC (bù)</small></th>';
+  let row2 = '<tr>';
+  for (let d = 1; d <= soNgay; d++) {
+    const iso = thang + '-' + String(d).padStart(2, '0');
+    const weekend = ccIsWeekend_(iso);
+    row1 += '';
+    row2 += `<th class="${weekend ? 'cc-weekend' : ''}"><span class="cc-d-num">${d}</span><span class="cc-d-dow">${ccDowLabel_(iso)}</span></th>`;
+  }
+  row1 += '</tr>';
+  row2 += '</tr>';
+  document.getElementById('ccThead').innerHTML = row1 + row2;
+
+  const rows = ccData.rows || [];
+  if (rows.length === 0) {
+    document.getElementById('ccBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Chưa có nhân sự nào.</td></tr>';
+    return;
+  }
+
+  document.getElementById('ccBody').innerHTML = rows.map((r, idx) => {
+    const quotaOk = r.congThu7 >= ccData.quotaThu7;
+    let cells = `<td class="cc-stt">${idx + 1}</td>
+      <td class="cc-name">
+        <div class="cc-name-inner">
+          <button type="button" class="cc-eye-btn" onclick="openChiTietCongModal('${r.userId}')" aria-label="Xem chi tiết công">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+          <span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')">${r.hoTen}</span>
+        </div>
+      </td>
+      <td class="cc-sumcol cc-readonly">${currentRole === 'ADMIN'
+        ? `<input type="number" class="dd-input-sm" step="0.5" value="${r.phepDauThang}" onchange="savePhepDauThangCC('${r.userId}', this)">`
+        : ccFmt1_(r.phepDauThang)}</td>
+      <td class="cc-sumcol"><span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(r.congThu7)}</span>/${ccFmt1_(ccData.quotaThu7)}</td>
+      <td class="cc-sumcol">${ccFmtDelta_(r.congTruPhepThang)}</td>
+      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
+      <td class="cc-sumcol">${ccFmt1_(r.congThucLam)}</td>
+      <td class="cc-sumcol">${ccFmt1_(r.tongGioTC)}h</td>
+      <td class="cc-sumcol">${ccFmt2_(r.ngayCongTC)}</td>`;
+
+    for (let d = 1; d <= soNgay; d++) {
+      const iso = thang + '-' + String(d).padStart(2, '0');
+      const weekend = ccIsWeekend_(iso);
+      const buoi = r.cc[iso];
+      const attCls = buoi === 1 ? 'cc-full' : (buoi === 0.5 ? 'cc-half' : (buoi === 'P' ? 'cc-phep' : ''));
+      const attLabel = buoi === 1 ? '<i class="fa-solid fa-check"></i>' : (buoi === 0.5 ? '½' : (buoi === 'P' ? 'P' : ''));
+      const entry = r.tc[iso];
+      let otCls = '', otLabel = '·';
+      if (entry) {
+        const bd = ccTinhGioTangCa_(entry.start, entry.end);
+        otCls = 'cc-filled';
+        otLabel = ccFmt1_(bd.quyDoi) + 'h';
+      }
+      cells += `<td class="cc-daycell ${weekend ? 'cc-weekend' : ''}">
+        <div class="cc-daycell-stack">
+          ${editable
+            ? `<button type="button" class="cc-att-btn ${attCls}" onclick="toggleChamCongCell('${r.userId}','${iso}',this)" aria-label="Chấm công">${attLabel}</button>`
+            : `<span class="cc-att-btn ${attCls}">${attLabel}</span>`}
+          ${editable
+            ? `<button type="button" class="cc-ot-btn ${otCls}" onclick="openTangCaModal('${r.userId}','${iso}')" aria-label="Tăng ca">${otLabel}</button>`
+            : `<span class="cc-ot-btn ${otCls}">${otLabel}</span>`}
+        </div>
+      </td>`;
+    }
+    return `<tr>${cells}</tr>`;
+  }).join('');
+}
+
+// Chỉ sửa cục bộ trên trình duyệt (ccData + ccPendingCC) — KHÔNG gọi server, KHÔNG load lại bảng.
+// Số liệu tổng hợp bên trái (Phép, Số công...) chỉ được server tính lại đúng sau khi bấm "Lưu thay đổi".
+function toggleChamCongCell(userId, ngay, btnEl) {
+  const row = (ccData.rows || []).find(r => r.userId === userId);
+  if (!row) return;
+  const cur = row.cc[ngay];
+  const nextBuoi = cur === 1 ? '0.5' : (cur === 0.5 ? 'P' : (cur === 'P' ? '' : '1'));
+
+  if (nextBuoi === '') delete row.cc[ngay];
+  else row.cc[ngay] = nextBuoi === 'P' ? 'P' : Number(nextBuoi);
+  ccPendingCC[ccKey_(userId, ngay)] = { targetUserId: userId, ngay, buoi: nextBuoi };
+
+  renderChamCongTable();
+  ccCapNhatNutLuu_();
+}
+
+function openTangCaModal(userId, ngay) {
+  const row = (ccData.rows || []).find(r => r.userId === userId);
+  if (!row) return;
+  const entry = row.tc[ngay];
+  ccModalCtx = { userId, ngay };
+
+  document.getElementById('tcModalTitle').textContent = `Tăng ca — ${row.hoTen}`;
+  document.getElementById('tcModalSub').textContent = 'Ngày ' + ngay.split('-').reverse().join('/');
+  document.getElementById('tcModalStart').value = entry ? entry.start : '18:00';
+  document.getElementById('tcModalEnd').value = entry ? entry.end : '22:00';
+  document.getElementById('tcModalXoaBtn').style.display = entry ? '' : 'none';
+  recalcTangCaModal();
+  document.getElementById('tangCaModal').classList.add('active');
+}
+
+function closeTangCaModal() {
+  document.getElementById('tangCaModal').classList.remove('active');
+  ccModalCtx = null;
+}
+
+function recalcTangCaModal() {
+  const start = document.getElementById('tcModalStart').value;
+  const end = document.getElementById('tcModalEnd').value;
+  if (!start || !end) return;
+  const bd = ccTinhGioTangCa_(start, end);
+  document.getElementById('tcBdThuong').textContent = ccFmt1_(bd.gioThuong) + 'h';
+  document.getElementById('tcBdDem').textContent = ccFmt1_(bd.gioDem) + 'h (→ ' + ccFmt1_(bd.gioDem * 2) + 'h)';
+  document.getElementById('tcBdTong').textContent = ccFmt1_(bd.quyDoi) + 'h';
+  document.getElementById('tcQuaNgayNote').textContent = bd.quaNgay ? `→ kết thúc lúc ${end} ngày hôm sau` : '';
+}
+
+// Chỉ sửa cục bộ (ccData + ccPendingTC) — KHÔNG gọi server, KHÔNG load lại bảng. Xem luuThayDoiChamCong().
+function saveTangCaModal() {
+  if (!ccModalCtx) return;
+  const start = document.getElementById('tcModalStart').value;
+  const end = document.getElementById('tcModalEnd').value;
+  if (!start || !end) { showCustomAlert('Vui lòng nhập đủ Giờ bắt đầu và Giờ kết thúc!', 'error'); return; }
+  if (start === end) { showCustomAlert('Giờ bắt đầu và Giờ kết thúc không được trùng nhau!', 'error'); return; }
+
+  const row = (ccData.rows || []).find(r => r.userId === ccModalCtx.userId);
+  if (row) row.tc[ccModalCtx.ngay] = { start, end };
+  ccPendingTC[ccKey_(ccModalCtx.userId, ccModalCtx.ngay)] = { targetUserId: ccModalCtx.userId, ngay: ccModalCtx.ngay, gioBatDau: start, gioKetThuc: end };
+
+  closeTangCaModal();
+  renderChamCongTable();
+  ccCapNhatNutLuu_();
+}
+
+function deleteTangCaModal() {
+  if (!ccModalCtx) return;
+  const row = (ccData.rows || []).find(r => r.userId === ccModalCtx.userId);
+  if (row) delete row.tc[ccModalCtx.ngay];
+  ccPendingTC[ccKey_(ccModalCtx.userId, ccModalCtx.ngay)] = { targetUserId: ccModalCtx.userId, ngay: ccModalCtx.ngay, gioBatDau: '', gioKetThuc: '' };
+
+  closeTangCaModal();
+  renderChamCongTable();
+  ccCapNhatNutLuu_();
+}
+
+// Gộp TOÀN BỘ ccPendingCC/ccPendingTC thành 1 lượt gọi capNhatChamCongHangLoat rồi mới load lại —
+// đây là lúc DUY NHẤT tab này gọi server để ghi dữ liệu (xem block comment đầu file).
+function luuThayDoiChamCong() {
+  const btn = document.getElementById('ccBtnLuu');
+  if (btn.disabled) return;
+  const ccKeys = Object.keys(ccPendingCC);
+  const tcKeys = Object.keys(ccPendingTC);
+  if (ccKeys.length === 0 && tcKeys.length === 0) return;
+
+  const danhSachCC = ccKeys.map(k => ccPendingCC[k]);
+  const danhSachTC = tcKeys.map(k => ccPendingTC[k]);
+
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Đang lưu…';
+  document.getElementById('ccThangPicker').disabled = true;
+
+  gsRun('capNhatChamCongHangLoat', myUserId, myPassword, danhSachCC, danhSachTC)
+    .then(() => {
+      // Chỉ xoá đúng những key đã gửi đi — tránh mất thay đổi mới phát sinh trong lúc đang lưu.
+      ccKeys.forEach(k => delete ccPendingCC[k]);
+      tcKeys.forEach(k => delete ccPendingTC[k]);
+      showCustomAlert('Đã lưu chấm công/tăng ca.', 'success');
+      if (!ccIsDirty_()) loadChamCong(ccCurrentThang);
+      else renderChamCongTable();
+    })
+    .catch(handleBackendError)
+    .finally(() => {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+      document.getElementById('ccThangPicker').disabled = false;
+      ccCapNhatNutLuu_();
+    });
+}
+
+// Popup xem chi tiết công 1 nhân sự — AI CŨNG XEM ĐƯỢC (không kiểm tra canEditChamCong()), chỉ hiển
+// thị dữ liệu server đã tính sẵn trong ccData, không có nút sửa nào ở đây.
+function openChiTietCongModal(userId) {
+  const row = (ccData.rows || []).find(r => r.userId === userId);
+  if (!row) return;
+
+  document.getElementById('detModalTitle').textContent = row.hoTen;
+  document.getElementById('detModalSub').textContent = 'Chi tiết công — Tháng ' + ccData.thang.split('-').reverse().join('/');
+
+  const quotaOk = row.congThu7 >= ccData.quotaThu7;
+  const rowsHtml = [
+    ['Phép đầu tháng', ccFmt1_(row.phepDauThang)],
+    ['Công Thứ 7', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${ccFmt1_(row.congThu7)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
+    ['Công Chủ Nhật', ccFmt1_(row.congChuNhat)],
+    ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (0 công Thứ 7 tháng này)</span>' : ' — <span class="cc-q-ok">được miễn trừ</span>') : '')]
+  ].map(([lbl, val]) => `<div class="cc-brk-row"><span class="cc-brk-lbl">${lbl}</span><span>${val}</span></div>`).join('');
+
+  document.getElementById('detModalBreakdown').innerHTML = rowsHtml + `
+    <div class="cc-brk-divider"></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Cộng/Trừ phép tháng</span>${ccFmtDelta_(row.congTruPhepThang)}</div>
+    <div class="cc-brk-row cc-brk-total"><span>Phép cuối tháng (dự kiến)</span><span>${ccFmt1_(row.phepCuoiThang)}</span></div>
+    <div class="cc-brk-divider"></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Số công thực làm</span><span>${ccFmt1_(row.congThucLam)}</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ tăng ca quy đổi</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Ngày công TC quy đổi (bù)</span><span>${ccFmt2_(row.ngayCongTC)}</span></div>
+  `;
+
+  const otDays = Object.keys(row.tc).sort();
+  document.getElementById('detModalOtList').innerHTML = otDays.length
+    ? otDays.map(iso => {
+        const e = row.tc[iso], bd = ccTinhGioTangCa_(e.start, e.end);
+        const label = iso.split('-').reverse().slice(0, 2).join('/');
+        return `<div class="cc-detail-item"><span>${label}: ${e.start} → ${e.end}${bd.quaNgay ? ' (hôm sau)' : ''}</span><span class="cc-detail-val">${ccFmt1_(bd.quyDoi)}h</span></div>`;
+      }).join('')
+    : '<div class="cc-detail-empty">Không có ngày tăng ca nào.</div>';
+
+  const pDays = Object.keys(row.cc).filter(iso => row.cc[iso] === 'P').sort();
+  document.getElementById('detModalPList').innerHTML = pDays.length
+    ? pDays.map(iso => `<div class="cc-detail-item"><span>${iso.split('-').reverse().slice(0, 2).join('/')}</span><span class="cc-detail-val">P</span></div>`).join('')
+    : '<div class="cc-detail-empty">Không có ngày nghỉ phép nào.</div>';
+
+  document.getElementById('chiTietCongModal').classList.add('active');
+}
+
+function closeChiTietCongModal() {
+  document.getElementById('chiTietCongModal').classList.remove('active');
+}
+
+// Chỉ Admin thấy được ô này (xem điều kiện render ở renderChamCongTable) — dùng để nhập/sửa số dư
+// phép đầu tháng (VD nạp số liệu cũ theo dõi thủ công trước khi có tab này). Lưu ngay lập tức (không
+// gộp vào ccPendingCC/ccPendingTC) vì đây là chỉnh 1 giá trị baseline riêng biệt, không phải chấm
+// công hàng loạt — backend adminCapNhatPhepDauThang cũng tự kiểm tra lại đúng vai trò ADMIN.
+function savePhepDauThangCC(userId, inputEl) {
+  const val = inputEl.value;
+  inputEl.disabled = true;
+  gsRun('adminCapNhatPhepDauThang', myUserId, myPassword, userId, ccCurrentThang, val)
+    .then(() => loadChamCong(ccCurrentThang))
+    .catch(err => { inputEl.disabled = false; handleBackendError(err); });
+}
+</script>

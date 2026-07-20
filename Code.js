@@ -24,10 +24,9 @@ const THONGBAO_HEADERS_ = ['id', 'userId', 'loai', 'noiDung', 'maCongViec', 'ngu
 const BINHLUAN_HEADERS_ = ['id', 'maCongViec', 'nguoiBinhLuan_id', 'nguoiBinhLuan_ten', 'noiDung', 'thoiGian', 'active', 'nguoiDuocTag'];
 const NHATKY_HEADERS_ = ['logId', 'maCongViec', 'ngayBaoCao', 'phanTramNgay', 'ghiChu',
   'nguoiNhap_id', 'nguoiNhap_ten', 'thoiGianNhap', 'fileDinhKem', 'active'];
-// DiemDanhCuoiTuan: trạng thái điểm danh Thứ 7/CN hiện tại (upsert theo userId+ngay, KHÔNG phải
-// log lịch sử — bỏ tick thì xoá hẳn dòng). PhepThang: sổ phép/tháng, "Cộng phép tháng"/"TỔNG CỘNG"
-// luôn tính lại từ 2 sheet này, không lưu cột riêng (xem getDiemDanhPhep()).
-const DIEMDANH_HEADERS_ = ['userId', 'ngay', 'buoi'];
+// PhepThang: sổ phép/tháng (phepDauThang = baseline đầu tháng, tự cộng 1 ngày/tháng — xem
+// chotPhepDenThangHienTai_). ChamCongThang (định nghĩa ở phần CHẤM CÔNG & TĂNG CA phía dưới): chấm
+// công + tăng ca CẢ THÁNG — "Cộng/Trừ phép tháng" luôn tính lại từ 2 sheet này, không lưu cột riêng.
 const PHEP_HEADERS_ = ['userId', 'thang', 'phepDauThang', 'soNgayNghi', 'chotLuc'];
 const THU_KY_CHUC_DANH_ = 'thư ký bqlda';
 
@@ -104,12 +103,12 @@ function thietLapBanDauSheet() {
     ss.insertSheet('NhatKyTienDo').getRange(1, 1, 1, NHATKY_HEADERS_.length).setValues([NHATKY_HEADERS_]);
   }
 
-  if (!ss.getSheetByName('DiemDanhCuoiTuan')) {
-    ss.insertSheet('DiemDanhCuoiTuan').getRange(1, 1, 1, DIEMDANH_HEADERS_.length).setValues([DIEMDANH_HEADERS_]);
-  }
-
   if (!ss.getSheetByName('PhepThang')) {
     ss.insertSheet('PhepThang').getRange(1, 1, 1, PHEP_HEADERS_.length).setValues([PHEP_HEADERS_]);
+  }
+
+  if (!ss.getSheetByName('ChamCongThang')) {
+    ss.insertSheet('ChamCongThang').getRange(1, 1, 1, CHAMCONG_HEADERS_.length).setValues([CHAMCONG_HEADERS_]);
   }
 
   if (!ss.getSheetByName('ThongBao')) {
@@ -158,7 +157,7 @@ function thietLapBanDauSheet() {
     }
   });
 
-  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, DiemDanhCuoiTuan, PhepThang, ThongBao, BinhLuanCongViec, HopDong, BOQHangMuc, PhuLucHopDong, PhuLucThayDoi, NghiemThu, DotThanhToan, DotThanhToanChiTiet, QuyetToan.';
+  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, PhepThang, ChamCongThang, ThongBao, BinhLuanCongViec, HopDong, BOQHangMuc, PhuLucHopDong, PhuLucThayDoi, NghiemThu, DotThanhToan, DotThanhToanChiTiet, QuyetToan.';
 }
 
 // Chạy 1 lần khi cần xóa sạch toàn bộ Hạng mục + Công việc kiểu cũ để làm lại từ đầu.
@@ -1157,9 +1156,11 @@ function uploadAnhHienTruong(userId, password, base64Data, tenFile) {
 }
 
 // =======================================================
-// ĐIỂM DANH CUỐI TUẦN & SỔ PHÉP — chỉ Admin/Thư ký BQLDA sửa được, ai cũng xem được (giống
-// getData() không cần đăng nhập). "Cộng phép tháng"/"TỔNG CỘNG" luôn tính lại từ DiemDanhCuoiTuan +
-// PhepThang mỗi lần đọc, không lưu cột riêng.
+// SỔ PHÉP (baseline đầu tháng) — dùng chung bởi tab "Chấm công & Tăng ca" (xem phần CHẤM CÔNG &
+// TĂNG CA bên dưới, nơi định nghĩa CHAMCONG_HEADERS_/tinhPhepChiTietTuChamCong_/assertQuyenChamCongTangCa_).
+// Tab "Điểm danh & Phép" (Thứ 7/CN riêng, sổ DiemDanhCuoiTuan) đã bị GỘP vào tab Chấm công & Tăng ca
+// để tránh 2 nơi chấm công trùng lặp — chotPhepDenThangHienTai_ dưới đây giờ tính "Cộng/Trừ phép
+// tháng" từ ChamCongThang (đủ mọi ngày trong tháng) thay vì chỉ từ Thứ 7/CN như trước.
 // =======================================================
 
 function chuanHoaChucDanh_(s) {
@@ -1178,27 +1179,6 @@ function layHoacTaoSheet_(tenSheet, headers) {
   return sheet;
 }
 
-function assertQuyenDiemDanh_(user) {
-  if (user.role !== 'ADMIN' && chuanHoaChucDanh_(user.chucDanh) !== THU_KY_CHUC_DANH_) {
-    throw new Error('Chỉ Quản trị hoặc Thư ký BQLDA mới có quyền cập nhật Điểm danh/Phép!');
-  }
-}
-
-function readDiemDanhRows_(sheet) {
-  if (!sheet) return [];
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return [];
-  const values = sheet.getRange(2, 1, lastRow - 1, DIEMDANH_HEADERS_.length).getValues();
-  const result = [];
-  values.forEach(r => {
-    const userId = String(r[0] || '').trim();
-    const ngay = formatDateCell_(r[1]);
-    if (!userId || !ngay) return;
-    result.push({ userId, ngay, buoi: Number(r[2]) || 0 });
-  });
-  return result;
-}
-
 function readPhepThangRows_(sheet) {
   if (!sheet) return [];
   const lastRow = sheet.getLastRow();
@@ -1214,47 +1194,6 @@ function readPhepThangRows_(sheet) {
   return result;
 }
 
-// Gộp các ngày Thứ 7/CN liền kề trong tháng thành từng nhóm "Tuần" (kể cả nhóm mồ côi chỉ có 1
-// ngày ở đầu/cuối tháng, khi Thứ 7 hoặc CN rơi sang tháng khác).
-function layDanhSachThu7CN_(thang) {
-  const parts = String(thang).split('-');
-  const year = parseInt(parts[0], 10), month1 = parseInt(parts[1], 10);
-  const soNgay = new Date(year, month1, 0).getDate();
-  const ddmm = iso => iso.slice(8, 10) + '/' + iso.slice(5, 7);
-
-  const groups = [];
-  let openGroup = null;
-  for (let day = 1; day <= soNgay; day++) {
-    const d = new Date(year, month1 - 1, day);
-    const dow = d.getDay(); // 0 = Chủ nhật, 6 = Thứ 7
-    if (dow !== 0 && dow !== 6) continue;
-    const iso = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    if (dow === 6) {
-      openGroup = { ngayThu7: iso, ngayCN: null };
-      groups.push(openGroup);
-    } else if (openGroup && !openGroup.ngayCN) {
-      openGroup.ngayCN = iso;
-      openGroup = null;
-    } else {
-      groups.push({ ngayThu7: null, ngayCN: iso });
-      openGroup = null;
-    }
-  }
-
-  return groups.map((g, idx) => ({
-    tuan: idx + 1,
-    ngayThu7: g.ngayThu7,
-    ngayCN: g.ngayCN,
-    nhan: 'Tuần ' + (idx + 1) + ' (' + [g.ngayThu7, g.ngayCN].filter(Boolean).map(ddmm).join('-') + ')'
-  }));
-}
-
-function tongCongPhepThangTuDiemDanh_(allDiemDanh, userId, thang) {
-  return Math.round(allDiemDanh
-    .filter(d => d.userId === userId && d.ngay.slice(0, 7) === thang)
-    .reduce((s, d) => s + d.buoi, 0) * 10) / 10;
-}
-
 // 'yyyy-MM' + số tháng cộng thêm (có thể âm) -> 'yyyy-MM' mới, tự xử lý qua năm.
 function thangCong_(thang, soThang) {
   const parts = String(thang).split('-');
@@ -1264,16 +1203,18 @@ function thangCong_(thang, soThang) {
 
 // Chốt ngầm mỗi khi có người mở tab: với mỗi nhân sự, tạo tuần tự các dòng PhepThang còn thiếu cho
 // tới tháng hiện tại thật (không nhảy cóc nếu app bị bỏ quên nhiều tháng liền), theo công thức:
-// TổngCộng(tháng cũ) = phepDauThang + CộngPhépThángTừĐiểmDanh - soNgayNghi;
+// TổngCộng(tháng cũ) = phepDauThang + Cộng/TrừPhépThángTừChấmCông - soNgayNghi (lịch sử cũ, nếu có);
 // phepDauThang(tháng mới) = TổngCộng(tháng cũ) + 1 (1 phép baseline/tháng).
+// tinhPhepChiTietTuChamCong_ định nghĩa ở phần CHẤM CÔNG & TĂNG CA bên dưới (cùng công thức hiển thị
+// ở getChamCongThang, tránh lệch số giữa "dự kiến" trên giao diện và số THẬT được chốt ở đây).
 function chotPhepDenThangHienTai_() {
   const phepSheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
-  const ddSheet = layHoacTaoSheet_('DiemDanhCuoiTuan', DIEMDANH_HEADERS_);
+  const ccSheet = layHoacTaoSheet_('ChamCongThang', CHAMCONG_HEADERS_);
 
   const thangHienTai = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
   const allUsers = listSupervisors();
   const allPhep = readPhepThangRows_(phepSheet);
-  const allDiemDanh = readDiemDanhRows_(ddSheet);
+  const allCC = readChamCongRows_(ccSheet);
 
   const rowsToAppend = [];
   allUsers.forEach(u => {
@@ -1288,14 +1229,14 @@ function chotPhepDenThangHienTai_() {
 
     let thangDangXet = lastRow.thang;
     let tongCongThangDo = lastRow.phepDauThang
-      + tongCongPhepThangTuDiemDanh_(allDiemDanh, u.id, thangDangXet)
+      + tinhPhepChiTietTuChamCong_(allCC, u.id, thangDangXet).congTruPhepThang
       - lastRow.soNgayNghi;
 
     while (thangDangXet < thangHienTai) {
       thangDangXet = thangCong_(thangDangXet, 1);
       const phepDauThangMoi = Math.round((tongCongThangDo + 1) * 10) / 10;
       rowsToAppend.push([u.id, thangDangXet, phepDauThangMoi, 0, new Date()]);
-      tongCongThangDo = phepDauThangMoi + tongCongPhepThangTuDiemDanh_(allDiemDanh, u.id, thangDangXet);
+      tongCongThangDo = phepDauThangMoi + tinhPhepChiTietTuChamCong_(allCC, u.id, thangDangXet).congTruPhepThang;
     }
   });
 
@@ -1304,107 +1245,9 @@ function chotPhepDenThangHienTai_() {
   }
 }
 
-// thang: 'yyyy-MM', bỏ trống = tháng hiện tại. KHÔNG cần đăng nhập để xem (giống getData()).
-function getDiemDanhPhep(thang) {
-  const thangXem = String(thang || '').trim() || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-
-  chotPhepDenThangHienTai_();
-
-  const allUsers = listSupervisors();
-  const allPhep = readPhepThangRows_(layHoacTaoSheet_('PhepThang', PHEP_HEADERS_));
-  const allDiemDanh = readDiemDanhRows_(layHoacTaoSheet_('DiemDanhCuoiTuan', DIEMDANH_HEADERS_));
-
-  const rows = allUsers.map(u => {
-    const phepRow = allPhep.find(p => p.userId === u.id && p.thang === thangXem);
-    const phepDauThang = phepRow ? phepRow.phepDauThang : 0;
-    const soNgayNghi = phepRow ? phepRow.soNgayNghi : 0;
-    const congPhepThang = tongCongPhepThangTuDiemDanh_(allDiemDanh, u.id, thangXem);
-    const diemDanh = {};
-    allDiemDanh.filter(d => d.userId === u.id && d.ngay.slice(0, 7) === thangXem)
-      .forEach(d => { diemDanh[d.ngay] = d.buoi; });
-
-    return {
-      userId: u.id,
-      hoTen: u.name,
-      phepDauThang,
-      soNgayNghi,
-      congPhepThang,
-      tongCong: Math.round((phepDauThang + congPhepThang - soNgayNghi) * 10) / 10,
-      diemDanh
-    };
-  });
-
-  return JSON.stringify({ thang: thangXem, tuanList: layDanhSachThu7CN_(thangXem), rows });
-}
-
-function capNhatDiemDanh(userId, password, targetUserId, ngay, buoi) {
-  const user = login(userId, password);
-  assertQuyenDiemDanh_(user);
-
-  const ngayStr = String(ngay || '').trim();
-  const parts = ngayStr.split('-');
-  if (parts.length !== 3) throw new Error('Ngày không hợp lệ!');
-  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-  const dow = d.getDay();
-  if (dow !== 0 && dow !== 6) throw new Error('Chỉ điểm danh được Thứ 7 hoặc Chủ nhật!');
-
-  const targetId = String(targetUserId || '').trim();
-  if (!targetId) throw new Error('Thiếu nhân sự cần điểm danh!');
-
-  const sheet = layHoacTaoSheet_('DiemDanhCuoiTuan', DIEMDANH_HEADERS_);
-
-  const data = sheet.getDataRange().getValues();
-  let foundRow = -1;
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === targetId && formatDateCell_(data[i][1]) === ngayStr) {
-      foundRow = i + 1;
-      break;
-    }
-  }
-
-  const buoiNum = parseFloat(buoi);
-  if (!buoi || isNaN(buoiNum) || buoiNum <= 0) {
-    if (foundRow > 0) sheet.deleteRow(foundRow);
-  } else {
-    if (buoiNum !== 1 && buoiNum !== 0.5) throw new Error('Buổi điểm danh chỉ nhận giá trị 1 hoặc 0.5!');
-    if (foundRow > 0) sheet.getRange(foundRow, 3).setValue(buoiNum);
-    else sheet.appendRow([targetId, ngayStr, buoiNum]);
-  }
-
-  logActivity(userId, user.name, 'Điểm danh cuối tuần', `${targetId} - ${ngayStr}: ${buoi || 'xoá'}`);
-  return 'Success';
-}
-
-function capNhatSoNgayNghi(userId, password, targetUserId, thang, soNgayNghi) {
-  const user = login(userId, password);
-  assertQuyenDiemDanh_(user);
-
-  const targetId = String(targetUserId || '').trim();
-  const thangStr = String(thang || '').trim();
-  if (!targetId || !thangStr) throw new Error('Thiếu thông tin nhân sự/tháng!');
-
-  const soNgayNghiNum = parseFloat(soNgayNghi);
-  if (isNaN(soNgayNghiNum) || soNgayNghiNum < 0) throw new Error('Số ngày nghỉ không hợp lệ!');
-
-  const sheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
-
-  const data = sheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]).trim() === targetId && formatThangCell_(data[i][1]) === thangStr) {
-      sheet.getRange(i + 1, 4).setValue(soNgayNghiNum);
-      logActivity(userId, user.name, 'Sửa Số ngày nghỉ', `${targetId} - ${thangStr}: ${soNgayNghiNum}`);
-      return 'Success';
-    }
-  }
-
-  sheet.appendRow([targetId, thangStr, 0, soNgayNghiNum, new Date()]);
-  logActivity(userId, user.name, 'Sửa Số ngày nghỉ', `${targetId} - ${thangStr}: ${soNgayNghiNum}`);
-  return 'Success';
-}
-
 // Chỉ Admin (không áp dụng cho Thư ký BQLDA) được sửa trực tiếp "Phép + bù" — dùng để nhập số dư
-// phép sẵn có của dự án (đã theo dõi thủ công trên Google Sheet trước khi có tab này), khác với
-// capNhatSoNgayNghi ở trên là việc vận hành hàng ngày.
+// phép sẵn có của dự án (đã theo dõi thủ công trên Google Sheet trước khi có tab này), hoặc chỉnh
+// tay khi cần — sửa trực tiếp ở tab "Chấm công & Tăng ca" (ô "Phép đầu tháng").
 function adminCapNhatPhepDauThang(userId, password, targetUserId, thang, phepDauThang) {
   const user = login(userId, password);
   if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền điều chỉnh trực tiếp "Phép + bù"!');
@@ -1430,6 +1273,260 @@ function adminCapNhatPhepDauThang(userId, password, targetUserId, thang, phepDau
   sheet.appendRow([targetId, thangStr, phepDauThangNum, 0, new Date()]);
   logActivity(userId, user.name, 'Sửa Phép + bù', `${targetId} - ${thangStr}: ${phepDauThangNum}`);
   return 'Success';
+}
+
+// =======================================================
+// CHẤM CÔNG & TĂNG CA THEO THÁNG — mỗi dòng = 1 (userId, ngày), gộp cả chấm công (buoi: 1 cả ngày /
+// 0.5 nửa ngày / 'P' nghỉ phép) CHO MỌI NGÀY trong tháng và tăng ca (gioBatDauTC/gioKetThucTC dạng
+// 'HH:mm', kết thúc <= bắt đầu ngầm hiểu là qua ngày hôm sau) trên CÙNG 1 dòng. Đây là tab DUY NHẤT
+// chấm công (tab "Điểm danh & Phép"/DiemDanhCuoiTuan cũ, chỉ chấm được Thứ 7/CN, đã bị GỘP vào đây để
+// khỏi trùng 2 nơi chấm công). Ai cũng xem được (giống getData()), chỉ Admin/Thư ký BQLDA
+// (assertQuyenChamCongTangCa_) chấm công/sửa tăng ca được — riêng "Phép đầu tháng" chỉ Admin sửa
+// được, qua adminCapNhatPhepDauThang() (định nghĩa ở phần SỔ PHÉP phía trên).
+//
+// Quy tắc quy đổi giờ tăng ca: tách theo mốc 22h trong ca đã nhập — phần trước 22h hệ số 1, phần từ
+// 22h hệ số 2, cộng lại thành "giờ quy đổi" (xem tinhGioTangCa_).
+//
+// Quy tắc cộng/trừ Phép mỗi tháng (xem tinhPhepChiTietTuChamCong_, dùng chung cho cả hiển thị "dự
+// kiến" ở getChamCongThang lẫn chốt số THẬT ở chotPhepDenThangHienTai_ khi sang tháng mới):
+//   Cộng/Trừ phép tháng = Công Chủ Nhật + (Công Thứ 7 − Định mức Thứ 7) − Số ngày đánh dấu P
+//   Định mức Thứ 7 = 0,5 công × số Thứ 7 trong tháng. Số ngày P CHỈ bị trừ khi cả tháng đó có 0 công
+//   Thứ 7 (không đi làm buổi Thứ 7 nào) — hễ có đi làm Thứ 7 (dù không dư định mức) thì mọi ngày P
+//   trong tháng đó được miễn, không trừ phép (theo yêu cầu thực tế của BQLDA).
+// =======================================================
+
+const CHAMCONG_HEADERS_ = ['userId', 'ngay', 'buoi', 'gioBatDauTC', 'gioKetThucTC'];
+
+function assertQuyenChamCongTangCa_(user) {
+  if (user.role !== 'ADMIN' && chuanHoaChucDanh_(user.chucDanh) !== THU_KY_CHUC_DANH_) {
+    throw new Error('Chỉ Quản trị hoặc Thư ký BQLDA mới có quyền cập nhật Chấm công/Tăng ca!');
+  }
+}
+
+// { gioThuong, gioDem, quyDoi, quaNgay } — quaNgay=true nghĩa là gioKetThuc rơi vào ngày hôm sau.
+function tinhGioTangCa_(gioBatDau, gioKetThuc) {
+  if (!gioBatDau || !gioKetThuc) return { gioThuong: 0, gioDem: 0, quyDoi: 0, quaNgay: false };
+  const toMin_ = s => {
+    const p = String(s).split(':');
+    return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0);
+  };
+  let s = toMin_(gioBatDau), e = toMin_(gioKetThuc);
+  const quaNgay = e <= s;
+  if (quaNgay) e += 1440;
+  const boundary = 22 * 60;
+  let gioThuong, gioDem;
+  if (e <= boundary) { gioThuong = e - s; gioDem = 0; }
+  else if (s >= boundary) { gioThuong = 0; gioDem = e - s; }
+  else { gioThuong = boundary - s; gioDem = e - boundary; }
+  gioThuong /= 60; gioDem /= 60;
+  return { gioThuong, gioDem, quyDoi: gioThuong + gioDem * 2, quaNgay };
+}
+
+// { soNgay, saturdays: ['yyyy-MM-dd', ...], sundays: [...] } cho 1 tháng 'yyyy-MM'.
+function layThu7CNTrongThang_(thang) {
+  const parts = String(thang).split('-');
+  const year = parseInt(parts[0], 10), month1 = parseInt(parts[1], 10);
+  const soNgay = new Date(year, month1, 0).getDate();
+  const saturdays = [], sundays = [];
+  for (let day = 1; day <= soNgay; day++) {
+    const d = new Date(year, month1 - 1, day);
+    const iso = Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    if (d.getDay() === 6) saturdays.push(iso);
+    if (d.getDay() === 0) sundays.push(iso);
+  }
+  return { soNgay, saturdays, sundays };
+}
+
+function readChamCongRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, CHAMCONG_HEADERS_.length).getValues();
+  const result = [];
+  values.forEach(r => {
+    const userId = String(r[0] || '').trim();
+    const ngay = formatDateCell_(r[1]);
+    if (!userId || !ngay) return;
+    const buoiRaw = r[2];
+    let buoi = '';
+    if (buoiRaw === 'P') buoi = 'P';
+    else { const n = Number(buoiRaw); if (n === 1 || n === 0.5) buoi = n; }
+    result.push({ userId, ngay, buoi, gioBatDauTC: String(r[3] || '').trim(), gioKetThucTC: String(r[4] || '').trim() });
+  });
+  return result;
+}
+
+// { quotaThu7, congThu7, congChuNhat, soNgayP, phepTruDoP, congTruPhepThang } cho 1 nhân sự/1 tháng —
+// DÙNG CHUNG bởi getChamCongThang (hiển thị "dự kiến") và chotPhepDenThangHienTai_ (chốt số THẬT khi
+// sang tháng mới), để không lệch công thức giữa 2 nơi.
+function tinhPhepChiTietTuChamCong_(allCC, userId, thang) {
+  const { saturdays, sundays } = layThu7CNTrongThang_(thang);
+  const quotaThu7 = Math.round(saturdays.length * 0.5 * 10) / 10;
+
+  const cc = {};
+  allCC.filter(r => r.userId === userId && r.ngay.slice(0, 7) === thang && r.buoi !== '')
+    .forEach(r => { cc[r.ngay] = r.buoi; });
+
+  const soNum_ = v => (typeof v === 'number' ? v : 0);
+  const congThu7 = Math.round(saturdays.reduce((s, d) => s + soNum_(cc[d]), 0) * 10) / 10;
+  const congChuNhat = Math.round(sundays.reduce((s, d) => s + soNum_(cc[d]), 0) * 10) / 10;
+  const soNgayP = Object.values(cc).filter(v => v === 'P').length;
+  const phepTruDoP = congThu7 > 0 ? 0 : soNgayP;
+  const congTruPhepThang = Math.round((congChuNhat + (congThu7 - quotaThu7) - phepTruDoP) * 10) / 10;
+
+  return { quotaThu7, congThu7, congChuNhat, soNgayP, phepTruDoP, congTruPhepThang };
+}
+
+// thang: 'yyyy-MM', bỏ trống = tháng hiện tại. KHÔNG cần đăng nhập để xem (giống getData()).
+function getChamCongThang(thang) {
+  const thangXem = String(thang || '').trim() || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+  chotPhepDenThangHienTai_(); // tái dùng cơ chế tự chốt "Phép đầu tháng" đã có, không tính lại ở đây
+
+  const { soNgay, saturdays, sundays } = layThu7CNTrongThang_(thangXem);
+
+  const allUsers = listSupervisors();
+  const allPhep = readPhepThangRows_(layHoacTaoSheet_('PhepThang', PHEP_HEADERS_));
+  const allCC = readChamCongRows_(layHoacTaoSheet_('ChamCongThang', CHAMCONG_HEADERS_));
+
+  const rows = allUsers.map(u => {
+    const phepRow = allPhep.find(p => p.userId === u.id && p.thang === thangXem);
+    const phepDauThang = phepRow ? phepRow.phepDauThang : 0;
+
+    const cc = {}, tc = {};
+    allCC.filter(r => r.userId === u.id && r.ngay.slice(0, 7) === thangXem).forEach(r => {
+      if (r.buoi !== '') cc[r.ngay] = r.buoi;
+      if (r.gioBatDauTC && r.gioKetThucTC) tc[r.ngay] = { start: r.gioBatDauTC, end: r.gioKetThucTC };
+    });
+
+    const chiTiet = tinhPhepChiTietTuChamCong_(allCC, u.id, thangXem);
+    const congThucLam = Object.values(cc).reduce((s, v) => s + (typeof v === 'number' ? v : 0), 0);
+    const tongGioTC = Object.values(tc).reduce((s, e) => s + tinhGioTangCa_(e.start, e.end).quyDoi, 0);
+
+    return {
+      userId: u.id, hoTen: u.name, phepDauThang,
+      cc, tc,
+      congThu7: chiTiet.congThu7,
+      congChuNhat: chiTiet.congChuNhat,
+      soNgayP: chiTiet.soNgayP,
+      phepTruDoP: chiTiet.phepTruDoP,
+      congTruPhepThang: chiTiet.congTruPhepThang,
+      phepCuoiThang: Math.round((phepDauThang + chiTiet.congTruPhepThang) * 10) / 10,
+      congThucLam: Math.round(congThucLam * 10) / 10,
+      tongGioTC: Math.round(tongGioTC * 10) / 10,
+      ngayCongTC: Math.round((tongGioTC / 8) * 100) / 100
+    };
+  });
+
+  const quotaThu7 = Math.round(saturdays.length * 0.5 * 10) / 10;
+  return JSON.stringify({ thang: thangXem, soNgay, saturdays, sundays, quotaThu7, rows });
+}
+
+// Gộp TOÀN BỘ thay đổi chấm công + tăng ca của 1 lượt sửa (nhiều ô, nhiều nhân sự, nhiều ngày) của
+// tab "Chấm công & Tăng ca" thành ĐÚNG 1 lượt gọi từ client (nút "Lưu thay đổi" ở 15_ChamCong.html)
+// thay vì gọi lặp lại từng ô bấm — trước đây mỗi lần bấm 1 ô là 1 round-trip + 1 lần load lại toàn
+// bộ bảng, rất giật khi cần sửa nhiều ô liên tiếp.
+// danhSachChamCong: mảng { targetUserId, ngay, buoi: '1'|'0.5'|'P'|'' }
+// danhSachTangCa:   mảng { targetUserId, ngay, gioBatDau, gioKetThuc } — cả 2 rỗng nghĩa là xoá tăng ca
+// Mỗi phần tử là TRẠNG THÁI CUỐI CÙNG mong muốn của đúng 1 ô (không phải log thao tác), nên áp dụng
+// theo bất kỳ thứ tự nào đều ra cùng kết quả.
+function capNhatChamCongHangLoat(userId, password, danhSachChamCong, danhSachTangCa) {
+  const user = login(userId, password);
+  assertQuyenChamCongTangCa_(user);
+
+  const sheet = layHoacTaoSheet_('ChamCongThang', CHAMCONG_HEADERS_);
+  const lastRow = sheet.getLastRow();
+  const existing = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, CHAMCONG_HEADERS_.length).getValues() : [];
+
+  // key "userId|ngay" -> trạng thái hiện tại (rowIdx=null nghĩa là chưa có dòng trong Sheet)
+  const state = new Map();
+  existing.forEach((r, i) => {
+    const uid = String(r[0] || '').trim(), ngay = formatDateCell_(r[1]);
+    if (!uid || !ngay) return;
+    state.set(uid + '|' + ngay, { rowIdx: i + 2, userId: uid, ngay, buoi: r[2], gioBD: String(r[3] || '').trim(), gioKT: String(r[4] || '').trim() });
+  });
+  function layHoacTao_(targetId, ngay) {
+    const key = targetId + '|' + ngay;
+    if (!state.has(key)) state.set(key, { rowIdx: null, userId: targetId, ngay, buoi: '', gioBD: '', gioKT: '' });
+    return state.get(key);
+  }
+
+  (danhSachChamCong || []).forEach(item => {
+    const targetId = String(item.targetUserId || '').trim();
+    const ngayStr = String(item.ngay || '').trim();
+    if (!targetId || !/^\d{4}-\d{2}-\d{2}$/.test(ngayStr)) return;
+    const s = layHoacTao_(targetId, ngayStr);
+    const buoiStr = String(item.buoi || '').trim();
+    s.buoi = buoiStr === 'P' ? 'P' : (buoiStr === '1' ? 1 : (buoiStr === '0.5' ? 0.5 : ''));
+  });
+
+  (danhSachTangCa || []).forEach(item => {
+    const targetId = String(item.targetUserId || '').trim();
+    const ngayStr = String(item.ngay || '').trim();
+    if (!targetId || !/^\d{4}-\d{2}-\d{2}$/.test(ngayStr)) return;
+    const s = layHoacTao_(targetId, ngayStr);
+    s.gioBD = String(item.gioBatDau || '').trim();
+    s.gioKT = String(item.gioKetThuc || '').trim();
+  });
+
+  const rowsToUpdate = [], rowsToDelete = [], rowsToAppend = [];
+  state.forEach(s => {
+    const rong = s.buoi === '' && !s.gioBD && !s.gioKT;
+    if (s.rowIdx) {
+      if (rong) rowsToDelete.push(s.rowIdx);
+      else rowsToUpdate.push({ rowIdx: s.rowIdx, values: [s.userId, s.ngay, s.buoi, s.gioBD, s.gioKT] });
+    } else if (!rong) {
+      rowsToAppend.push([s.userId, s.ngay, s.buoi, s.gioBD, s.gioKT]);
+    }
+  });
+
+  rowsToUpdate.forEach(u => sheet.getRange(u.rowIdx, 1, 1, CHAMCONG_HEADERS_.length).setValues([u.values]));
+  rowsToDelete.sort((a, b) => b - a).forEach(r => sheet.deleteRow(r)); // xoá từ dưới lên để khỏi lệch rowIdx
+  if (rowsToAppend.length) sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, CHAMCONG_HEADERS_.length).setValues(rowsToAppend);
+
+  logActivity(userId, user.name, 'Lưu Chấm công/Tăng ca hàng loạt',
+    `${rowsToUpdate.length} dòng sửa, ${rowsToAppend.length} dòng thêm, ${rowsToDelete.length} dòng xoá`);
+  return 'Success';
+}
+
+// Tiện ích chạy TAY 1 LẦN từ trình soạn thảo Apps Script (không gọi từ giao diện web) để nạp số liệu
+// "Phép + bù Tháng 6" (đầu vào Phép tháng 7/2026) từ bảng Excel thủ công cũ của Thư ký BQLDA sang
+// PhepThang — khớp theo email = userId (tài khoản trong DanhSachUser đang dùng email làm ID đăng
+// nhập). Chạy lại nhiều lần vẫn an toàn (ghi đè đúng dòng đã có, không tạo trùng).
+function adminSeedPhepThang7_2026() {
+  const THANG = '2026-07';
+  const DU_LIEU = [
+    ['tranthemanh77@gmail.com', 5.5], ['hoang31xd@gmail.com', 0], ['trongpvin@gmail.com', 5.5],
+    ['hohongvan93@gmail.com', 5], ['lequanghong1984@gmail.com', 0], ['longsaovietpy@gmail.com', 10],
+    ['trongtoanxd2012@gmail.com', 7], ['buiquoclamtd@gmail.com', 7], ['tronghieushdk@gmail.com', 7],
+    ['dongphuong3112@gmail.com', 0], ['congtay1610@gmail.com', 2], ['vlnam0481@gmail.com', 8.5],
+    ['vantien.7799@gmail.com', 3], ['ktshongvu@gmail.com', 2], ['congchinh1603@gmail.com', 0],
+    ['duyhieu0983897677@gmail.com', 1], ['thoaicosevcopy@gmail.com', 0], ['ntht.hoaithuong.287@gmail.com', 0],
+    ['trungdang.const@gmail.com', 0], ['bienthiaivan@gmail.com', 0]
+  ];
+
+  const allUsers = listSupervisors();
+  const sheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
+  const data = sheet.getDataRange().getValues();
+  const boQua = [];
+
+  DU_LIEU.forEach(([email, phepDauThang]) => {
+    const u = allUsers.find(x => x.id.toLowerCase() === email.toLowerCase());
+    if (!u) { boQua.push(email); return; }
+
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === u.id && formatThangCell_(data[i][1]) === THANG) {
+        sheet.getRange(i + 1, 3).setValue(phepDauThang);
+        found = true;
+        break;
+      }
+    }
+    if (!found) sheet.appendRow([u.id, THANG, phepDauThang, 0, new Date()]);
+  });
+
+  const ketQua = `Đã seed Phép đầu tháng 7/2026 cho ${DU_LIEU.length - boQua.length}/${DU_LIEU.length} người. Bỏ qua (không khớp email nào trong DanhSachUser): ${boQua.join(', ') || '(không có)'}`;
+  Logger.log(ketQua);
+  return ketQua;
 }
 
 // =======================================================

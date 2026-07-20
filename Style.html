@@ -236,6 +236,84 @@
         button.dd-cell.editable:hover { border-color: var(--primary); }
         .dd-cell.full { background: var(--success); border-color: var(--success); color: #fff; }
         .dd-cell.half { background: #FDF1D6; border-color: #B8860B; color: #B8860B; }
+
+        /* --- Chấm công & Tăng ca (bảng rộng nhiều cột ngày, 2 cột đầu ghim khi cuộn ngang) --- */
+        #ccTable { border-collapse: separate; border-spacing: 0; font-size: 0.82rem; min-width: 100%; }
+        #ccTable th, #ccTable td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border-faint); }
+        #ccTable thead th { background: #f8fafc; color: var(--primary-dark); font-weight: 700; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.3px; text-align: center; padding: 8px 5px; white-space: nowrap; vertical-align: middle; }
+        #ccTable thead tr:last-child th { padding: 6px 1px 8px; font-size: 0.66rem; }
+        .cc-d-num { display: block; font-size: 0.78rem; font-weight: 800; color: var(--text-main); }
+        .cc-d-dow { display: block; font-weight: 600; color: var(--text-muted); text-transform: none; }
+        #ccTable thead th.cc-weekend { background: #FFF9E6; }
+        #ccTable thead th.cc-weekend .cc-d-dow { color: #B8860B; }
+
+        #ccTable td { padding: 3px; text-align: center; }
+        #ccTable tbody tr:hover td { background: #f8fafc; }
+        .cc-stt, .cc-name { position: sticky; z-index: 2; background: var(--card-bg); }
+        .cc-stt { left: 0; min-width: 32px; }
+        .cc-name { left: 32px; min-width: 168px; text-align: left; font-weight: 600; padding-left: 8px !important; box-shadow: 2px 0 4px rgba(15,23,42,0.05); }
+        #ccTable thead th.cc-stt, #ccTable thead th.cc-name { background: #f8fafc; z-index: 3; }
+        #ccTable tbody tr:hover .cc-name, #ccTable tbody tr:hover .cc-stt { background: #f1f5f9; }
+        .cc-name-inner { display: flex; align-items: center; gap: 7px; }
+        .cc-eye-btn { width: 22px; height: 22px; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; }
+        .cc-eye-btn:hover { color: var(--primary-dark); border-color: var(--primary); }
+        .cc-name-text { cursor: pointer; }
+        .cc-name-text:hover { color: var(--primary-dark); text-decoration: underline; }
+
+        .cc-sumcol { min-width: 68px; font-weight: 800; color: var(--primary-dark); background: #f5f8ff; font-size: 0.83rem; }
+        .cc-sumcol.cc-readonly { color: var(--text-muted); font-weight: 700; background: var(--card-bg); }
+        .cc-sumcol.cc-highlight { font-size: 0.95rem; background: #eef4ff; }
+        .cc-sumcol small { display: block; font-weight: 500; }
+        .cc-q-ok { color: var(--success); }
+        .cc-q-short { color: var(--danger); }
+        .cc-delta-pos { color: var(--success); }
+        .cc-delta-neg { color: var(--danger); }
+        .cc-delta-zero { color: var(--text-muted); }
+
+        .cc-daycell { min-width: 40px; padding: 0 !important; vertical-align: middle; }
+        .cc-daycell.cc-weekend { background: #FFFDF5; }
+        .cc-daycell-stack { display: flex; flex-direction: column; width: 100%; }
+        .cc-att-btn { width: 100%; height: 22px; border: none; border-bottom: 1px solid var(--border-faint); background: transparent; cursor: default; display: flex; align-items: center; justify-content: center; color: var(--border); font-weight: 800; font-size: 0.7rem; }
+        button.cc-att-btn { cursor: pointer; }
+        button.cc-att-btn:hover { background: rgba(2,132,199,0.06); }
+        .cc-att-btn.cc-full { background: var(--success); color: #fff; border-bottom-color: transparent; }
+        .cc-att-btn.cc-half { background: #FDF1D6; color: #B8860B; border-bottom-color: transparent; }
+        .cc-att-btn.cc-phep { background: #FDE4E1; color: #C0392B; border-bottom-color: transparent; }
+        .cc-ot-btn { width: 100%; height: 16px; border: none; background: transparent; cursor: default; display: flex; align-items: center; justify-content: center; color: var(--border); font-size: 0.62rem; font-weight: 700; }
+        button.cc-ot-btn { cursor: pointer; }
+        button.cc-ot-btn:hover { background: rgba(99,102,241,0.1); color: #6366F1; }
+        .cc-ot-btn.cc-filled { background: #EEF0FE; color: #6366F1; font-weight: 800; }
+
+        .cc-formula-box { background: var(--bg); border: 1px solid var(--border-faint); border-radius: 10px; padding: 12px 14px; margin: 12px 0 4px; display: grid; gap: 6px; font-size: 0.8rem; color: var(--text-main); }
+        .cc-formula-box b { color: var(--primary-dark); }
+        .cc-formula-box .cc-formula-total { font-weight: 700; color: var(--primary-dark); padding-top: 7px; margin-top: 2px; border-top: 1px dashed var(--border); }
+        .cc-legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 10px 0 0; font-size: 0.78rem; color: var(--text-muted); }
+        .cc-legend span.cc-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+        .cc-swatch { width: 13px; height: 13px; border-radius: 4px; display: inline-block; border: 1px solid var(--border); }
+        .cc-swatch.cc-full { background: var(--success); border-color: var(--success); }
+        .cc-swatch.cc-half { background: #FDF1D6; border-color: #B8860B; }
+        .cc-swatch.cc-phep { background: #FDE4E1; border-color: #C0392B; }
+        .cc-swatch.cc-weekend { background: #FFF9E6; }
+        .cc-swatch.cc-night { background: #6366F1; border-color: #6366F1; }
+
+        /* Popup Tăng ca */
+        .cc-field-row { display: flex; gap: 12px; }
+        .cc-field { flex: 1; }
+        .cc-quanhay-note { font-size: 0.75rem; color: #6366F1; font-weight: 600; margin: 6px 0 12px; min-height: 16px; }
+        .cc-breakdown { background: var(--bg); border: 1px solid var(--border-faint); border-radius: 10px; padding: 12px 14px; margin-bottom: 4px; display: grid; gap: 7px; }
+        .cc-breakdown .cc-brk-row, .cc-brk-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: var(--text-main); }
+        .cc-brk-lbl { color: var(--text-muted); }
+        .cc-brk-divider { height: 1px; background: var(--border); margin: 1px 0; }
+        .cc-brk-total { font-weight: 800; font-size: 0.94rem; color: var(--primary-dark); }
+
+        /* Popup Chi tiết công (chỉ xem) */
+        .cc-detail-section { margin-top: 14px; }
+        .cc-detail-section h4 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); margin: 0 0 6px; }
+        .cc-detail-item { display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem; padding: 5px 0; border-bottom: 1px solid var(--border-faint); }
+        .cc-detail-item:last-child { border-bottom: none; }
+        .cc-detail-val { font-weight: 700; color: #6366F1; flex-shrink: 0; }
+        .cc-detail-empty { font-size: 0.8rem; color: var(--text-muted); font-style: italic; }
+
         .kpi-box {
             display: flex; align-items: center; gap: 12px;
             background: var(--card-bg); border: 1px solid var(--border);

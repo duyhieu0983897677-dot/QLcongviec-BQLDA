@@ -73,7 +73,7 @@ function switchTab(tabId) {
     if (tabId === 'thanhtoan') safeRender_('renderThanhToan', 'Thanh toán');
     if (tabId === 'quyettoan') safeRender_('renderQuyetToan', 'Quyết toán');
     if (tabId === 'tiendothicong') safeRender_('renderTienDoThiCong', 'Tiến độ');
-    if (tabId === 'diemdanh') safeRender_('renderDiemDanh', 'Điểm danh & Phép');
+    if (tabId === 'chamcong') safeRender_('renderChamCong', 'Chấm công & Tăng ca');
     if (tabId === 'nguoidung') safeRender_('renderNguoiDung', 'Quản lý nhân sự');
     window.scrollTo(0, 0);
 }
@@ -192,7 +192,7 @@ function updateUI() {
     if (document.getElementById('thanhtoan') && document.getElementById('thanhtoan').classList.contains('active')) safeRender_('renderThanhToan', 'Thanh toán');
     if (document.getElementById('quyettoan') && document.getElementById('quyettoan').classList.contains('active')) safeRender_('renderQuyetToan', 'Quyết toán');
     if (document.getElementById('tiendothicong') && document.getElementById('tiendothicong').classList.contains('active')) safeRender_('renderTienDoThiCong', 'Tiến độ');
-    if (document.getElementById('diemdanh') && document.getElementById('diemdanh').classList.contains('active')) safeRender_('renderDiemDanh', 'Điểm danh & Phép');
+    if (document.getElementById('chamcong') && document.getElementById('chamcong').classList.contains('active')) safeRender_('renderChamCong', 'Chấm công & Tăng ca');
     if (document.getElementById('nguoidung') && document.getElementById('nguoidung').classList.contains('active')) safeRender_('renderNguoiDung', 'Quản lý nhân sự');
 }
 

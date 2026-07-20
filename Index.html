@@ -109,7 +109,7 @@
                     </div>
                 </div>
 
-                <button class="nav-btn side-nav-btn" onclick="switchTab('diemdanh')"><i class="fa-solid fa-calendar-check"></i> Điểm danh & Phép</button>
+                <button class="nav-btn side-nav-btn" onclick="switchTab('chamcong')"><i class="fa-solid fa-business-time"></i> Chấm công & Tăng ca</button>
                 <button class="nav-btn side-nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i> Quản lý nhân sự</button>
             </div>
         </aside>
@@ -142,8 +142,8 @@
                 <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #64748b;">
                     <i class="fa-solid fa-sitemap"></i><span>Gói thầu/Hạng mục</span>
                 </button>
-                <button class="nav-btn home-tile" onclick="switchTab('diemdanh')" style="--tile-c: #b8860b;">
-                    <i class="fa-solid fa-calendar-check"></i><span>Điểm danh</span>
+                <button class="nav-btn home-tile" onclick="switchTab('chamcong')" style="--tile-c: #6366F1;">
+                    <i class="fa-solid fa-business-time"></i><span>Chấm công</span>
                 </button>
             </div>
             <div class="home-tiles">
@@ -752,20 +752,36 @@
             </div>
         </section>
 
-        <!-- TAB: ĐIỂM DANH & PHÉP — ai cũng xem được, chỉ Admin/Thư ký BQLDA sửa được -->
-        <section id="diemdanh" class="tab-content">
+        <!-- TAB: CHẤM CÔNG & TĂNG CA — ai cũng xem được, chỉ Admin/Thư ký BQLDA sửa được (gộp thay tab
+             "Điểm danh & Phép" cũ — tab đó chỉ chấm được Thứ 7/CN, trùng với tab này nên đã bỏ) -->
+        <section id="chamcong" class="tab-content">
             <div class="card">
                 <div class="card-header-row">
-                    <div class="card-title"><i class="fa-solid fa-calendar-check"></i> Điểm danh Thứ 7/CN &amp; Sổ phép</div>
-                    <input type="month" id="ddThangPicker" class="ntd-input" style="width:auto;">
+                    <div class="card-title"><i class="fa-solid fa-business-time"></i> Chấm công &amp; Tăng ca tháng</div>
+                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                        <input type="month" id="ccThangPicker" class="ntd-input" style="width:auto;">
+                        <button id="ccBtnLuu" class="btn" style="background:var(--success); width:auto; padding:0.6rem 1rem;" onclick="luuThayDoiChamCong()" disabled><i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi</button>
+                    </div>
                 </div>
-                <p style="font-size:0.8rem; color:var(--text-muted); margin:-4px 0 10px;">
-                    Chỉ Quản trị hoặc Thư ký BQLDA tick được điểm danh / sửa Số ngày nghỉ. "Cộng phép tháng" tự tính từ điểm danh cuối tuần; đầu tháng sau tự cộng vào "Phép + bù".
-                </p>
+                <div class="cc-formula-box">
+                    <div>Mỗi ô ngày: <b>hàng trên</b> = chấm công (bấm xoay vòng trống → cả ngày ✓ → nửa ngày ½ → nghỉ phép P → trống), <b>hàng dưới</b> = tăng ca (bấm mở popup nhập giờ, tự tách hệ số theo mốc 22h: trước 22h ×1, từ 22h ×2).</div>
+                    <div><b>Định mức Thứ 7</b> = 0,5 công × số Thứ 7 trong tháng. Làm đủ/dư định mức thì được nghỉ các Thứ 7 còn lại không mất phép; làm thiếu thì phần thiếu trừ thẳng vào Phép.</div>
+                    <div>Đánh dấu <b>P</b>: nếu tháng đó <b>có đi làm Thứ 7</b> (dù 1 buổi) thì được <b>miễn trừ</b>; chỉ khi cả tháng không đi làm Thứ 7 nào thì P mới bị trừ đủ vào Phép. Chủ Nhật đi làm luôn cộng thẳng vào Phép.</div>
+                    <div class="cc-formula-total">Cộng/Trừ phép tháng = Công Chủ Nhật + (Công Thứ 7 − Định mức Thứ 7) − Số ngày P (chỉ trừ khi tháng đó 0 công Thứ 7)</div>
+                    <div>Cột "Phép đầu tháng" tự cộng thêm 1 ngày mỗi đầu tháng; chỉ <b>Quản trị</b> sửa tay được (ô số ở đầu mỗi dòng).</div>
+                </div>
+                <div class="cc-legend">
+                    <span class="cc-legend-item"><span class="cc-swatch cc-full"></span> Đi làm cả ngày</span>
+                    <span class="cc-legend-item"><span class="cc-swatch cc-half"></span> Đi làm nửa ngày</span>
+                    <span class="cc-legend-item"><span class="cc-swatch cc-phep"></span> Nghỉ phép (P)</span>
+                    <span class="cc-legend-item"><span class="cc-swatch cc-weekend"></span> Thứ 7 / Chủ nhật</span>
+                    <span class="cc-legend-item"><span class="cc-swatch cc-night"></span> Có tăng ca</span>
+                </div>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin:10px 0 0;">Bấm icon <i class="fa-solid fa-eye"></i> hoặc bấm thẳng vào tên nhân sự để xem đầy đủ chi tiết công trong tháng (ai cũng xem được).</p>
                 <div class="table-responsive">
-                    <table class="data-table">
-                        <thead id="ddThead"></thead>
-                        <tbody id="ddBody"></tbody>
+                    <table id="ccTable">
+                        <thead id="ccThead"></thead>
+                        <tbody id="ccBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -1264,6 +1280,56 @@
         </div>
     </div>
 
+    <!-- MODAL: NHẬP GIỜ TĂNG CA (tab Chấm công & Tăng ca) -->
+    <div id="tangCaModal" class="modal">
+        <div class="modal-content" style="max-width:420px;">
+            <h3 id="tcModalTitle" style="margin-bottom:2px; color:var(--primary-dark);"><i class="fa-solid fa-business-time"></i> Tăng ca</h3>
+            <p id="tcModalSub" style="font-size:0.8rem; color:var(--text-muted); margin:0 0 14px;">Ngày --</p>
+            <div class="cc-field-row">
+                <div class="cc-field form-group" style="margin-bottom:0;">
+                    <label>Giờ bắt đầu</label>
+                    <input type="time" id="tcModalStart" class="form-control" step="1800" oninput="recalcTangCaModal()">
+                </div>
+                <div class="cc-field form-group" style="margin-bottom:0;">
+                    <label>Giờ kết thúc</label>
+                    <input type="time" id="tcModalEnd" class="form-control" step="1800" oninput="recalcTangCaModal()">
+                </div>
+            </div>
+            <div class="cc-quanhay-note" id="tcQuaNgayNote"></div>
+            <div class="cc-breakdown">
+                <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ thường (trước 22h) ×1</span><span id="tcBdThuong">0h</span></div>
+                <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ đêm (từ 22h) ×2</span><span id="tcBdDem">0h</span></div>
+                <div class="cc-brk-divider"></div>
+                <div class="cc-brk-row cc-brk-total"><span>Tổng quy đổi</span><span id="tcBdTong">0h</span></div>
+            </div>
+            <div class="modal-actions" style="margin-top:14px;">
+                <button id="tcModalXoaBtn" class="btn btn-danger" style="display:none;" onclick="deleteTangCaModal()"><i class="fa-solid fa-trash"></i> Xoá</button>
+                <button class="btn" style="background:var(--text-muted);" onclick="closeTangCaModal()">Hủy</button>
+                <button class="btn" style="background:var(--success);" onclick="saveTangCaModal()">Lưu</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: CHI TIẾT CÔNG 1 NHÂN SỰ (chỉ xem, ai cũng mở được) -->
+    <div id="chiTietCongModal" class="modal">
+        <div class="modal-content" style="max-width:460px;">
+            <h3 id="detModalTitle" style="margin-bottom:2px; color:var(--primary-dark);"><i class="fa-solid fa-circle-info"></i> Chi tiết công</h3>
+            <p id="detModalSub" style="font-size:0.8rem; color:var(--text-muted); margin:0 0 14px;">Tháng --</p>
+            <div class="cc-breakdown" id="detModalBreakdown"></div>
+            <div class="cc-detail-section">
+                <h4>Ngày tăng ca trong tháng</h4>
+                <div id="detModalOtList"></div>
+            </div>
+            <div class="cc-detail-section">
+                <h4>Ngày nghỉ phép (P) trong tháng</h4>
+                <div id="detModalPList"></div>
+            </div>
+            <div class="modal-actions" style="margin-top:16px;">
+                <button class="btn" style="background:var(--primary);" onclick="closeChiTietCongModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: TẠO ĐỢT THANH TOÁN -->
     <div id="paymentModal" class="modal">
         <div class="modal-content" style="max-width:560px;">
@@ -1416,7 +1482,6 @@
     <?!= include('4_ViecCuaToi'); ?>
     <?!= include('5_Dashboard'); ?>
     <?!= include('6_NguoiDung'); ?>
-    <?!= include('7_DiemDanh'); ?>
     <?!= include('8_ThongBao'); ?>
     <?!= include('9_HopDong'); ?>
     <?!= include('10_BOQ'); ?>
@@ -1424,5 +1489,6 @@
     <?!= include('12_ThanhToan'); ?>
     <?!= include('13_QuyetToan'); ?>
     <?!= include('14_TienDoThiCong'); ?>
+    <?!= include('15_ChamCong'); ?>
 </body>
 </html>
