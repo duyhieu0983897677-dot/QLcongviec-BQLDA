@@ -1004,6 +1004,18 @@
         </div>
     </div>
 
+    <!-- MODAL: NHẬT KÝ BÁO CÁO THEO NGÀY (bấm tên công việc ở bảng "Báo cáo chi tiết" — tab Tổng quan) -->
+    <div id="bcnkModal" class="modal">
+        <div class="modal-content" style="max-width:640px;">
+            <h3 style="margin-bottom:5px; color:var(--primary-dark);"><i class="fa-solid fa-calendar-check"></i> <span id="bcnkTitle">--</span></h3>
+            <div id="bcnkMeta" class="bcnk-meta"></div>
+            <div id="bcnkBody"></div>
+            <div class="modal-actions">
+                <button class="btn" style="background:var(--text-muted);" onclick="closeBcNhatKyModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
     <!-- MODAL: THÊM CÔNG VIỆC HÀNG LOẠT (1 hoặc nhiều dòng cùng lúc) -->
     <div id="themCongViecHangLoatModal" class="modal">
         <div class="modal-content" style="max-width:1200px;">

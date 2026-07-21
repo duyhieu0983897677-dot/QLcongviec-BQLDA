@@ -365,7 +365,7 @@ function renderBcDetail() {
                 <tr>
                     <td class="text-center" data-col="stt">${BC_PHAN_ROMAN[phan]}.${counter}</td>
                     <td class="text-center" data-col="mahangmuc">${(cv.maHangMucList || []).join(', ') || '--'}</td>
-                    <td data-col="ten"><div class="t-name-row"><span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${escapeHtml(cv.tenCongViec)}</span>${commentBadgeHtml(cv)}</div></td>
+                    <td data-col="ten"><div class="t-name-row"><button type="button" class="t-name-link" onclick="openBcNhatKyModal('${cv.maCongViec}')" title="${escapeHtml(cv.tenCongViec)} — bấm để xem nhật ký báo cáo theo ngày"><span class="t-name">${escapeHtml(cv.tenCongViec)}</span></button>${commentBadgeHtml(cv)}</div></td>
                     <td class="text-center" data-col="nguoiphutrach">${escapeHtml(nameOfUser(cv.nguoiTaoId))}</td>
                     <td class="text-center" data-col="chucdanh">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${escapeHtml(chucDanh)}</span>` : '--'}</td>
                     <td class="text-center" data-col="ngaybatdau">${formatVN(cv.ngayBatDauKH)}</td>
@@ -664,5 +664,177 @@ function formatTienGon_(value) {
     if (value >= 1000000000) return (value / 1000000000).toFixed(1) + ' Tỷ';
     if (value >= 1000000) return (value / 1000000).toFixed(0) + ' Tr';
     return value;
+}
+
+// =======================================================
+// NHẬT KÝ BÁO CÁO THEO NGÀY — popup khi bấm tên công việc ở bảng "Báo cáo chi tiết" (renderBcDetail
+// ở trên), cho biết ngày nào đã báo cáo (kèm %) và ngày nào bị thiếu, để biết cần nhắc nhân sự nào
+// vào đúng ngày nào. Dùng lại getNhatKyGanNhat() đã có sẵn ở Code.js (truyền limit lớn để lấy TOÀN
+// BỘ log của 1 công việc — cv.recentLogs trong congViec toàn cục chỉ giữ 5 log gần nhất, không đủ để
+// vẽ lịch), KHÔNG cần thêm hàm backend mới.
+// =======================================================
+const BCNK_DOW_ = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+let bcNkNgayLeSet_ = null; // Set các ngày lễ 'yyyy-MM-dd' — tải 1 lần rồi dùng lại cho mọi lần mở popup.
+
+function isoOfDate_(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function addDaysIso_(iso, n) {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return isoOfDate_(d);
+}
+
+function openBcNhatKyModal(maCongViec) {
+    const cv = bcAllCongViec.find(c => c.maCongViec === maCongViec);
+    if (!cv) return;
+    document.getElementById('bcnkModal').classList.add('active');
+    document.getElementById('bcnkTitle').textContent = cv.tenCongViec;
+    const hmLabel = (cv.maHangMucList || []).join(', ') || '--';
+    document.getElementById('bcnkMeta').innerHTML = `
+        <span>Mã hạng mục: <b>${escapeHtml(hmLabel)}</b></span><span class="sep">•</span>
+        <span>Người phụ trách: <b>${escapeHtml(nameOfUser(cv.nguoiTaoId))}</b></span><span class="sep">•</span>
+        <span>Kế hoạch: <b>${formatVN(cv.ngayBatDauKH)} – ${formatVN(cv.ngayKetThucKH)}</b></span><span class="sep">•</span>
+        <span class="bc-badge ${cv.trangThaiMau}">${trangThaiLabelDayDu_(cv)}</span>`;
+    document.getElementById('bcnkBody').innerHTML = '<p class="bcnk-empty"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải nhật ký báo cáo…</p>';
+
+    const ensureHolidays = bcNkNgayLeSet_
+        ? Promise.resolve()
+        : gsRun('getDanhSachNgayLe').then(json => { bcNkNgayLeSet_ = new Set(JSON.parse(json).map(nl => nl.ngay)); });
+
+    ensureHolidays
+        .then(() => gsRun('getNhatKyGanNhat', maCongViec, 100000))
+        .then(json => renderBcNkBody_(cv, JSON.parse(json)))
+        .catch(err => {
+            document.getElementById('bcnkBody').innerHTML = '<p class="bcnk-empty">Không tải được nhật ký báo cáo.</p>';
+            handleBackendError(err);
+        });
+}
+
+function closeBcNhatKyModal() {
+    document.getElementById('bcnkModal').classList.remove('active');
+}
+
+function renderBcNkBody_(cv, logs) {
+    const body = document.getElementById('bcnkBody');
+    if (!cv.ngayBatDauKH) {
+        body.innerHTML = '<p class="bcnk-empty">Công việc chưa đặt Ngày bắt đầu kế hoạch nên chưa có lịch báo cáo để xem.</p>';
+        return;
+    }
+    const today = getTodayDate();
+    if (today < cv.ngayBatDauKH) {
+        body.innerHTML = `<p class="bcnk-empty">Chưa tới ngày bắt đầu kế hoạch (dự kiến ${formatVN(cv.ngayBatDauKH)}) nên chưa có báo cáo nào được yêu cầu.</p>`;
+        return;
+    }
+
+    // Cộng dồn % theo từng ngày — 1 ngày có thể có nhiều dòng log (báo cáo bổ sung cùng ngày).
+    const pctByDate = {};
+    logs.forEach(l => { pctByDate[l.ngayBaoCao] = (pctByDate[l.ngayBaoCao] || 0) + l.phanTramNgay; });
+
+    // Việc đã Hoàn thành: chỉ tính đến đúng ngày lũy kế chạm mốc 100% (không kéo dài tới hôm nay) —
+    // giống hệt cách getData() ở Code.js xác định ngày hoàn thành thực tế cho trạng thái "Trễ tiến độ".
+    let end = today;
+    if (cv.luyKe >= 100) {
+        const sortedDates = Object.keys(pctByDate).sort();
+        let running = 0, ngayHT = null;
+        for (const d of sortedDates) { running += pctByDate[d]; if (running >= 99.999) { ngayHT = d; break; } }
+        end = ngayHT || today;
+    }
+    if (end < cv.ngayBatDauKH) end = cv.ngayBatDauKH;
+
+    // Toàn bộ ngày từ lúc bắt đầu tới "end" — ngày nào không phải Chủ nhật/Ngày lễ mà không có báo
+    // cáo thì coi là "Chưa báo cáo" (validateVaGhiNhatKy_ ở Code.js chỉ cho báo cáo đúng ngày hôm đó
+    // nên không có báo cáo tức là hôm đó nhân sự đã không nhập gì).
+    const days = [];
+    for (let iso = cv.ngayBatDauKH; iso <= end; iso = addDaysIso_(iso, 1)) {
+        const dow = new Date(iso + 'T00:00:00').getDay();
+        const isOff = dow === 0 || bcNkNgayLeSet_.has(iso);
+        const pct = pctByDate[iso];
+        days.push({ iso, dow, isOff, pct, state: isOff ? 'off' : (pct > 0 ? 'reported' : 'missing') });
+    }
+
+    const expected = days.filter(d => !d.isOff).length;
+    const reported = days.filter(d => d.state === 'reported').length;
+    const missingDays = days.filter(d => d.state === 'missing');
+    const pctReported = expected > 0 ? Math.round((reported / expected) * 100) : 0;
+    const pctMissing = expected > 0 ? Math.round((missingDays.length / expected) * 100) : 0;
+
+    const statHtml = `<div class="bcnk-stat-row">
+        <div class="bcnk-stat"><div class="bcnk-stat-label">Lũy kế hiện tại</div><div class="bcnk-stat-value">${cv.luyKe || 0}%</div></div>
+        <div class="bcnk-stat"><div class="bcnk-stat-label">Ngày phải báo cáo</div><div class="bcnk-stat-value">${expected}</div><div class="bcnk-stat-sub">${formatVN(cv.ngayBatDauKH)} → ${formatVN(end)}</div></div>
+        <div class="bcnk-stat ok"><div class="bcnk-stat-label">Đã báo cáo</div><div class="bcnk-stat-value">${reported}</div><div class="bcnk-stat-sub">${pctReported}% số ngày</div></div>
+        <div class="bcnk-stat ${missingDays.length > 0 ? 'warn' : 'ok'}"><div class="bcnk-stat-label">Chưa báo cáo</div><div class="bcnk-stat-value">${missingDays.length}</div><div class="bcnk-stat-sub">${pctMissing}% số ngày</div></div>
+    </div>`;
+
+    body.innerHTML = statHtml + renderBcNkCalendar_(days) + renderBcNkMissing_(missingDays, today) +
+        '<p class="bcnk-note">* Không tính Chủ nhật và các ngày đã khai báo trong danh sách Ngày lễ (mục Chấm công).</p>';
+}
+
+// Vẽ lịch dạng lưới theo từng tháng có mặt trong khoảng [ngày bắt đầu KH .. end] — ngày ngoài
+// khoảng này (trước lúc bắt đầu, hoặc sau "end" trong cùng tháng cuối) hiện mờ (lớp "na"), chỉ để
+// nhìn trọn tháng cho dễ theo dõi, không tính vào thống kê.
+function renderBcNkCalendar_(days) {
+    const dataByIso = {};
+    days.forEach(d => { dataByIso[d.iso] = d; });
+    const startYm = days[0].iso.slice(0, 7);
+    const lastYm = days[days.length - 1].iso.slice(0, 7);
+    const today = getTodayDate();
+
+    const months = [];
+    for (let ym = startYm; ym <= lastYm;) {
+        months.push(ym);
+        const [y, m] = ym.split('-').map(Number);
+        const next = new Date(y, m, 1);
+        ym = next.getFullYear() + '-' + String(next.getMonth() + 1).padStart(2, '0');
+    }
+
+    const monthBlocks = months.map(ym => {
+        const [y, m] = ym.split('-').map(Number);
+        const firstOfMonth = new Date(y, m - 1, 1);
+        const daysInMonth = new Date(y, m, 0).getDate();
+        const leadPad = (firstOfMonth.getDay() + 6) % 7; // Lưới bắt đầu từ T2 — CN(0) phải rơi cột cuối.
+
+        let cells = '';
+        for (let i = 0; i < leadPad; i++) cells += '<div class="bcnk-cell pad"></div>';
+        for (let dnum = 1; dnum <= daysInMonth; dnum++) {
+            const iso = ym + '-' + String(dnum).padStart(2, '0');
+            const info = dataByIso[iso];
+            if (!info) {
+                cells += `<div class="bcnk-cell na"><span class="bcnk-d">${dnum}</span><span class="bcnk-v">—</span></div>`;
+            } else {
+                const cls = info.state + (iso === today ? ' today' : '');
+                const val = info.state === 'reported' ? (Math.round(info.pct * 10) / 10) + '%'
+                    : info.state === 'missing' ? 'Thiếu' : BCNK_DOW_[info.dow];
+                cells += `<div class="bcnk-cell ${cls}"><span class="bcnk-d">${dnum}</span><span class="bcnk-v">${val}</span></div>`;
+            }
+        }
+
+        return `<div class="bcnk-month-lbl">Tháng ${m}/${y}</div>
+            <div class="bcnk-cal-grid">
+                <div class="bcnk-dow">T2</div><div class="bcnk-dow">T3</div><div class="bcnk-dow">T4</div><div class="bcnk-dow">T5</div><div class="bcnk-dow">T6</div><div class="bcnk-dow">T7</div><div class="bcnk-dow">CN</div>
+                ${cells}
+            </div>`;
+    }).join('');
+
+    return monthBlocks + `<div class="bcnk-legend">
+        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:var(--ok-dim); border:1px solid var(--ok);"></span>Đã báo cáo (% ngày đó)</div>
+        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:var(--warn-dim); border:1.5px solid var(--warn);"></span>Chưa báo cáo</div>
+        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:var(--late-dim);"></span>Chủ nhật / Ngày lễ</div>
+        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:#fff; border:1px dashed var(--border);"></span>Ngoài kế hoạch</div>
+    </div>`;
+}
+
+function renderBcNkMissing_(missingDays, today) {
+    if (missingDays.length === 0) {
+        return `<div class="bcnk-ok"><i class="fa-solid fa-circle-check"></i><p>Đã báo cáo đầy đủ tất cả các ngày làm việc trong kế hoạch — không có ngày nào bị thiếu.</p></div>`;
+    }
+    const chips = missingDays.map(d => {
+        const label = BCNK_DOW_[d.dow] + ', ' + formatVN(d.iso) + (d.iso === today ? ' (hôm nay)' : '');
+        return `<span class="bcnk-chip">${label}</span>`;
+    }).join('');
+    return `<div class="bcnk-miss">
+        <div class="bcnk-miss-head"><i class="fa-solid fa-triangle-exclamation"></i> ${missingDays.length} ngày chưa nhập báo cáo — cần nhắc nhân sự</div>
+        <div class="bcnk-chip-row">${chips}</div>
+    </div>`;
 }
 </script>
