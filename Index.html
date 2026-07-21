@@ -753,17 +753,18 @@
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <input type="month" id="ccThangPicker" class="ntd-input" style="width:auto;">
                         <button type="button" class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="ccLamMoi_()" title="Tải lại dữ liệu mới nhất từ máy chủ"><i class="fa-solid fa-rotate"></i> Làm mới</button>
+                        <button id="ccBtnNgayLe" type="button" class="btn btn-sm" style="background:var(--text-muted); width:auto; display:none;" onclick="openNgayLeModal()" title="Quản lý ngày nghỉ lễ"><i class="fa-solid fa-calendar-day"></i> Ngày lễ</button>
                         <button id="ccBtnLuu" class="btn" style="background:var(--success); width:auto; padding:0.6rem 1rem;" onclick="luuThayDoiChamCong()" disabled><i class="fa-solid fa-floppy-disk"></i> Lưu thay đổi</button>
                     </div>
                 </div>
-                <div class="cc-formula-box">
+                <div class="cc-formula-box" id="ccFormulaBox">
                     <div>Mỗi ô ngày: <b>hàng trên</b> = chấm công (bấm xoay vòng trống → cả ngày ✓ → nửa ngày ½ → nghỉ phép P → trống), <b>hàng dưới</b> = tăng ca (bấm mở popup nhập giờ, tự tách hệ số theo mốc 22h: trước 22h ×1, từ 22h ×2).</div>
-                    <div><b>Định mức cuối tuần</b> = 0,5 công × số Thứ 7 trong tháng — <b>đi làm Chủ Nhật thay Thứ 7 vẫn tính đủ định mức</b> (không bắt buộc đúng ngày Thứ 7). Làm đủ/dư định mức thì được nghỉ các buổi cuối tuần còn lại không mất phép; làm thiếu thì phần thiếu trừ thẳng vào Phép.</div>
-                    <div>Đánh dấu <b>P</b>: nếu tháng đó <b>có đi làm cuối tuần</b> (Thứ 7 hoặc Chủ Nhật, dù 1 buổi) thì được <b>miễn trừ</b>; chỉ khi cả tháng không đi làm cuối tuần buổi nào thì P mới bị trừ đủ vào Phép.</div>
-                    <div class="cc-formula-total">Cộng/Trừ phép tháng = (Công Thứ 7 + Công Chủ Nhật − Định mức cuối tuần) − Số ngày P (chỉ trừ khi tháng đó 0 công cuối tuần)</div>
-                    <div><b>Số công thực làm</b> = đúng số công đã chấm (ngày thường + Thứ 7 + Chủ Nhật, không giới hạn) — ghi nhận chấm công thuần tuý. <b>Số công tính lương</b> = cơ sở tính lương: cuối tuần làm <b>dư</b> định mức thì chỉ tính tới đúng định mức (phần dư đã quy đổi sang Phép, không cộng thêm vào lương kẻo trả 2 lần); làm <b>thiếu</b> thì không bị trừ thêm ở đây (chỉ trừ Phép, không phạt kép vào lương); <b>cộng thêm Công TC quy đổi</b> (xem bên dưới).</div>
-                    <div>Cột "Phép đầu tháng" tự cộng thêm 1 ngày mỗi đầu tháng, nhưng <b>chỉ áp dụng cho nhân sự chính thức (Đang hoạt động)</b> — Thử việc không có, Nghỉ việc bị đóng băng (không cộng/trừ thêm gì); chỉ <b>Quản trị</b> sửa tay được (ô số ở đầu mỗi dòng).</div>
-                    <div><b>Giờ tăng ca → Công TC quy đổi</b>: cứ đủ <b>4h</b> (cộng dồn giờ dư tháng trước + giờ phát sinh tháng này) chốt <b>0,5 công</b>, đủ <b>8h</b> chốt <b>1 công</b> — cộng thẳng vào Số công tính lương; giờ lẻ chưa đủ 4h tự động <b>chuyển sang tháng sau</b> cộng dồn tiếp (xem popup "Chi tiết công").</div>
+                    <div>Bảng chỉ hiện <b>4 số quan trọng nhất</b>: <b>Số công tính lương</b>, <b>Phép còn lại</b>, <b>Giờ TC dư (bù tháng sau)</b>, <b>Công bù sang tháng (dự kiến)</b> — bấm tên nhân sự để xem đầy đủ chi tiết Phép/Bù (kể cả sửa "Phép/Bù đầu tháng" nếu là Quản trị).</div>
+                    <div>App tách riêng <b>2 sổ</b> theo đúng cách BQLDA đang làm tay trên Excel — <b>Phép</b> (nghỉ phép chuẩn) và <b>Bù</b> (nghỉ bù từ cuối tuần/tăng ca) — không gộp chung như trước.</div>
+                    <div class="cc-formula-total">SỔ PHÉP: Trừ phép (ngày P) — chỉ trừ khi tháng đó <b>không phát sinh Bù nào</b>; có phát sinh Bù (dù ít) thì mọi ngày P trong tháng được <b>miễn trừ</b>. Tự cộng thêm 1 ngày mỗi đầu tháng, nhưng <b>chỉ áp dụng cho nhân sự chính thức (Đang hoạt động)</b> — Thử việc không có; Nghỉ việc bị đóng băng hoàn toàn.</div>
+                    <div class="cc-formula-total">SỔ BÙ: Bù phát sinh = phần cuối tuần <b>vượt định mức</b> (0,5 công × số Thứ 7 trong tháng — đi làm Chủ Nhật thay Thứ 7 vẫn tính đủ định mức) + <b>Công TC quy đổi</b> từ giờ tăng ca. Làm cuối tuần <b>thiếu</b> định mức không bị trừ Bù (Bù chỉ tăng, không âm) — áp dụng cho <b>mọi</b> nhân sự, kể cả Thử việc.</div>
+                    <div><b>Giờ tăng ca → Công TC quy đổi</b>: cứ đủ <b>4h</b> (cộng dồn giờ dư tháng trước + giờ phát sinh tháng này) chốt <b>0,5 công</b>, đủ <b>8h</b> chốt <b>1 công</b> — cộng vào sổ <b>Bù</b> (không cộng vào lương); giờ lẻ chưa đủ 4h tự động <b>chuyển sang tháng sau</b> cộng dồn tiếp — đây chính là "Giờ TC dư" hiện ở bảng chính.</div>
+                    <div><b>Số công thực làm</b> = đúng số công đã chấm (ngày thường + Thứ 7 + Chủ Nhật, không giới hạn) — ghi nhận chấm công thuần tuý. <b>Số công tính lương</b> = cơ sở tính lương: cuối tuần làm <b>dư</b> định mức thì chỉ tính tới đúng định mức (phần dư đã dồn sang Bù ở trên, không cộng thêm vào lương kẻo trả 2 lần); làm <b>thiếu</b> thì không bị trừ thêm ở đây (không phạt kép). Tăng ca <b>không</b> cộng vào lương — chỉ vào Bù để nghỉ bù sau.</div>
                 </div>
                 <div class="cc-legend">
                     <span class="cc-legend-item"><span class="cc-swatch cc-full"></span> Đi làm cả ngày</span>
@@ -772,7 +773,8 @@
                     <span class="cc-legend-item"><span class="cc-swatch cc-weekend"></span> Thứ 7 / Chủ nhật</span>
                     <span class="cc-legend-item"><span class="cc-swatch cc-night"></span> Có tăng ca</span>
                 </div>
-                <p style="font-size:0.8rem; color:var(--text-muted); margin:10px 0 0;">Bấm icon <i class="fa-solid fa-eye"></i> hoặc bấm thẳng vào tên nhân sự để xem đầy đủ chi tiết công trong tháng (ai cũng xem được).</p>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin:10px 0 0;">Bấm vào tên nhân sự để xem đầy đủ chi tiết công trong tháng (ai cũng xem được).</p>
+                <h4 id="ccCaptionThang" style="margin:14px 0 6px; color:var(--primary-dark);"></h4>
                 <div class="table-responsive">
                     <table id="ccTable">
                         <thead id="ccThead"></thead>
@@ -1321,6 +1323,24 @@
             </div>
             <div class="modal-actions" style="margin-top:16px;">
                 <button class="btn" style="background:var(--primary);" onclick="closeChiTietCongModal()">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: QUẢN LÝ NGÀY LỄ (chỉ Admin) — dùng để tính "Số ngày công chuẩn dự kiến" tham khảo ở tab
+         Chấm công, không ảnh hưởng công thức tính công cá nhân -->
+    <div id="ngayLeModal" class="modal">
+        <div class="modal-content" style="max-width:420px;">
+            <h3 style="margin-bottom:2px; color:var(--primary-dark);"><i class="fa-solid fa-calendar-day"></i> Quản lý ngày lễ</h3>
+            <p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 14px;">Chỉ dùng để tính "Số ngày công chuẩn dự kiến" tham khảo ở tab Chấm công — không ảnh hưởng cách tính công của từng nhân sự.</p>
+            <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <input type="date" id="ngayLeNewDate" class="ntd-input" style="flex:1;">
+                <input type="text" id="ngayLeNewTen" class="ntd-input" placeholder="Tên ngày lễ (VD: Quốc khánh)" style="flex:2;">
+                <button type="button" class="btn btn-sm" style="background:var(--success); width:auto;" onclick="themNgayLe_()"><i class="fa-solid fa-plus"></i></button>
+            </div>
+            <div id="ngayLeList" style="max-height:300px; overflow-y:auto;"></div>
+            <div class="modal-actions" style="margin-top:16px;">
+                <button class="btn" style="background:var(--primary);" onclick="closeNgayLeModal()">Đóng</button>
             </div>
         </div>
     </div>

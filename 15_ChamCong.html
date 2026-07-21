@@ -7,7 +7,16 @@
    này) + tăng ca theo giờ bắt đầu/kết thúc (tự tách hệ số theo mốc
    22h). Ai cũng xem được (giống getData() không cần đăng nhập); chỉ
    Admin hoặc Chức danh "Thư ký BQLDA" chấm công / sửa tăng ca được
-   (canEditChamCong()) — riêng "Phép đầu tháng" chỉ Admin sửa được.
+   (canEditChamCong()) — riêng "Phép/Bù đầu tháng" (trong popup Chi
+   tiết công) chỉ Admin sửa được.
+
+   Bảng chính CHỈ hiện 4 cột nhân sự thực sự cần xem hàng ngày: Số công
+   tính lương, Phép còn lại, Giờ TC dư (bù tháng sau), Công bù sang tháng
+   (dự kiến) — mọi chi tiết còn lại (Phép/Bù đầu-cuối tháng, breakdown
+   cuối tuần/tăng ca...) chuyển hết vào popup "Chi tiết công"
+   (openChiTietCongModal) để bảng đỡ rối. Ô giải thích cách tính
+   (#ccFormulaBox) chỉ Admin thấy — nhân sự thường không cần biết công
+   thức, chỉ cần xem 4 số trên.
 
    Dữ liệu tải riêng theo tháng qua getChamCongThang(thang) — server đã
    tính sẵn mọi cột tổng hợp (Công Thứ 7/Định mức, Cộng-Trừ phép, Phép
@@ -17,7 +26,10 @@
    Bấm 1 ô CHỈ sửa cục bộ trên trình duyệt (không gọi server, không load lại) — mọi thay đổi gom vào
    ccPendingCC/ccPendingTC, đến khi bấm nút "Lưu thay đổi" (luuThayDoiChamCong) mới gộp thành ĐÚNG 1
    lượt gọi capNhatChamCongHangLoat rồi mới load lại bảng 1 lần. Tránh tình trạng bấm xong 1 ô là bị
-   giật/load lại ngay, rất khó chấm công liên tiếp nhiều ô/nhiều người.
+   giật/load lại ngay, rất khó chấm công liên tiếp nhiều ô/nhiều người. Sửa Phép/Bù đầu tháng (Admin,
+   trong popup) cũng theo tinh thần này — chỉ cập nhật CỤC BỘ (ccCapNhatPhepDauThangLocal_/
+   ccCapNhatBuDauThangLocal_) sau khi lưu server thành công, KHÔNG loadChamCong(forceReload=true) nữa
+   (trước đây làm vậy khiến vẽ lại TOÀN BỘ bảng, cảm giác như trang tự load lại rất khó chịu).
 
    DANH SÁCH HÀM CHÍNH:
    - renderChamCong()        : Điểm vào, đặt tháng mặc định rồi tải dữ liệu
@@ -26,13 +38,18 @@
                                forceReload=true (sau khi Lưu, hoặc bấm "Làm mới") — xem chú thích ở
                                ccCache_ phía trên vì sao cache theo tháng quan trọng cho tốc độ.
    - ccLamMoi_()             : Nút "Làm mới" — bỏ qua cache, luôn tải lại từ server
-   - renderChamCongTable()   : Dựng thead (cột tổng hợp + từng ngày) + tbody
+   - renderChamCongTable()   : Dựng thead (3 cột tổng hợp + từng ngày) + tbody
    - toggleChamCongCell()    : Bấm ô chấm công 1 ngày, xoay vòng trống→1→0,5→P→trống — CHỈ sửa cục bộ
    - openTangCaModal()       : Mở popup nhập giờ tăng ca cho 1 ngày, có breakdown 22h trực tiếp
    - saveTangCaModal()/deleteTangCaModal() : Ghi nhận tăng ca của popup đang mở — CHỈ sửa cục bộ
    - luuThayDoiChamCong()    : Gộp toàn bộ pending thành 1 lượt gọi server rồi mới load lại
-   - openChiTietCongModal()  : Mở popup xem đầy đủ thông tin công của 1 nhân sự (ai cũng xem được)
-   - savePhepDauThangCC()    : Chỉ Admin — sửa trực tiếp "Phép đầu tháng" (adminCapNhatPhepDauThang)
+   - openChiTietCongModal()  : Mở popup xem đầy đủ thông tin công của 1 nhân sự (ai cũng xem được);
+                               Admin thấy thêm ô sửa Phép/Bù đầu tháng ngay trong popup này
+   - saveDetPhepDauThang_()/saveDetBuDauThang_() : Chỉ Admin — bấm nút "Lưu" cạnh ô Phép/Bù đầu tháng
+                               (trong popup) mới lưu, KHÔNG tự lưu khi rời focus khỏi ô (onchange) nữa.
+   - openNgayLeModal()/themNgayLe_()/xoaNgayLe_() : Chỉ Admin — quản lý danh sách ngày nghỉ lễ, chỉ
+                               dùng để tính "Số ngày công chuẩn dự kiến" tham khảo ở dòng tiêu đề bảng
+                               (không ảnh hưởng công thức tính công của từng nhân sự).
    ================================================================ */
 
 let ccCurrentThang = '';
@@ -127,7 +144,7 @@ function loadChamCong(thang, forceReload) {
     return;
   }
 
-  document.getElementById('ccBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Đang tải…</td></tr>';
+  document.getElementById('ccBody').innerHTML = '<tr><td colspan="16" class="text-center" style="padding:20px; color:gray;">Đang tải…</td></tr>';
   gsRun('getChamCongThang', thang)
     .then(json => {
       ccData = JSON.parse(json);
@@ -158,18 +175,24 @@ function renderChamCongTable() {
   if (!ccData) return;
   const editable = canEditChamCong();
   document.getElementById('ccBtnLuu').style.display = editable ? '' : 'none';
+  const formulaBox = document.getElementById('ccFormulaBox');
+  if (formulaBox) formulaBox.style.display = currentRole === 'ADMIN' ? '' : 'none';
+  const btnNgayLe = document.getElementById('ccBtnNgayLe');
+  if (btnNgayLe) btnNgayLe.style.display = currentRole === 'ADMIN' ? '' : 'none';
   const thang = ccData.thang;
   const soNgay = ccData.soNgay;
+  const captionEl = document.getElementById('ccCaptionThang');
+  if (captionEl) {
+    const tenLeList = (ccData.ngayLeThang || []).map(nl => nl.tenLe).filter(Boolean);
+    const ghiChuLe = tenLeList.length ? ` <small style="font-weight:400; color:var(--text-muted);">(đã trừ ${tenLeList.length} ngày lễ: ${tenLeList.join(', ')})</small>` : '';
+    captionEl.innerHTML = `Số công tính lương tháng ${thang.split('-').reverse().join('/')}: ${ccFmt1_(ccData.soNgayCongChuan)} ngày${ghiChuLe}`;
+  }
 
   let row1 = '<tr><th class="cc-stt" rowspan="2">STT</th><th class="cc-name" rowspan="2" style="text-align:left;">Họ và tên</th>' +
-    '<th class="cc-sumcol cc-readonly" rowspan="2">Phép đầu<br><small>tháng trước</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Cuối tuần<br><small>đã làm/cần</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Cộng/Trừ<br><small>phép tháng</small></th>' +
-    '<th class="cc-sumcol cc-highlight" rowspan="2">Phép cuối<br><small>tháng (dự kiến)</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Số công<br><small>thực làm</small></th>' +
     '<th class="cc-sumcol cc-highlight" rowspan="2">Số công<br><small>tính lương</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Giờ TC<br><small>phát sinh</small></th>' +
-    '<th class="cc-sumcol cc-highlight" rowspan="2">Công TC<br><small>quy đổi (đã cộng lương)</small></th>';
+    '<th class="cc-sumcol cc-highlight" rowspan="2">Phép<br><small>còn lại</small></th>' +
+    '<th class="cc-sumcol cc-highlight" rowspan="2">Giờ TC dư<br><small>(bù tháng sau)</small></th>' +
+    '<th class="cc-sumcol cc-highlight" rowspan="2">Công bù<br><small>sang tháng (dự kiến)</small></th>';
   let row2 = '<tr>';
   for (let d = 1; d <= soNgay; d++) {
     const iso = thang + '-' + String(d).padStart(2, '0');
@@ -183,33 +206,23 @@ function renderChamCongTable() {
 
   const rows = ccData.rows || [];
   if (rows.length === 0) {
-    document.getElementById('ccBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Chưa có nhân sự nào.</td></tr>';
+    document.getElementById('ccBody').innerHTML = '<tr><td colspan="16" class="text-center" style="padding:20px; color:gray;">Chưa có nhân sự nào.</td></tr>';
     return;
   }
 
   document.getElementById('ccBody').innerHTML = rows.map((r, idx) => {
-    const quotaOk = r.congCuoiTuan >= ccData.quotaThu7;
     const laToi = r.userId === myUserId;
     let cells = `<td class="cc-stt">${idx + 1}</td>
       <td class="cc-name">
         <div class="cc-name-inner">
-          <button type="button" class="cc-eye-btn" onclick="openChiTietCongModal('${r.userId}')" aria-label="Xem chi tiết công">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-          </button>
-          <span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')">${escapeHtml(r.hoTen)}</span>
+          <span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')" title="Bấm để xem chi tiết công">${escapeHtml(r.hoTen)}</span>
           ${laToi ? '<span class="cc-name-badge">Bạn</span>' : ''}
         </div>
       </td>
-      <td class="cc-sumcol cc-readonly">${currentRole === 'ADMIN'
-        ? `<input type="number" class="dd-input-sm" step="0.5" value="${r.phepDauThang}" onchange="savePhepDauThangCC('${r.userId}', this)">`
-        : ccFmt1_(r.phepDauThang)}</td>
-      <td class="cc-sumcol"><span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${quotaOk ? '✓' : '✗'} ${ccFmt1_(r.congCuoiTuan)}</span>/${ccFmt1_(ccData.quotaThu7)}</td>
-      <td class="cc-sumcol">${ccFmtDelta_(r.congTruPhepThang)}</td>
-      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
-      <td class="cc-sumcol">${ccFmt1_(r.congThucLam)}</td>
       <td class="cc-sumcol cc-highlight">${ccFmt1_(r.congTinhLuong)}</td>
-      <td class="cc-sumcol">${ccFmt1_(r.tongGioTC)}h</td>
-      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.congTangCaQuyDoi)}</td>`;
+      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
+      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.gioTCConLaiDuKien)}h</td>
+      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.buCuoiThang)}</td>`;
 
     for (let d = 1; d <= soNgay; d++) {
       const iso = thang + '-' + String(d).padStart(2, '0');
@@ -349,36 +362,58 @@ function luuThayDoiChamCong() {
     });
 }
 
-// Popup xem chi tiết công 1 nhân sự — AI CŨNG XEM ĐƯỢC (không kiểm tra canEditChamCong()), chỉ hiển
-// thị dữ liệu server đã tính sẵn trong ccData, không có nút sửa nào ở đây.
+let ccDetModalUserId_ = null; // userId của popup Chi tiết công đang mở — dùng để lưu Phép/Bù đầu tháng.
+
+// Popup xem chi tiết công 1 nhân sự — AI CŨNG XEM ĐƯỢC (không kiểm tra canEditChamCong()); riêng ô
+// "Phép đầu tháng"/"Bù đầu tháng" chỉ Admin sửa được (đưa vào đây thay vì bảng chính để bảng chính
+// gọn — chỉ còn 3 cột nhân sự thực sự cần xem hàng ngày: Số công tính lương/Phép còn lại/Giờ TC dư).
 function openChiTietCongModal(userId) {
   const row = (ccData.rows || []).find(r => r.userId === userId);
   if (!row) return;
+  ccDetModalUserId_ = userId;
 
   document.getElementById('detModalTitle').textContent = row.hoTen;
   document.getElementById('detModalSub').textContent = 'Chi tiết công — Tháng ' + ccData.thang.split('-').reverse().join('/');
 
+  const isAdmin = currentRole === 'ADMIN';
   const quotaOk = row.congCuoiTuan >= ccData.quotaThu7;
   const rowsHtml = [
-    ['Phép đầu tháng', ccFmt1_(row.phepDauThang)],
     ['Công Thứ 7', ccFmt1_(row.congThu7)],
     ['Công Chủ Nhật', ccFmt1_(row.congChuNhat)],
     ['Cuối tuần (T7+CN)', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${quotaOk ? '✓' : '✗'} ${ccFmt1_(row.congCuoiTuan)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
-    ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (0 công cuối tuần tháng này)</span>' : ' — <span class="cc-q-ok">được miễn trừ</span>') : '')]
+    ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (tháng này không phát sinh Bù)</span>' : ' — <span class="cc-q-ok">được miễn trừ (có phát sinh Bù)</span>') : '')]
   ].map(([lbl, val]) => `<div class="cc-brk-row"><span class="cc-brk-lbl">${lbl}</span><span>${val}</span></div>`).join('');
+
+  const phepDauThangHtml = isAdmin
+    ? `<span style="display:inline-flex; gap:6px; align-items:center;">
+        <input type="number" class="dd-input-sm" id="detPhepDauThangInput" step="0.5" value="${row.phepDauThang}">
+        <button type="button" class="btn btn-sm" style="background:var(--success); padding:3px 9px;" onclick="saveDetPhepDauThang_()" title="Lưu Phép đầu tháng"><i class="fa-solid fa-floppy-disk"></i></button>
+      </span>`
+    : ccFmt1_(row.phepDauThang);
+  const buDauThangHtml = isAdmin
+    ? `<span style="display:inline-flex; gap:6px; align-items:center;">
+        <input type="number" class="dd-input-sm" id="detBuDauThangInput" step="0.5" value="${row.buDauThang}">
+        <button type="button" class="btn btn-sm" style="background:var(--success); padding:3px 9px;" onclick="saveDetBuDauThang_()" title="Lưu Bù đầu tháng"><i class="fa-solid fa-floppy-disk"></i></button>
+      </span>`
+    : ccFmt1_(row.buDauThang);
 
   document.getElementById('detModalBreakdown').innerHTML = rowsHtml + `
     <div class="cc-brk-divider"></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Cộng/Trừ phép tháng</span>${ccFmtDelta_(row.congTruPhepThang)}</div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Phép đầu tháng</span><span>${phepDauThangHtml}</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Trừ phép (ngày P)</span>${ccFmtDelta_(row.congTruPhepThang)}</div>
     <div class="cc-brk-row cc-brk-total"><span>Phép cuối tháng (dự kiến)</span><span>${ccFmt1_(row.phepCuoiThang)}</span></div>
+    <div class="cc-brk-divider"></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Bù đầu tháng</span><span>${buDauThangHtml}</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Cuối tuần vượt định mức</span><span>${ccFmt1_(row.congCuoiTuanDu)}</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư từ tháng trước</span><span>${ccFmt1_(row.gioTCDauThang)}h</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC phát sinh tháng này</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">→ Công TC quy đổi (block 4h/8h)</span><span>${ccFmt1_(row.congTangCaQuyDoi)}</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư, chuyển tháng sau (dự kiến)</span><span>${ccFmt1_(row.gioTCConLaiDuKien)}h</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Bù phát sinh tháng này</span>${ccFmtDelta_(row.buTangThangNay)}</div>
+    <div class="cc-brk-row cc-brk-total"><span>Bù cuối tháng (dự kiến)</span><span>${ccFmt1_(row.buCuoiThang)}</span></div>
     <div class="cc-brk-divider"></div>
     <div class="cc-brk-row"><span class="cc-brk-lbl">Số công thực làm</span><span>${ccFmt1_(row.congThucLam)}</span></div>
     <div class="cc-brk-row cc-brk-total"><span>Số công tính lương</span><span>${ccFmt1_(row.congTinhLuong)}</span></div>
-    <div class="cc-brk-divider"></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư từ tháng trước</span><span>${ccFmt1_(row.gioTCDauThang)}h</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC phát sinh tháng này</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
-    <div class="cc-brk-row cc-brk-total"><span>Công TC quy đổi (đã cộng vào lương)</span><span>${ccFmt1_(row.congTangCaQuyDoi)}</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư, chuyển tháng sau (dự kiến)</span><span>${ccFmt1_(row.gioTCConLaiDuKien)}h</span></div>
   `;
 
   const otDays = Object.keys(row.tc).sort();
@@ -400,17 +435,110 @@ function openChiTietCongModal(userId) {
 
 function closeChiTietCongModal() {
   document.getElementById('chiTietCongModal').classList.remove('active');
+  ccDetModalUserId_ = null;
 }
 
-// Chỉ Admin thấy được ô này (xem điều kiện render ở renderChamCongTable) — dùng để nhập/sửa số dư
-// phép đầu tháng (VD nạp số liệu cũ theo dõi thủ công trước khi có tab này). Lưu ngay lập tức (không
-// gộp vào ccPendingCC/ccPendingTC) vì đây là chỉnh 1 giá trị baseline riêng biệt, không phải chấm
-// công hàng loạt — backend adminCapNhatPhepDauThang cũng tự kiểm tra lại đúng vai trò ADMIN.
-function savePhepDauThangCC(userId, inputEl) {
-  const val = inputEl.value;
+// Cập nhật CỤC BỘ (không gọi lại server) sau khi Admin sửa Phép/Bù đầu tháng — trước đây gọi
+// loadChamCong(thang, true) để lấy lại dữ liệu mới, nhưng round-trip đó vẽ lại TOÀN BỘ bảng khiến
+// trang có cảm giác "tự load lại" rất khó chịu khi chỉnh nhiều dòng liên tiếp. Vì phepDauThang/
+// buDauThang chỉ CỘNG THẲNG vào các cột "cuối tháng" tương ứng (không ảnh hưởng công thức khác), chỉ
+// cần dịch đúng phần chênh lệch (delta) là đủ, không cần tính lại từ server.
+function ccCapNhatPhepDauThangLocal_(userId, newVal) {
+  const row = (ccData.rows || []).find(r => r.userId === userId);
+  if (!row) return;
+  const delta = newVal - row.phepDauThang;
+  row.phepDauThang = newVal;
+  row.phepCuoiThang = Math.round((row.phepCuoiThang + delta) * 10) / 10;
+  renderChamCongTable();
+  if (ccDetModalUserId_ === userId) openChiTietCongModal(userId);
+}
+
+function ccCapNhatBuDauThangLocal_(userId, newVal) {
+  const row = (ccData.rows || []).find(r => r.userId === userId);
+  if (!row) return;
+  const delta = newVal - row.buDauThang;
+  row.buDauThang = newVal;
+  row.buCuoiThang = Math.round((row.buCuoiThang + delta) * 10) / 10;
+  renderChamCongTable();
+  if (ccDetModalUserId_ === userId) openChiTietCongModal(userId);
+}
+
+// Chỉ Admin thấy được ô này (xem điều kiện render ở openChiTietCongModal) — dùng để nhập/sửa số dư
+// phép đầu tháng (VD nạp số liệu cũ theo dõi thủ công trước khi có tab này). Có nút "Lưu" riêng (thay
+// vì onchange tự lưu khi rời khỏi ô) để người dùng chủ động bấm khi đã nhập xong — tránh cảm giác
+// "tự load lại" khi vô tình rời focus khỏi ô trong lúc đang gõ số. Lưu ngay lập tức (không gộp vào
+// ccPendingCC/ccPendingTC) vì đây là chỉnh 1 giá trị baseline riêng biệt, không phải chấm công hàng
+// loạt — backend adminCapNhatPhepDauThang cũng tự kiểm tra lại đúng vai trò ADMIN.
+function saveDetPhepDauThang_() {
+  const userId = ccDetModalUserId_;
+  const inputEl = document.getElementById('detPhepDauThangInput');
+  if (!userId || !inputEl) return;
+  const val = parseFloat(inputEl.value);
+  if (isNaN(val)) return;
   inputEl.disabled = true;
   gsRun('adminCapNhatPhepDauThang', myUserId, myPassword, userId, ccCurrentThang, val)
-    .then(() => loadChamCong(ccCurrentThang, true))
+    .then(() => ccCapNhatPhepDauThangLocal_(userId, val))
     .catch(err => { inputEl.disabled = false; handleBackendError(err); });
+}
+
+function saveDetBuDauThang_() {
+  const userId = ccDetModalUserId_;
+  const inputEl = document.getElementById('detBuDauThangInput');
+  if (!userId || !inputEl) return;
+  const val = parseFloat(inputEl.value);
+  if (isNaN(val)) return;
+  inputEl.disabled = true;
+  gsRun('adminCapNhatBuDauThang', myUserId, myPassword, userId, ccCurrentThang, val)
+    .then(() => ccCapNhatBuDauThangLocal_(userId, val))
+    .catch(err => { inputEl.disabled = false; handleBackendError(err); });
+}
+
+// Popup quản lý Ngày lễ (chỉ Admin, nút chỉ hiện với Admin — xem renderChamCongTable) — dùng để tính
+// "Số ngày công chuẩn dự kiến" tham khảo ở dòng tiêu đề bảng, không ảnh hưởng công thức cá nhân.
+let ccNgayLeCache_ = null;
+
+function openNgayLeModal() {
+  document.getElementById('ngayLeNewDate').value = '';
+  document.getElementById('ngayLeNewTen').value = '';
+  document.getElementById('ngayLeModal').classList.add('active');
+  gsRun('getDanhSachNgayLe')
+    .then(json => { ccNgayLeCache_ = JSON.parse(json); renderNgayLeList_(); })
+    .catch(handleBackendError);
+}
+
+function closeNgayLeModal() {
+  document.getElementById('ngayLeModal').classList.remove('active');
+}
+
+function renderNgayLeList_() {
+  const list = ccNgayLeCache_ || [];
+  document.getElementById('ngayLeList').innerHTML = list.length
+    ? list.map(nl => `<div class="cc-detail-item">
+        <span>${nl.ngay.split('-').reverse().join('/')} — ${escapeHtml(nl.tenLe)}</span>
+        <button type="button" class="btn btn-sm btn-danger" style="padding:2px 8px;" onclick="xoaNgayLe_('${nl.ngay}')"><i class="fa-solid fa-trash"></i></button>
+      </div>`).join('')
+    : '<div class="cc-detail-empty">Chưa có ngày lễ nào.</div>';
+}
+
+function themNgayLe_() {
+  const ngay = document.getElementById('ngayLeNewDate').value;
+  const ten = document.getElementById('ngayLeNewTen').value.trim();
+  if (!ngay || !ten) { showCustomAlert('Vui lòng nhập đủ ngày và tên ngày lễ.', 'error'); return; }
+  gsRun('adminThemNgayLe', myUserId, myPassword, ngay, ten)
+    .then(() => {
+      document.getElementById('ngayLeNewDate').value = '';
+      document.getElementById('ngayLeNewTen').value = '';
+      return gsRun('getDanhSachNgayLe');
+    })
+    .then(json => { ccNgayLeCache_ = JSON.parse(json); renderNgayLeList_(); loadChamCong(ccCurrentThang, true); })
+    .catch(handleBackendError);
+}
+
+function xoaNgayLe_(ngay) {
+  if (!confirm('Xoá ngày lễ ' + ngay.split('-').reverse().join('/') + '?')) return;
+  gsRun('adminXoaNgayLe', myUserId, myPassword, ngay)
+    .then(() => gsRun('getDanhSachNgayLe'))
+    .then(json => { ccNgayLeCache_ = JSON.parse(json); renderNgayLeList_(); loadChamCong(ccCurrentThang, true); })
+    .catch(handleBackendError);
 }
 </script>
