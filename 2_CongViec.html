@@ -92,7 +92,7 @@ document.addEventListener('click', e => {
 function fillCvGoiThauSelect(selectedId) {
     const sel = document.getElementById('cvGoiThau');
     let html = '<option value="">-- Chọn Gói thầu --</option>';
-    goiThau.forEach(g => html += `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`);
+    goiThau.forEach(g => html += `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`);
     sel.innerHTML = html;
     if (selectedId) sel.value = selectedId;
 }
@@ -114,7 +114,7 @@ function fillCvHangMucCheckboxes(maGoiThau, selectedIds) {
     }
     container.innerHTML = list.map(h => `
         <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
-            <input type="checkbox" class="cv-hm-cb" value="${h.maHangMuc}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${h.maHangMuc}
+            <input type="checkbox" class="cv-hm-cb" value="${escapeHtml(h.maHangMuc)}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${escapeHtml(h.maHangMuc)}
         </label>`).join('');
 }
 
@@ -124,14 +124,18 @@ function onCvGoiThauChange() {
 
 // Tô đậm "@Tên" trong nội dung bình luận cho những người thực sự đã được @tag (dựa vào
 // c.nguoiDuocTag, không suy đoán từ text để tránh tô nhầm khi trùng ký tự "@").
+// LUÔN escapeHtml(noiDung) TRƯỚC — nội dung bình luận là văn bản tự do do bất kỳ ai (kể cả Giám sát
+// thường) gõ vào, chèn thẳng không escape sẽ cho phép chèn mã HTML/script chạy trong trình duyệt
+// của người khác xem bình luận đó (XSS lưu trữ).
 function cvHighlightMentions_(noiDung, nguoiDuocTag) {
-    if (!nguoiDuocTag || !nguoiDuocTag.length) return noiDung;
-    let html = noiDung;
+    let html = escapeHtml(noiDung);
+    if (!nguoiDuocTag || !nguoiDuocTag.length) return html;
     nguoiDuocTag.forEach(id => {
         const u = users.find(x => x.id === id);
         if (!u) return;
-        const escaped = u.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        html = html.replace(new RegExp('@' + escaped + '(?!\\w)', 'g'), `<span class="cv-mention">@${u.name}</span>`);
+        const ten = escapeHtml(u.name);
+        const escaped = ten.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        html = html.replace(new RegExp('@' + escaped + '(?!\\w)', 'g'), `<span class="cv-mention">@${ten}</span>`);
     });
     return html;
 }
@@ -143,7 +147,7 @@ function renderCvComments(list) {
         ? '<div class="cv-comment-empty">Chưa có bình luận nào.</div>'
         : list.map(c => `
             <div class="cv-comment-item">
-                <div class="cv-comment-meta"><b>${c.nguoiBinhLuanTen}</b> <span>${c.thoiGian}</span></div>
+                <div class="cv-comment-meta"><b>${escapeHtml(c.nguoiBinhLuanTen)}</b> <span>${escapeHtml(c.thoiGian)}</span></div>
                 <div class="cv-comment-noidung">${cvHighlightMentions_(c.noiDung, c.nguoiDuocTag)}</div>
             </div>`).join('');
     box.scrollTop = box.scrollHeight;

@@ -76,7 +76,7 @@ function renderThanhToan() {
         const bd = getPaymentRoundBreakdown(r);
         return `<div class="pl-item">
             <div class="pl-item-head">
-                <b>${r.tenDot}</b> <span class="pl-item-date">${formatVN(r.ngayThanhToan)} · ${r.phanTramThanhToan}%</span>
+                <b>${escapeHtml(r.tenDot)}</b> <span class="pl-item-date">${formatVN(r.ngayThanhToan)} · ${r.phanTramThanhToan}%</span>
                 ${editable ? `<span class="action-cell" style="float:right;">
                     <button class="btn btn-sm" style="background:var(--primary);" onclick="openDieuChinhModal('${r.maDotThanhToan}')" aria-label="Sửa điều chỉnh" title="Sửa điều chỉnh"><i class="fa-solid fa-sliders"></i></button>
                     <button class="btn btn-sm btn-danger" onclick="deleteDotThanhToan('${r.maDotThanhToan}')" aria-label="Xóa Đợt thanh toán" title="Xóa Đợt thanh toán"><i class="fa-solid fa-trash"></i></button>
@@ -127,7 +127,7 @@ function openPaymentModal() {
         ? '<div class="thongbao-empty">Hợp đồng chưa có hạng mục BOQ.</div>'
         : items.map(b => `
             <div class="tt-item-row">
-                <span>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc} <small>(${b.donVi || ''})</small></span>
+                <span>${b.stt ? b.stt + ' - ' : ''}${escapeHtml(b.tenHangMuc)} <small>(${escapeHtml(b.donVi || '')})</small></span>
                 <input type="number" step="any" min="0" class="js-tt-qty" data-boq="${b.maBOQ}" placeholder="0">
             </div>`).join('');
 

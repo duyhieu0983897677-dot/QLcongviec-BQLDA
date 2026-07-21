@@ -84,9 +84,9 @@ function thietLapBanDauSheet() {
 
   if (!ss.getSheetByName('DanhSachUser')) {
     const sh = ss.insertSheet('DanhSachUser');
-    sh.getRange(1, 1, 2, 7).setValues([
-      ['ID', 'MatKhau', 'VaiTro', 'HoTen', 'ChucDanh', 'PhanMacDinh', 'TrangThai'],
-      ['admin', '123456', 'ADMIN', 'Ban QLDA', '', '', TRANGTHAI_HOATDONG_]
+    sh.getRange(1, 1, 2, 8).setValues([
+      ['ID', 'MatKhau', 'VaiTro', 'HoTen', 'ChucDanh', 'PhanMacDinh', 'TrangThai', 'Salt'],
+      ['admin', '123456', 'ADMIN', 'Ban QLDA', '', '', TRANGTHAI_HOATDONG_, '']
     ]);
   }
 
@@ -452,6 +452,7 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
   if (!sheet.getRange(1, 5).getValue()) sheet.getRange(1, 5).setValue('ChucDanh');
   if (!sheet.getRange(1, 6).getValue()) sheet.getRange(1, 6).setValue('PhanMacDinh');
   if (!sheet.getRange(1, 7).getValue()) sheet.getRange(1, 7).setValue('TrangThai');
+  if (!sheet.getRange(1, 8).getValue()) sheet.getRange(1, 8).setValue('Salt');
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
@@ -460,7 +461,10 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
       sheet.getRange(i + 1, 4).setValue(name);
       sheet.getRange(i + 1, 5).setValue(chucDanh || '');
       sheet.getRange(i + 1, 6).setValue(phanMacDinh || '');
-      if (newPassword) sheet.getRange(i + 1, 2).setValue(newPassword); // lưu thường, tự mã hóa ở lần đăng nhập đầu (xem login())
+      if (newPassword) {
+        sheet.getRange(i + 1, 2).setValue(newPassword); // lưu thường, tự mã hóa ở lần đăng nhập đầu (xem login())
+        sheet.getRange(i + 1, 8).setValue(''); // xoá Salt cũ (nếu có) — kẻo login() so khớp nhầm mật khẩu thường với hash cũ
+      }
       logActivity(adminId, adminUser.name, "Sửa Giám sát", `Sửa tài khoản ${targetId}`);
       return "Success";
     }
@@ -1663,7 +1667,63 @@ function hashPassword(text) {
   return txtHash;
 }
 
+// hashPassword() (trên) dùng 1 "muối" (salt) CỐ ĐỊNH DÙNG CHUNG cho mọi tài khoản — 2 người trùng
+// mật khẩu ra cùng 1 hash, và chỉ băm ĐÚNG 1 vòng. hashPasswordV2_ khắc phục cả 2: salt RIÊNG cho
+// từng tài khoản (cột 'Salt' trong DanhSachUser, sinh ngẫu nhiên) + băm LẶP LẠI HASH_SO_VONG_ vòng
+// (kiểu PBKDF2 thủ công, Apps Script không có sẵn hàm PBKDF2/bcrypt/scrypt thật) — khiến dò mật khẩu
+// ngoại tuyến (nếu dữ liệu Sheet từng bị lộ) tốn CPU hơn hẳn so với chỉ 1 vòng SHA-256. Vẫn tự nâng
+// cấp trong suốt (không cần người dùng làm gì) — xem login(): tài khoản nào chưa có Salt (mật khẩu
+// thường HOẶC hash kiểu cũ v1) sẽ được ghi lại theo scheme mới ngay lần đăng nhập đúng tiếp theo.
+const HASH_SO_VONG_ = 1000;
+
+function taoSaltMoi_() {
+  return Utilities.getUuid() + Utilities.getUuid();
+}
+
+function hashPasswordV2_(text, salt) {
+  let hash = String(text).trim() + '|' + String(salt);
+  for (let i = 0; i < HASH_SO_VONG_; i++) {
+    const raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, hash, Utilities.Charset.UTF_8);
+    let hex = '';
+    for (let j = 0; j < raw.length; j++) {
+      let v = raw[j];
+      if (v < 0) v += 256;
+      hex += (v < 16 ? '0' : '') + v.toString(16);
+    }
+    hash = hex;
+  }
+  return hash;
+}
+
+// Giới hạn thử sai mật khẩu liên tục — chặn tạm 1 tài khoản sau nhiều lần đăng nhập sai liên tiếp,
+// giảm rủi ro dò mật khẩu tự động (brute-force). Dùng CacheService (tự hết hạn sau LOGIN_KHOA_PHUT_
+// phút, không cần dọn tay, không tốn thêm sheet) — đếm theo ĐÚNG userId đang gõ (kể cả tài khoản
+// không tồn tại), vì login() được MỌI hàm backend khác gọi lại để xác thực (không chỉ nút Đăng nhập),
+// nên cơ chế này tự động bảo vệ toàn bộ hệ thống, không riêng màn hình đăng nhập.
+const LOGIN_SO_LAN_TOI_DA_ = 5;
+const LOGIN_KHOA_PHUT_ = 15;
+
+function loginKeyCache_(userId) {
+  return 'LOGIN_FAIL_' + String(userId).trim().toLowerCase();
+}
+
+function loginKiemTraKhoa_(userId) {
+  const soLan = parseInt(CacheService.getScriptCache().get(loginKeyCache_(userId)), 10) || 0;
+  if (soLan >= LOGIN_SO_LAN_TOI_DA_) {
+    throw new Error(`Tài khoản tạm khoá do đăng nhập sai quá ${LOGIN_SO_LAN_TOI_DA_} lần liên tiếp. Vui lòng thử lại sau ${LOGIN_KHOA_PHUT_} phút.`);
+  }
+}
+
+function loginGhiNhanSai_(userId) {
+  const cache = CacheService.getScriptCache();
+  const key = loginKeyCache_(userId);
+  const soLan = (parseInt(cache.get(key), 10) || 0) + 1;
+  cache.put(key, String(soLan), LOGIN_KHOA_PHUT_ * 60);
+}
+
 function login(userId, password) {
+  loginKiemTraKhoa_(userId);
+
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
   if (!sheet) throw new Error("Chưa cấu hình Tab DanhSachUser trên Google Sheet!");
 
@@ -1674,18 +1734,29 @@ function login(userId, password) {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === String(userId).trim()) {
       const storedPass = String(data[i][1]).trim();
+      const storedSalt = String(data[i][7] || '').trim();
 
-      if (storedPass === hashedInput || storedPass === plainInput) {
+      // Có Salt riêng (cột H) -> đã ở scheme mới (hashPasswordV2_, salt riêng + băm nhiều vòng).
+      // Chưa có Salt -> scheme cũ (hashPassword() 1 salt chung) HOẶC vẫn còn mật khẩu thường.
+      const khop = storedSalt
+        ? storedPass === hashPasswordV2_(plainInput, storedSalt)
+        : (storedPass === hashedInput || storedPass === plainInput);
+
+      if (khop) {
         const trangThai = String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_;
         if (trangThai === TRANGTHAI_NGHIVIEC_) {
           throw new Error("Tài khoản đã Nghỉ việc, không thể đăng nhập. Liên hệ Quản trị nếu có nhầm lẫn.");
         }
 
-        // TỰ ĐỘNG BẢO MẬT: nếu pass trong Sheet vẫn là pass thường, lập tức mã hóa và lưu đè lại
-        if (storedPass !== hashedInput) {
-          sheet.getRange(i + 1, 2).setValue(hashedInput);
+        // TỰ ĐỘNG BẢO MẬT: nâng cấp lên scheme mới (salt riêng + băm nhiều vòng) ngay khi chưa có Salt
+        // — dù đang là mật khẩu thường hay hash kiểu cũ, người dùng không cần làm gì.
+        if (!storedSalt) {
+          const saltMoi = taoSaltMoi_();
+          sheet.getRange(i + 1, 2).setValue(hashPasswordV2_(plainInput, saltMoi));
+          sheet.getRange(i + 1, 8).setValue(saltMoi);
         }
 
+        CacheService.getScriptCache().remove(loginKeyCache_(userId)); // đăng nhập đúng — xoá bộ đếm sai
         return {
           role: String(data[i][2]).trim().toUpperCase(),
           name: String(data[i][3]).trim(),
@@ -1695,31 +1766,47 @@ function login(userId, password) {
           trangThai: trangThai
         };
       } else {
+        loginGhiNhanSai_(userId);
         throw new Error("Sai Tên đăng nhập (ID) hoặc Mật khẩu!");
       }
     }
   }
+  loginGhiNhanSai_(userId);
   throw new Error("Tài khoản không tồn tại trong hệ thống!");
 }
 
+// Dùng chung bộ đếm khoá tạm với login() (loginKiemTraKhoa_/loginGhiNhanSai_) — đây cũng là 1 điểm
+// có thể bị dò mật khẩu cũ (đổi được mật khẩu = chiếm được tài khoản), cần bảo vệ như nhau.
 function changeUserPassword(userId, oldPass, newPass) {
+  loginKiemTraKhoa_(userId);
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('DanhSachUser');
   const data = sheet.getDataRange().getValues();
 
   const hashedOld = hashPassword(oldPass);
-  const hashedNew = hashPassword(newPass);
   const plainOld = String(oldPass).trim();
 
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === String(userId).trim()) {
       const storedPass = String(data[i][1]).trim();
+      const storedSalt = String(data[i][7] || '').trim();
 
-      if (storedPass === hashedOld || storedPass === plainOld) {
-        sheet.getRange(i + 1, 2).setValue(hashedNew);
+      const khop = storedSalt
+        ? storedPass === hashPasswordV2_(plainOld, storedSalt)
+        : (storedPass === hashedOld || storedPass === plainOld);
+
+      if (khop) {
+        // Mật khẩu MỚI luôn ghi theo scheme mới (salt riêng + băm nhiều vòng), bất kể mật khẩu cũ
+        // đang ở scheme nào.
+        const saltMoi = taoSaltMoi_();
+        sheet.getRange(i + 1, 2).setValue(hashPasswordV2_(String(newPass).trim(), saltMoi));
+        sheet.getRange(i + 1, 8).setValue(saltMoi);
+        CacheService.getScriptCache().remove(loginKeyCache_(userId));
         logActivity(userId, data[i][3], "Đổi mật khẩu", "Người dùng tự đổi mật khẩu cá nhân");
         return "Success";
       } else {
+        loginGhiNhanSai_(userId);
         throw new Error("Mật khẩu cũ không chính xác!");
       }
     }
@@ -2625,32 +2712,49 @@ const CHAT_THANHVIEN_HEADERS_ = ['maPhong', 'userId', 'ngayThamGia'];
 const CHAT_TINNHAN_HEADERS_ = ['maTinNhan', 'maPhong', 'userId', 'noiDungMaHoa', 'thoiGian'];
 const CHAT_DADOC_HEADERS_ = ['maPhong', 'userId', 'thoiGianDaDoc'];
 
-function chatKhoaBiMat_() {
+// Khoá RIÊNG cho từng phòng (không phải 1 khoá dùng chung cho mọi phòng như trước) — lưu ở Script
+// Properties (chỉ ai có quyền SỬA Apps Script mới đọc được, không nằm trong Sheet). Lộ khoá 1 phòng
+// (nếu có) không kéo theo lộ nội dung MỌI phòng khác như thiết kế cũ.
+function chatKhoaPhong_(maPhong) {
   const props = PropertiesService.getScriptProperties();
-  let key = props.getProperty('CHAT_MA_HOA_KEY');
-  if (!key) {
-    key = Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid();
-    props.setProperty('CHAT_MA_HOA_KEY', key);
+  const propKey = 'CHAT_KHOA_' + String(maPhong).trim();
+  let khoa = props.getProperty(propKey);
+  if (!khoa) {
+    khoa = Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty(propKey, khoa);
   }
-  return key;
+  return khoa;
 }
 
-// Mã hoá/giải mã đối xứng đơn giản (XOR theo khoá bí mật lưu ở Script Properties, không nằm trong
-// Sheet) — đủ để nội dung KHÔNG hiện dạng chữ thường khi mở trực tiếp Google Sheet, xem chú thích ở
-// đầu khối CHAT NỘI BỘ về giới hạn thực tế của cách này.
-function maHoaChat_(text) {
-  const keyBytes = Utilities.newBlob(chatKhoaBiMat_()).getBytes();
+// Sinh "dòng khoá" (keystream) dài soByte byte bằng HMAC-SHA256 nối tiếp theo từng khối (kiểu counter
+// mode) — thay cho khoá lặp lại XOR kiểu Vigenère cũ (dễ lộ quy luật lặp khi văn bản dài hơn độ dài
+// khoá). HMAC là hàm mật mã THẬT có sẵn trong Apps Script (Utilities.computeHmacSha256Signature),
+// không phải tự chế — nhưng bản chất vẫn là mã hoá ĐỐI XỨNG (cùng 1 khoá mã hoá lẫn giải mã), vẫn
+// KHÔNG phải end-to-end thực sự, xem chú thích ở đầu khối CHAT NỘI BỘ.
+function chatKeystream_(khoa, soByte) {
+  const out = [];
+  let counter = 0;
+  while (out.length < soByte) {
+    const block = Utilities.computeHmacSha256Signature(String(counter), khoa, Utilities.Charset.UTF_8);
+    for (let i = 0; i < block.length && out.length < soByte; i++) out.push(block[i]);
+    counter++;
+  }
+  return out;
+}
+
+function maHoaChat_(text, maPhong) {
   const textBytes = Utilities.newBlob(String(text == null ? '' : text)).getBytes();
-  const out = textBytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
+  const keystream = chatKeystream_(chatKhoaPhong_(maPhong), textBytes.length);
+  const out = textBytes.map((b, i) => b ^ keystream[i]);
   return Utilities.base64Encode(out);
 }
 
-function giaiMaChat_(encoded) {
+function giaiMaChat_(encoded, maPhong) {
   if (!encoded) return '';
   try {
-    const keyBytes = Utilities.newBlob(chatKhoaBiMat_()).getBytes();
     const bytes = Utilities.base64Decode(String(encoded));
-    const out = bytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
+    const keystream = chatKeystream_(chatKhoaPhong_(maPhong), bytes.length);
+    const out = bytes.map((b, i) => b ^ keystream[i]);
     return Utilities.newBlob(out).getDataAsString();
   } catch (e) {
     return '(Không đọc được nội dung)';
@@ -2774,7 +2878,7 @@ function getDanhSachPhongChat(userId, password) {
     return {
       maPhong: p.maPhong, tenPhong: p.tenPhong, chuPhong: p.chuPhong, laChuPhong: p.chuPhong === uid,
       soNgayLuu: p.soNgayLuu, soThanhVien,
-      tinCuoi: tinCuoi ? { noiDung: giaiMaChat_(tinCuoi.noiDungMaHoa), userId: tinCuoi.userId, thoiGian: tinCuoi.thoiGian } : null,
+      tinCuoi: tinCuoi ? { noiDung: giaiMaChat_(tinCuoi.noiDungMaHoa, p.maPhong), userId: tinCuoi.userId, thoiGian: tinCuoi.thoiGian } : null,
       thoiGianHoatDong: tinCuoi ? tinCuoi.thoiGian : p.ngayTao,
       soChuaDoc
     };
@@ -2803,7 +2907,7 @@ function getTinNhanPhongChat(userId, password, maPhong) {
 
   const tinNhan = allTinNhan.filter(tn => tn.maPhong === maP)
     .sort((a, b) => a.thoiGian - b.thoiGian)
-    .map(tn => ({ userId: tn.userId, tenNguoiGui: tenTheoId_[tn.userId] || tn.userId, noiDung: giaiMaChat_(tn.noiDungMaHoa), thoiGian: tn.thoiGian }));
+    .map(tn => ({ userId: tn.userId, tenNguoiGui: tenTheoId_[tn.userId] || tn.userId, noiDung: giaiMaChat_(tn.noiDungMaHoa, maP), thoiGian: tn.thoiGian }));
 
   const thanhVienPhong = allThanhVien.filter(tv => tv.maPhong === maP).map(tv => tenTheoId_[tv.userId] || tv.userId);
 
@@ -2833,7 +2937,7 @@ function guiTinNhanChat(userId, password, maPhong, noiDung) {
   chatXacThucThanhVien_(maP, uid, allThanhVien);
 
   const tnSheet = layHoacTaoSheet_('ChatTinNhan', CHAT_TINNHAN_HEADERS_);
-  tnSheet.appendRow([Utilities.getUuid(), maP, uid, maHoaChat_(noi), new Date()]);
+  tnSheet.appendRow([Utilities.getUuid(), maP, uid, maHoaChat_(noi, maP), new Date()]);
   return "Success";
 }
 

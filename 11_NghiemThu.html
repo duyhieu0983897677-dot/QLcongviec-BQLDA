@@ -137,7 +137,7 @@ function renderNghiemThuTheoNgay() {
     items.forEach((b, idx) => {
         if (b.isHeader) {
             if (!neededHeaders.has(b.maBOQ)) return;
-            html += `<tr class="boq-header-row"><td colspan="8"><b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b></td></tr>`;
+            html += `<tr class="boq-header-row"><td colspan="8"><b>${b.stt ? b.stt + ' - ' : ''}${escapeHtml(b.tenHangMuc)}</b></td></tr>`;
             return;
         }
         if (!activeIdx.has(idx)) return;
@@ -152,12 +152,12 @@ function renderNghiemThuTheoNgay() {
         const ghiChuNgay = logsNgay.filter(n => n.ghiChu).map(n => n.ghiChu).join('; ');
         html += `<tr>
             <td class="text-center">${b.stt || ''}</td>
-            <td>${b.tenHangMuc}</td>
-            <td class="text-center">${b.donVi || '--'}</td>
+            <td>${escapeHtml(b.tenHangMuc)}</td>
+            <td class="text-center">${escapeHtml(b.donVi || '--')}</td>
             <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
             <td class="text-right val-hopdong">${khoiLuongHienThi_(xacNhanNgay)}</td>
             <td class="text-right ${chenhLechClass}">${khoiLuongHienThi_(chenhLech)}</td>
-            <td>${ghiChuNgay || '--'}</td>
+            <td>${escapeHtml(ghiChuNgay || '--')}</td>
             <td class="text-center">${editable ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="openNtEditModal('${b.maBOQ}', '${ngayISO}')" aria-label="Sửa khối lượng ngày này" title="Sửa khối lượng ngày này"><i class="fa-solid fa-pen"></i></button>` : '--'}</td>
         </tr>`;
     });

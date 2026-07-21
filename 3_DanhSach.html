@@ -41,8 +41,8 @@ function renderHangMucRefList() {
     function renderNode(node, depth) {
         let rows = `<tr>
             <td class="text-center mono">${node.stt || '--'}</td>
-            <td class="mono">${node.maHangMuc}</td>
-            <td style="padding-left:${depth * 18}px;">${node.tenHangMuc}</td>
+            <td class="mono">${escapeHtml(node.maHangMuc)}</td>
+            <td style="padding-left:${depth * 18}px;">${escapeHtml(node.tenHangMuc)}</td>
         </tr>`;
         (childrenByParent[node.maHangMuc] || []).forEach(child => { rows += renderNode(child, depth + 1); });
         return rows;
@@ -64,7 +64,7 @@ function renderGoiThauList() {
     const sorted = goiThau.slice().sort((a, b) => (a.stt || 0) - (b.stt || 0));
     body.innerHTML = sorted.map(g => {
         const names = g.maHangMucList.map(id => { const h = findHangMuc(id); return h ? h.maHangMuc : id; }).join(', ');
-        return `<tr><td class="text-center mono">${g.stt || '--'}</td><td>${g.tenGoiThau}</td><td>${names || '--'}</td></tr>`;
+        return `<tr><td class="text-center mono">${g.stt || '--'}</td><td>${escapeHtml(g.tenGoiThau)}</td><td>${escapeHtml(names || '--')}</td></tr>`;
     }).join('');
 }
 
@@ -73,7 +73,7 @@ function renderGoiThauList() {
 function fillHmPicker_(selectedId) {
     const sel = document.getElementById('hmPicker');
     sel.innerHTML = '<option value="">-- Chọn Hạng mục --</option>' +
-        hangMuc.map(h => `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`).join('');
+        hangMuc.map(h => `<option value="${escapeHtml(h.maHangMuc)}">${escapeHtml(h.maHangMuc)} — ${escapeHtml(h.tenHangMuc)}</option>`).join('');
     if (selectedId) sel.value = selectedId;
 }
 
@@ -175,14 +175,14 @@ function fillGoiThauGroupCheckboxes(selectedIds) {
     }
     container.innerHTML = hangMuc.map(h => `
         <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
-            <input type="checkbox" class="gt-hm-cb" value="${h.maHangMuc}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${h.maHangMuc} — ${h.tenHangMuc}
+            <input type="checkbox" class="gt-hm-cb" value="${escapeHtml(h.maHangMuc)}" ${sel.has(h.maHangMuc) ? 'checked' : ''}> ${escapeHtml(h.maHangMuc)} — ${escapeHtml(h.tenHangMuc)}
         </label>`).join('');
 }
 
 function fillGtPicker_(selectedId) {
     const sel = document.getElementById('gtPicker');
     sel.innerHTML = '<option value="">-- Chọn Gói thầu --</option>' +
-        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        goiThau.map(g => `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`).join('');
     if (selectedId) sel.value = selectedId;
 }
 
@@ -260,7 +260,7 @@ function deleteGoiThauFromModal() {
 function fillParentSelect(selectEl, selectedId, excludeId) {
     let html = '<option value="">-- Không có (là gốc) --</option>';
     hangMuc.filter(h => h.maHangMuc !== excludeId).forEach(h => {
-        html += `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`;
+        html += `<option value="${escapeHtml(h.maHangMuc)}">${escapeHtml(h.maHangMuc)} — ${escapeHtml(h.tenHangMuc)}</option>`;
     });
     selectEl.innerHTML = html;
     if (selectedId) selectEl.value = selectedId;

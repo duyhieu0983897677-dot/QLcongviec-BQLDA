@@ -61,8 +61,8 @@ function renderThongBaoPanel() {
         ? '<div class="thongbao-empty">Chưa có thông báo nào.</div>'
         : dsThongBao.map(t => `
             <div class="thongbao-item ${t.daDoc ? '' : 'unread'}" onclick="moThongBao('${t.id}')">
-                <div class="thongbao-noidung">${t.noiDung}</div>
-                <div class="thongbao-thoigian">${t.thoiGian}</div>
+                <div class="thongbao-noidung">${escapeHtml(t.noiDung)}</div>
+                <div class="thongbao-thoigian">${escapeHtml(t.thoiGian)}</div>
             </div>`).join('');
     lists.forEach(el => { el.innerHTML = html; });
 }

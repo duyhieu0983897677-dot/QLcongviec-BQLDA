@@ -233,7 +233,7 @@ function renderTdtcBoqDetail_() {
             html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="toggleTdtcHeader_('${b.maBOQ}')">
                 <td colspan="7" style="padding-left:${indent}px;">
                     <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
-                    <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
+                    <b>${b.stt ? b.stt + ' - ' : ''}${escapeHtml(b.tenHangMuc)}</b>
                 </td>
             </tr>`;
             return;
@@ -246,12 +246,12 @@ function renderTdtcBoqDetail_() {
             : formatVN(b.ngayKetThucKH);
         html += `<tr>
             <td class="text-center">${b.stt || '--'}</td>
-            <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
-            <td class="text-center">${b.donVi || '--'}</td>
+            <td style="padding-left:${indent}px;">${escapeHtml(b.tenHangMuc)}</td>
+            <td class="text-center">${escapeHtml(b.donVi || '--')}</td>
             <td class="text-right">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
             <td${dangSua ? '' : ' class="text-center"'}>${oNgayBD}</td>
             <td${dangSua ? '' : ' class="text-center"'}>${oNgayKT}</td>
-            <td style="text-align:left;">${b.ghiChu || '--'}</td>
+            <td style="text-align:left;">${escapeHtml(b.ghiChu || '--')}</td>
         </tr>`;
     });
     tbody.innerHTML = html || empty;

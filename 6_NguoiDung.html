@@ -37,9 +37,9 @@ function renderNguoiDung() {
         return `<tr>
         <td class="text-center">${idx + 1}</td>
         <td>${u.id}</td>
-        <td${ngiViec ? ' style="text-decoration:line-through; color:var(--text-muted);"' : ''}>${u.name}</td>
+        <td${ngiViec ? ' style="text-decoration:line-through; color:var(--text-muted);"' : ''}>${escapeHtml(u.name)}</td>
         <td class="text-center">${u.role === 'ADMIN' ? 'Quản trị' : 'Giám sát'}</td>
-        <td>${u.chucDanh || '--'}</td>
+        <td>${escapeHtml(u.chucDanh || '--')}</td>
         <td class="text-center">${u.phanMacDinh === 'ca_hai' ? 'Cả hai' : (PHAN_LOAI_LABEL[u.phanMacDinh] || '-- Chưa gán --')}</td>
         <td class="text-center">
             <select style="width:150px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.83rem; ${ngiViec ? 'color:var(--danger);' : 'color:var(--success);'} font-weight:600;" ${u.id === myUserId ? 'disabled title="Không thể tự đổi trạng thái của chính mình"' : ''} onchange="doiTrangThaiNhanSu_('${u.id}', this)">

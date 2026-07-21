@@ -70,7 +70,7 @@ function renderBOQLuyKeTable_(tbodyId, valueField, expandedSet, toggleFnName) {
             html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="${toggleFnName}('${b.maBOQ}')">
                 <td colspan="8" style="padding-left:${indent}px;">
                     <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
-                    <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
+                    <b>${b.stt ? b.stt + ' - ' : ''}${escapeHtml(b.tenHangMuc)}</b>
                 </td>
             </tr>`;
             return;
@@ -80,8 +80,8 @@ function renderBOQLuyKeTable_(tbodyId, valueField, expandedSet, toggleFnName) {
         const giaTriDat = luyKe * (b.donGiaHieuLuc || 0);
         html += `<tr>
             <td class="text-center">${b.stt || '--'}</td>
-            <td style="padding-left:${indent}px;">${b.tenHangMuc}</td>
-            <td class="text-center">${b.donVi || '--'}</td>
+            <td style="padding-left:${indent}px;">${escapeHtml(b.tenHangMuc)}</td>
+            <td class="text-center">${escapeHtml(b.donVi || '--')}</td>
             <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
             <td class="text-right">${tienHienThi_(b.donGiaHieuLuc)}</td>
             <td class="text-right val-nghiemthu">${khoiLuongHienThi_(luyKe)}</td>
@@ -123,7 +123,7 @@ function fillHopDongSelect_(selectId) {
     const sel = document.getElementById(selectId);
     if (!sel) return;
     sel.innerHTML = '<option value="">-- Chọn Hợp đồng --</option>' +
-        (hopDong || []).map(h => `<option value="${h.maHopDong}">${h.tenHopDong}</option>`).join('');
+        (hopDong || []).map(h => `<option value="${escapeHtml(h.maHopDong)}">${escapeHtml(h.tenHopDong)}</option>`).join('');
     sel.value = currentHopDongId || '';
 }
 
@@ -141,7 +141,7 @@ function fillHopDongFilterGoiThau_() {
     if (!sel) return;
     const currentVal = sel.value;
     sel.innerHTML = '<option value="">-- Tất cả Gói thầu --</option>' +
-        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        goiThau.map(g => `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`).join('');
     if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal;
 }
 
@@ -190,9 +190,9 @@ function renderHopDongList() {
         const daTT = tongDaThanhToanHopDong_(hd.maHopDong);
         const conLai = Math.max(0, giaTriVAT - daTT);
         return `<tr class="${dangChon ? 'hd-row-active' : ''}">
-            <td><span class="mono">${hd.tenHopDong}</span>${dangChon ? ' <span class="bc-badge inprogress">Đang xem</span>' : ''}</td>
-            <td>${hd.nhaThau || '--'}</td>
-            <td>${g ? g.tenGoiThau : '--'}</td>
+            <td><span class="mono">${escapeHtml(hd.tenHopDong)}</span>${dangChon ? ' <span class="bc-badge inprogress">Đang xem</span>' : ''}</td>
+            <td>${escapeHtml(hd.nhaThau || '--')}</td>
+            <td>${g ? escapeHtml(g.tenGoiThau) : '--'}</td>
             <td class="text-center">${formatVN(hd.ngayKy)}</td>
             <td class="text-right val-hopdong">${tienHienThi_(giaTriVAT)}</td>
             <td class="text-right val-thanhtoan">${tienHienThi_(daTT)}</td>
@@ -224,7 +224,7 @@ function openHopDongModal(maHopDong) {
 
     const gtSelect = document.getElementById('hdGoiThau');
     gtSelect.innerHTML = '<option value="">-- Chưa gắn Gói thầu --</option>' +
-        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        goiThau.map(g => `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`).join('');
     gtSelect.value = hd ? (hd.maGoiThau || '') : '';
 
     document.getElementById('hopDongModal').classList.add('active');

@@ -162,13 +162,13 @@ function fillBcDetailExtraFilters() {
         const ids = [...new Set(bcAllCongViec.map(cv => cv.nguoiTaoId).filter(Boolean))];
         ids.sort((a, b) => nameOfUser(a).localeCompare(nameOfUser(b), 'vi'));
         gsSelect.innerHTML = '<option value="">-- Tất cả người phụ trách --</option>' +
-            ids.map(id => `<option value="${id}">${nameOfUser(id)}</option>`).join('');
+            ids.map(id => `<option value="${escapeHtml(id)}">${escapeHtml(nameOfUser(id))}</option>`).join('');
     }
     const cdSelect = document.getElementById('bcDetailChucDanh');
     if (cdSelect && cdSelect.options.length <= 1) {
         const chucDanhs = [...new Set((users || []).map(u => u.chucDanh).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
         cdSelect.innerHTML = '<option value="">-- Tất cả chức danh --</option>' +
-            chucDanhs.map(cd => `<option value="${cd}">${cd}</option>`).join('');
+            chucDanhs.map(cd => `<option value="${escapeHtml(cd)}">${escapeHtml(cd)}</option>`).join('');
     }
 }
 
@@ -288,9 +288,9 @@ function fillBcDetailSelect() {
     const currentVal = sel.value;
     let html = type === 'goithau' ? '<option value="">-- Tất cả Gói thầu --</option>' : '<option value="">-- Tất cả Hạng mục --</option>';
     if (type === 'goithau') {
-        html += goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        html += goiThau.map(g => `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`).join('');
     } else {
-        html += hangMuc.map(h => `<option value="${h.maHangMuc}">${h.maHangMuc} — ${h.tenHangMuc}</option>`).join('');
+        html += hangMuc.map(h => `<option value="${escapeHtml(h.maHangMuc)}">${escapeHtml(h.maHangMuc)} — ${escapeHtml(h.tenHangMuc)}</option>`).join('');
     }
     sel.innerHTML = html;
     if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal;
@@ -365,9 +365,9 @@ function renderBcDetail() {
                 <tr>
                     <td class="text-center" data-col="stt">${BC_PHAN_ROMAN[phan]}.${counter}</td>
                     <td class="text-center" data-col="mahangmuc">${(cv.maHangMucList || []).join(', ') || '--'}</td>
-                    <td data-col="ten"><div class="t-name-row"><span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>${commentBadgeHtml(cv)}</div></td>
-                    <td class="text-center" data-col="nguoiphutrach">${nameOfUser(cv.nguoiTaoId)}</td>
-                    <td class="text-center" data-col="chucdanh">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
+                    <td data-col="ten"><div class="t-name-row"><span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${escapeHtml(cv.tenCongViec)}</span>${commentBadgeHtml(cv)}</div></td>
+                    <td class="text-center" data-col="nguoiphutrach">${escapeHtml(nameOfUser(cv.nguoiTaoId))}</td>
+                    <td class="text-center" data-col="chucdanh">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${escapeHtml(chucDanh)}</span>` : '--'}</td>
                     <td class="text-center" data-col="ngaybatdau">${formatVN(cv.ngayBatDauKH)}</td>
                     <td class="text-center" data-col="ngayketthuc">${formatVN(cv.ngayKetThucKH)}</td>
                     <td class="bc-bar-cell" data-col="tiendo">
@@ -377,7 +377,7 @@ function renderBcDetail() {
                         </div>
                     </td>
                     <td class="text-center" data-col="tinhtrang"><span class="bc-badge ${cv.trangThaiMau}">${trangThaiLabelDayDu_(cv)}</span></td>
-                    <td class="bc-detail-note" data-col="ghichu" title="${showNote ? escapeHtml(`${formatVN(note.date)}: ${note.text}`) : ''}">${showNote ? `<b>${formatVN(note.date)}:</b> ${note.text}` : '--'}</td>
+                    <td class="bc-detail-note" data-col="ghichu" title="${showNote ? escapeHtml(`${formatVN(note.date)}: ${note.text}`) : ''}">${showNote ? `<b>${formatVN(note.date)}:</b> ${escapeHtml(note.text)}` : '--'}</td>
                 </tr>`;
             });
         });
@@ -452,7 +452,7 @@ function fillBcChiPhiHopDongSelect() {
     if (!sel) return;
     const currentVal = sel.value;
     sel.innerHTML = '<option value="all">-- Tổng hợp toàn bộ Hợp đồng --</option>' +
-        (hopDong || []).map(h => `<option value="${h.maHopDong}">HĐ: ${h.tenHopDong}</option>`).join('');
+        (hopDong || []).map(h => `<option value="${escapeHtml(h.maHopDong)}">HĐ: ${escapeHtml(h.tenHopDong)}</option>`).join('');
     if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) sel.value = currentVal;
     else sel.value = 'all';
 }

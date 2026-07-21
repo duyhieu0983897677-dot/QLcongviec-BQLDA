@@ -157,7 +157,7 @@ function renderBOQTree() {
             html += `<tr class="boq-header-row" style="cursor:pointer;" onclick="toggleBoqHeader_('${b.maBOQ}')">
                 <td colspan="7" style="padding-left:${indent}px;">
                     <i class="fa-solid ${isOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>
-                    <b>${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</b>
+                    <b>${b.stt ? b.stt + ' - ' : ''}${escapeHtml(b.tenHangMuc)}</b>
                 </td>
             </tr>`;
             return;
@@ -165,12 +165,12 @@ function renderBOQTree() {
         const thanhTien = (b.khoiLuongHieuLuc || 0) * (b.donGiaHieuLuc || 0);
         html += `<tr>
             <td class="text-center">${b.stt || '--'}</td>
-            <td style="padding-left:${indent}px;">${b.tenHangMuc}${b.maPhuLucTao ? ' <span class="bc-badge pl-tag">PL</span>' : ''}</td>
-            <td class="text-center">${b.donVi || '--'}</td>
+            <td style="padding-left:${indent}px;">${escapeHtml(b.tenHangMuc)}${b.maPhuLucTao ? ' <span class="bc-badge pl-tag">PL</span>' : ''}</td>
+            <td class="text-center">${escapeHtml(b.donVi || '--')}</td>
             <td class="text-right val-hopdong">${khoiLuongHienThi_(b.khoiLuongHieuLuc)}</td>
             <td class="text-right">${tienHienThi_(b.donGiaHieuLuc)}</td>
             <td class="text-right val-nghiemthu">${tienHienThi_(thanhTien)}</td>
-            <td style="text-align:left;">${b.ghiChu || '--'}</td>
+            <td style="text-align:left;">${escapeHtml(b.ghiChu || '--')}</td>
         </tr>`;
     });
     tbody.innerHTML = html || `<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có hạng mục BOQ nào.</td></tr>`;
@@ -273,12 +273,12 @@ function renderPhuLucList() {
             let mota = 'Thêm hạng mục mới';
             if (c.loaiThayDoi === 'THAY_THE') mota = `Thay khối lượng → ${khoiLuongHienThi_(c.khoiLuongMoi)}`;
             else if (c.loaiThayDoi === 'DIEU_CHINH') mota = `Điều chỉnh ${c.khoiLuongDieuChinh > 0 ? '+' : ''}${khoiLuongHienThi_(c.khoiLuongDieuChinh)}`;
-            return `<li>${ten}: ${mota}</li>`;
+            return `<li>${escapeHtml(ten)}: ${mota}</li>`;
         }).join('');
         const vohieu = pl.active === false;
         return `<div class="pl-item" style="${vohieu ? 'opacity:0.6;' : ''}">
             <div class="pl-item-head">
-                <b>${pl.soHieu}</b> <span class="pl-item-date">${formatVN(pl.ngayPhuLuc)}</span>
+                <b>${escapeHtml(pl.soHieu)}</b> <span class="pl-item-date">${formatVN(pl.ngayPhuLuc)}</span>
                 ${vohieu ? '<span class="bc-badge overdue">Đã vô hiệu hóa</span>' : ''}
                 ${editable ? `<span class="action-cell" style="float:right;">
                     ${!vohieu ? `<button class="btn btn-sm" style="background:var(--primary);" onclick="openThayDoiModal('${pl.maPhuLuc}')"><i class="fa-solid fa-plus"></i> Thay đổi</button>` : ''}
@@ -286,7 +286,7 @@ function renderPhuLucList() {
                     <button class="btn btn-sm ${vohieu ? '' : 'btn-danger'}" style="${vohieu ? 'background:var(--success);' : ''}" onclick="toggleTrangThaiPhuLuc('${pl.maPhuLuc}')">${vohieu ? '<i class="fa-solid fa-rotate-left"></i> Khôi phục' : '<i class="fa-solid fa-ban"></i> Vô hiệu hóa'}</button>
                 </span>` : ''}
             </div>
-            ${pl.ghiChu ? `<div class="pl-item-note">${pl.ghiChu}</div>` : ''}
+            ${pl.ghiChu ? `<div class="pl-item-note">${escapeHtml(pl.ghiChu)}</div>` : ''}
             ${rows ? `<ul class="pl-change-list">${rows}</ul>` : '<div class="pl-item-note">Chưa có thay đổi nào.</div>'}
         </div>`;
     }).join('');
@@ -343,7 +343,7 @@ function openThayDoiModal(maPhuLuc) {
     const sel = document.getElementById('tdBOQ');
     sel.innerHTML = '<option value="">-- Chọn hạng mục --</option>' +
         boq.filter(b => b.maHopDong === currentHopDongId && !b.isHeader)
-           .map(b => `<option value="${b.maBOQ}">${b.stt ? b.stt + ' - ' : ''}${b.tenHangMuc}</option>`).join('');
+           .map(b => `<option value="${escapeHtml(b.maBOQ)}">${b.stt ? b.stt + ' - ' : ''}${escapeHtml(b.tenHangMuc)}</option>`).join('');
     document.getElementById('tdLoai').value = 'DIEU_CHINH';
     document.getElementById('tdKhoiLuong').value = '';
     document.getElementById('tdDonGiaMoi').value = '';

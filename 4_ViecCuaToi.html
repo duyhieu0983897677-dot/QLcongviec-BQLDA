@@ -47,7 +47,7 @@ function renderCongViecRow(cv) {
     const meta = (cv.maHangMucList || []).map(id => {
         const hm = findHangMuc(id);
         return hm ? `${hm.maHangMuc} — ${hm.tenHangMuc}` : id;
-    }).join('; ');
+    }).join('; '); // escapeHtml() ở nơi CHÈN vào markup bên dưới (title=/nội dung hiển thị)
     // Công việc đã bị xóa: chỉ hiện ở đây (đã lọc khỏi Tổng quan từ backend), gạch ngang + mờ cả
     // dòng, không còn nút Sửa/Xóa vì đã xóa rồi.
     const isDeleted = cv.active === false;
@@ -57,13 +57,13 @@ function renderCongViecRow(cv) {
     return `<tr id="${taskRowElId_(cv.maCongViec)}" class="task-row${isDeleted ? ' deleted' : ''}">
         <td class="task-name-cell" style="padding-left:48px;">
             <div class="t-name-row">
-                <span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${cv.tenCongViec}</span>
+                <span class="t-name" title="${escapeHtml(cv.tenCongViec)}">${escapeHtml(cv.tenCongViec)}</span>
                 ${commentBadgeHtml(cv)}
             </div>
-            <span class="t-target" title="${escapeHtml(meta)}">${meta}</span>
+            <span class="t-target" title="${escapeHtml(meta)}">${escapeHtml(meta)}</span>
         </td>
-        <td class="text-center">${nameOfUser(cv.nguoiTaoId)}</td>
-        <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${chucDanh}</span>` : '--'}</td>
+        <td class="text-center">${escapeHtml(nameOfUser(cv.nguoiTaoId))}</td>
+        <td class="text-center">${chucDanh ? `<span class="bc-badge" style="background:${mau.bg}; color:${mau.fg};">${escapeHtml(chucDanh)}</span>` : '--'}</td>
         <td class="text-center">${formatVN(cv.ngayBatDauKH)}</td>
         <td class="text-center">${formatVN(cv.ngayKetThucKH)}</td>
         <td>
@@ -88,7 +88,7 @@ function renderCongViecCaNhan() {
     const gtSelect = document.getElementById('filterGoiThau');
     if (gtSelect.options.length <= 1) {
         let html = '<option value="">-- Tất cả Gói thầu --</option>';
-        goiThau.forEach(g => html += `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`);
+        goiThau.forEach(g => html += `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`);
         gtSelect.innerHTML = html;
     }
     const gsSelect = document.getElementById('filterGS');
@@ -96,7 +96,7 @@ function renderCongViecCaNhan() {
         let html = '<option value="">-- Tất cả người phụ trách --</option>';
         const ids = [...new Set(congViec.map(c => c.nguoiTaoId).filter(Boolean))];
         ids.sort((a, b) => nameOfUser(a).localeCompare(nameOfUser(b)));
-        ids.forEach(id => html += `<option value="${id}">${nameOfUser(id)}</option>`);
+        ids.forEach(id => html += `<option value="${escapeHtml(id)}">${escapeHtml(nameOfUser(id))}</option>`);
         gsSelect.innerHTML = html;
     }
 
@@ -129,7 +129,7 @@ function renderCongViecCaNhan() {
         const gtKey = 'gt:' + g.maGoiThau;
         const gtOpen = !collapsedGroups.has(gtKey);
         html += `<tr class="task-group-row" onclick="toggleTaskGroup('${gtKey}')">
-            <td colspan="8"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.stt ? g.stt + '. ' : ''}${g.tenGoiThau}</td>
+            <td colspan="8"><i class="fa-solid ${gtOpen ? 'fa-chevron-down' : 'fa-chevron-right'}" style="margin-right:8px; color:var(--accent);"></i>${g.stt ? g.stt + '. ' : ''}${escapeHtml(g.tenGoiThau)}</td>
         </tr>`;
         if (!gtOpen) return;
 
@@ -155,7 +155,7 @@ let cvhlRowSeq_ = 0;
 
 function fillCvhlGoiThauSelect_(selectEl) {
     selectEl.innerHTML = '<option value="">-- Chọn Gói thầu --</option>' +
-        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        goiThau.map(g => `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`).join('');
 }
 
 function onCvhlGoiThauChange(rowId) {
@@ -180,7 +180,7 @@ function fillCvhlHangMucBox_(rowId, maGoiThau) {
         </label>` +
         list.map(h => `
         <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; font-weight:400;">
-            <input type="checkbox" class="cvhl-hm-cb" value="${h.maHangMuc}"> ${h.maHangMuc}
+            <input type="checkbox" class="cvhl-hm-cb" value="${escapeHtml(h.maHangMuc)}"> ${escapeHtml(h.maHangMuc)}
         </label>`).join('');
 }
 
@@ -323,7 +323,7 @@ function openBaoCaoModal() {
 
     const sel = document.getElementById('ntdGoiThauFilter');
     sel.innerHTML = '<option value="">-- Tất cả Gói thầu --</option>' +
-        goiThau.map(g => `<option value="${g.maGoiThau}">${g.tenGoiThau}</option>`).join('');
+        goiThau.map(g => `<option value="${escapeHtml(g.maGoiThau)}">${escapeHtml(g.tenGoiThau)}</option>`).join('');
     sel.value = '';
 
     renderBaoCaoTable();
@@ -351,8 +351,8 @@ function renderBaoCaoTable() {
         // ràng ngay từ đầu để nhân sự biết trước khi gõ % chứ không phải đợi bị chặn mới thấy.
         const isTre = cv.ngayKetThucKH && getTodayDate() > cv.ngayKetThucKH;
         return `<tr>
-            <td style="text-align:left;">${cv.tenCongViec}${isTre ? ' <span class="bc-badge overdue">Trễ hạn</span>' : ''}</td>
-            <td class="admin-only text-center">${cv.nguoiTaoTen || '--'}</td>
+            <td style="text-align:left;">${escapeHtml(cv.tenCongViec)}${isTre ? ' <span class="bc-badge overdue">Trễ hạn</span>' : ''}</td>
+            <td class="admin-only text-center">${escapeHtml(cv.nguoiTaoTen || '--')}</td>
             <td class="text-center">${hmLabel || '--'}</td>
             <td class="text-center">${cv.luyKe || 0}%</td>
             <td><input type="number" step="0.5" min="0" class="form-control ntd-row-pct" data-cv="${cv.maCongViec}" data-current="${cv.luyKe || 0}" placeholder="0"></td>
