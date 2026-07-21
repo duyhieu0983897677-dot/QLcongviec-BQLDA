@@ -92,10 +92,22 @@ function ccCapNhatNutLuu_() {
 
 function ccFmt1_(n) { return (Math.round((Number(n) || 0) * 10) / 10).toString().replace('.', ','); }
 function ccFmt2_(n) { return (Math.round((Number(n) || 0) * 100) / 100).toString().replace('.', ','); }
+// n === null nghĩa là nhân sự "Không chấm công chung" — hiện dấu "—" thay vì số (xem getChamCongThang).
+function ccFmtOrDash_(n, suffix) { return n === null ? '—' : ccFmt1_(n) + (suffix || ''); }
 function ccFmtDelta_(n) {
   const r = Math.round((Number(n) || 0) * 10) / 10;
   const cls = r > 0 ? 'cc-delta-pos' : (r < 0 ? 'cc-delta-neg' : 'cc-delta-zero');
   return `<span class="${cls}">${r > 0 ? '+' : ''}${ccFmt1_(r)}</span>`;
+}
+
+// Mô tả cách ngày nghỉ phép (P) được "trả" theo thứ tự thác nước Bù → Phép → không lương (xem
+// tinhChiTietThangChoNguoi_ ở Code.js) — chỉ hiện khi có ít nhất 1 ngày P trong tháng.
+function ccChiTietPhuP_(row) {
+  const parts = [];
+  if (row.buDungChoP > 0) parts.push(`<span class="cc-q-ok">Bù phủ ${ccFmt1_(row.buDungChoP)}</span>`);
+  if (row.phepDungChoP > 0) parts.push(`<span class="cc-q-ok">Phép phủ ${ccFmt1_(row.phepDungChoP)}</span>`);
+  if (row.pKhongDuocPhu > 0) parts.push(`<span class="cc-q-short">${ccFmt1_(row.pKhongDuocPhu)} ngày nghỉ không lương</span>`);
+  return parts.length ? ' — ' + parts.join(', ') : '';
 }
 
 // Mirror đúng logic tinhGioTangCa_() ở Code.js — chỉ để hiện breakdown ngay trong popup trước khi
@@ -217,12 +229,13 @@ function renderChamCongTable() {
         <div class="cc-name-inner">
           <span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')" title="Bấm để xem chi tiết công">${escapeHtml(r.hoTen)}</span>
           ${laToi ? '<span class="cc-name-badge">Bạn</span>' : ''}
+          ${r.khongChamCongChung ? '<span class="cc-name-badge" style="background:var(--text-muted);" title="Không tham gia chấm công/tăng ca chung với BQLDA"><i class="fa-solid fa-ban"></i> Không chấm công</span>' : ''}
         </div>
       </td>
-      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.congTinhLuong)}</td>
-      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
-      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.gioTCConLaiDuKien)}h</td>
-      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.buCuoiThang)}</td>`;
+      <td class="cc-sumcol cc-highlight">${ccFmtOrDash_(r.congTinhLuong)}</td>
+      <td class="cc-sumcol cc-highlight">${ccFmtOrDash_(r.phepCuoiThang)}</td>
+      <td class="cc-sumcol cc-highlight">${ccFmtOrDash_(r.gioTCConLaiDuKien, 'h')}</td>
+      <td class="cc-sumcol cc-highlight">${ccFmtOrDash_(r.buCuoiThang)}</td>`;
 
     for (let d = 1; d <= soNgay; d++) {
       const iso = thang + '-' + String(d).padStart(2, '0');
@@ -376,45 +389,59 @@ function openChiTietCongModal(userId) {
   document.getElementById('detModalSub').textContent = 'Chi tiết công — Tháng ' + ccData.thang.split('-').reverse().join('/');
 
   const isAdmin = currentRole === 'ADMIN';
-  const quotaOk = row.congCuoiTuan >= ccData.quotaThu7;
-  const rowsHtml = [
-    ['Công Thứ 7', ccFmt1_(row.congThu7)],
-    ['Công Chủ Nhật', ccFmt1_(row.congChuNhat)],
-    ['Cuối tuần (T7+CN)', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${quotaOk ? '✓' : '✗'} ${ccFmt1_(row.congCuoiTuan)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
-    ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? (row.phepTruDoP > 0 ? ' — <span class="cc-q-short">bị trừ đủ (tháng này không phát sinh Bù)</span>' : ' — <span class="cc-q-ok">được miễn trừ (có phát sinh Bù)</span>') : '')]
-  ].map(([lbl, val]) => `<div class="cc-brk-row"><span class="cc-brk-lbl">${lbl}</span><span>${val}</span></div>`).join('');
 
-  const phepDauThangHtml = isAdmin
-    ? `<span style="display:inline-flex; gap:6px; align-items:center;">
-        <input type="number" class="dd-input-sm" id="detPhepDauThangInput" step="0.5" value="${row.phepDauThang}">
-        <button type="button" class="btn btn-sm" style="background:var(--success); padding:3px 9px;" onclick="saveDetPhepDauThang_()" title="Lưu Phép đầu tháng"><i class="fa-solid fa-floppy-disk"></i></button>
-      </span>`
-    : ccFmt1_(row.phepDauThang);
-  const buDauThangHtml = isAdmin
-    ? `<span style="display:inline-flex; gap:6px; align-items:center;">
-        <input type="number" class="dd-input-sm" id="detBuDauThangInput" step="0.5" value="${row.buDauThang}">
-        <button type="button" class="btn btn-sm" style="background:var(--success); padding:3px 9px;" onclick="saveDetBuDauThang_()" title="Lưu Bù đầu tháng"><i class="fa-solid fa-floppy-disk"></i></button>
-      </span>`
-    : ccFmt1_(row.buDauThang);
+  const toggleHtml = isAdmin
+    ? `<div class="cc-brk-row"><span class="cc-brk-lbl">Không chấm công chung với BQLDA</span><span><input type="checkbox" id="detKhongChamCongChungInput" ${row.khongChamCongChung ? 'checked' : ''} onchange="saveDetKhongChamCongChung_(this)"></span></div>
+       <div class="cc-brk-divider"></div>`
+    : '';
 
-  document.getElementById('detModalBreakdown').innerHTML = rowsHtml + `
-    <div class="cc-brk-divider"></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Phép đầu tháng</span><span>${phepDauThangHtml}</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Trừ phép (ngày P)</span>${ccFmtDelta_(row.congTruPhepThang)}</div>
-    <div class="cc-brk-row cc-brk-total"><span>Phép cuối tháng (dự kiến)</span><span>${ccFmt1_(row.phepCuoiThang)}</span></div>
-    <div class="cc-brk-divider"></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Bù đầu tháng</span><span>${buDauThangHtml}</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Cuối tuần vượt định mức</span><span>${ccFmt1_(row.congCuoiTuanDu)}</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư từ tháng trước</span><span>${ccFmt1_(row.gioTCDauThang)}h</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC phát sinh tháng này</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">→ Công TC quy đổi (block 4h/8h)</span><span>${ccFmt1_(row.congTangCaQuyDoi)}</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư, chuyển tháng sau (dự kiến)</span><span>${ccFmt1_(row.gioTCConLaiDuKien)}h</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Bù phát sinh tháng này</span>${ccFmtDelta_(row.buTangThangNay)}</div>
-    <div class="cc-brk-row cc-brk-total"><span>Bù cuối tháng (dự kiến)</span><span>${ccFmt1_(row.buCuoiThang)}</span></div>
-    <div class="cc-brk-divider"></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Số công thực làm</span><span>${ccFmt1_(row.congThucLam)}</span></div>
-    <div class="cc-brk-row cc-brk-total"><span>Số công tính lương</span><span>${ccFmt1_(row.congTinhLuong)}</span></div>
-  `;
+  if (row.khongChamCongChung) {
+    document.getElementById('detModalBreakdown').innerHTML = toggleHtml + `
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Trạng thái</span><span class="cc-q-short"><i class="fa-solid fa-ban"></i> Không chấm công chung với BQLDA</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Ghi chú</span><span>Phép/Bù/Số công tính lương không áp dụng cho nhân sự này</span></div>
+    `;
+  } else {
+    const quotaOk = row.congCuoiTuan >= ccData.quotaThu7;
+    const rowsHtml = [
+      ['Công Thứ 7', ccFmt1_(row.congThu7)],
+      ['Công Chủ Nhật', ccFmt1_(row.congChuNhat)],
+      ['Cuối tuần (T7+CN)', `<span class="${quotaOk ? 'cc-q-ok' : 'cc-q-short'}">${quotaOk ? '✓' : '✗'} ${ccFmt1_(row.congCuoiTuan)}</span> / ${ccFmt1_(ccData.quotaThu7)} (định mức)`],
+      ['Số ngày nghỉ phép (P)', `${row.soNgayP} ngày` + (row.soNgayP ? ccChiTietPhuP_(row) : '')]
+    ].map(([lbl, val]) => `<div class="cc-brk-row"><span class="cc-brk-lbl">${lbl}</span><span>${val}</span></div>`).join('');
+
+    const phepDauThangHtml = isAdmin
+      ? `<span style="display:inline-flex; gap:6px; align-items:center;">
+          <input type="number" class="dd-input-sm" id="detPhepDauThangInput" step="0.5" value="${row.phepDauThang}">
+          <button type="button" class="btn btn-sm" style="background:var(--success); padding:3px 9px;" onclick="saveDetPhepDauThang_()" title="Lưu Phép đầu tháng"><i class="fa-solid fa-floppy-disk"></i></button>
+        </span>`
+      : ccFmt1_(row.phepDauThang);
+    const buDauThangHtml = isAdmin
+      ? `<span style="display:inline-flex; gap:6px; align-items:center;">
+          <input type="number" class="dd-input-sm" id="detBuDauThangInput" step="0.5" value="${row.buDauThang}">
+          <button type="button" class="btn btn-sm" style="background:var(--success); padding:3px 9px;" onclick="saveDetBuDauThang_()" title="Lưu Bù đầu tháng"><i class="fa-solid fa-floppy-disk"></i></button>
+        </span>`
+      : ccFmt1_(row.buDauThang);
+
+    document.getElementById('detModalBreakdown').innerHTML = toggleHtml + rowsHtml + `
+      <div class="cc-brk-divider"></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Phép đầu tháng</span><span>${phepDauThangHtml}</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Trừ phép (ngày P)</span>${ccFmtDelta_(row.congTruPhepThang)}</div>
+      <div class="cc-brk-row cc-brk-total"><span>Phép cuối tháng (dự kiến)</span><span>${ccFmt1_(row.phepCuoiThang)}</span></div>
+      <div class="cc-brk-divider"></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Bù đầu tháng</span><span>${buDauThangHtml}</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Cuối tuần vượt định mức</span><span>${ccFmt1_(row.congCuoiTuanDu)}</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư từ tháng trước</span><span>${ccFmt1_(row.gioTCDauThang)}h</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC phát sinh tháng này</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">→ Công TC quy đổi (block 4h/8h)</span><span>${ccFmt1_(row.congTangCaQuyDoi)}</span></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư, chuyển tháng sau (dự kiến)</span><span>${ccFmt1_(row.gioTCConLaiDuKien)}h</span></div>
+      ${row.buDungChoP > 0 ? `<div class="cc-brk-row"><span class="cc-brk-lbl">Trừ do phủ ngày P</span>${ccFmtDelta_(-row.buDungChoP)}</div>` : ''}
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Bù phát sinh tháng này (đã trừ P nếu có)</span>${ccFmtDelta_(row.buTangThangNay)}</div>
+      <div class="cc-brk-row cc-brk-total"><span>Bù cuối tháng (dự kiến)</span><span>${ccFmt1_(row.buCuoiThang)}</span></div>
+      <div class="cc-brk-divider"></div>
+      <div class="cc-brk-row"><span class="cc-brk-lbl">Số công thực làm</span><span>${ccFmt1_(row.congThucLam)}</span></div>
+      <div class="cc-brk-row cc-brk-total"><span>Số công tính lương</span><span>${ccFmt1_(row.congTinhLuong)}</span></div>
+    `;
+  }
 
   const otDays = Object.keys(row.tc).sort();
   document.getElementById('detModalOtList').innerHTML = otDays.length
@@ -491,6 +518,19 @@ function saveDetBuDauThang_() {
   gsRun('adminCapNhatBuDauThang', myUserId, myPassword, userId, ccCurrentThang, val)
     .then(() => ccCapNhatBuDauThangLocal_(userId, val))
     .catch(err => { inputEl.disabled = false; handleBackendError(err); });
+}
+
+// Bật/tắt "Không chấm công chung" (chỉ Admin) — đổi hẳn hình dạng dữ liệu của dòng (số ↔ "—" ở nhiều
+// cột cùng lúc) nên gọi loadChamCong(forceReload) lấy lại nguyên dòng từ server thay vì vá cục bộ như
+// Phép/Bù đầu tháng — đây cũng là thao tác hiếm khi bấm, không phải gõ số liên tục nên chấp nhận được.
+function saveDetKhongChamCongChung_(inputEl) {
+  const userId = ccDetModalUserId_;
+  if (!userId) return;
+  const giaTri = inputEl.checked;
+  inputEl.disabled = true;
+  gsRun('adminSetKhongChamCongChung', myUserId, myPassword, userId, giaTri)
+    .then(() => { closeChiTietCongModal(); loadChamCong(ccCurrentThang, true); })
+    .catch(err => { inputEl.disabled = false; inputEl.checked = !giaTri; handleBackendError(err); });
 }
 
 // Popup quản lý Ngày lễ (chỉ Admin, nút chỉ hiện với Admin — xem renderChamCongTable) — dùng để tính

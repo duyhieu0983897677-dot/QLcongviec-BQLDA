@@ -14,6 +14,11 @@ const TRANGTHAI_HOATDONG_ = 'Đang hoạt động';
 const TRANGTHAI_THUVIEC_ = 'Thử việc';
 const TRANGTHAI_NGHIVIEC_ = 'Nghỉ việc';
 
+// KhongChamCongChung (cột I/index 8 trong DanhSachUser) — cờ RIÊNG, KHÁC với TrangThai: dành cho nhân
+// sự không tham gia chấm công/tăng ca chung với BQLDA (VD tài khoản dùng chung, lãnh đạo không chấm
+// công...) — KHÔNG ảnh hưởng đăng nhập/các danh sách chọn khác, CHỈ đóng băng Phép/Bù/Số công tính
+// lương ở tab Chấm công (xem adminSetKhongChamCongChung/chotSoSachDenThangHienTai_/getChamCongThang).
+
 // HangMuc nay CHỈ là dữ liệu tham chiếu (mã/tên/cây cha-con) để lọc & để Gói thầu gộp —
 // không còn nhận Nhật ký tiến độ trực tiếp (xem CongViec bên dưới).
 // stt (số thứ tự hiển thị) thêm ở CUỐI mỗi bảng — không chèn giữa để không xáo trộn cột của các
@@ -460,7 +465,8 @@ function listSupervisors() {
       name: String(data[i][3]).trim(),
       chucDanh: String(data[i][4] || '').trim(),
       phanMacDinh: String(data[i][5] || '').trim(),
-      trangThai: String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_
+      trangThai: String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_,
+      khongChamCongChung: data[i][8] === true || String(data[i][8] || '').trim().toUpperCase() === 'TRUE'
     });
   }
   return result;
@@ -526,6 +532,34 @@ function adminSetTrangThaiNhanSu(adminId, adminPass, targetId, trangThai) {
     if (String(data[i][0]).trim() === String(targetId).trim()) {
       sheet.getRange(i + 1, 7).setValue(tt);
       logActivity(adminId, adminUser.name, "Đổi Trạng thái nhân sự", `${targetId} -> ${tt}`);
+      return "Success";
+    }
+  }
+  throw new Error("Không tìm thấy nhân sự!");
+}
+
+// (Admin) Đánh dấu 1 nhân sự "Không chấm công chung" (cột 'KhongChamCongChung' trong DanhSachUser,
+// cột I/index 8) — dành cho nhân sự không tham gia chấm công/tăng ca chung với BQLDA (VD tài khoản
+// dùng chung, cấp lãnh đạo không chấm công...). KHÔNG ảnh hưởng đăng nhập/các danh sách chọn khác
+// (khác với TrangThai Nghỉ việc) — CHỈ đóng băng Phép/Bù/Số công tính lương ở tab Chấm công (xem
+// chotSoSachDenThangHienTai_/getChamCongThang), dòng của họ hiện dấu "—" thay vì số.
+function adminSetKhongChamCongChung(adminId, adminPass, targetId, giaTri) {
+  const adminUser = login(adminId, adminPass);
+  if (adminUser.role !== 'ADMIN') throw new Error("Chỉ Quản trị mới có quyền đặt \"Không chấm công chung\"!");
+
+  const targetIdStr = String(targetId || '').trim();
+  if (!targetIdStr) throw new Error("Thiếu thông tin nhân sự!");
+  const coGiaTri = giaTri === true || giaTri === 'true' || giaTri === 1 || giaTri === '1';
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
+  if (!sheet) throw new Error("Chưa cấu hình Tab DanhSachUser trên Google Sheet!");
+  if (!sheet.getRange(1, 9).getValue()) sheet.getRange(1, 9).setValue('KhongChamCongChung');
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === targetIdStr) {
+      sheet.getRange(i + 1, 9).setValue(coGiaTri);
+      logActivity(adminId, adminUser.name, "Đổi Không chấm công chung", `${targetIdStr}: ${coGiaTri}`);
       return "Success";
     }
   }
@@ -1340,6 +1374,7 @@ function chotSoSachDenThangHienTai_(allUsers, ccByThang_) {
   allUsers.forEach(u => {
     const trangThai = u.trangThai || TRANGTHAI_HOATDONG_;
     if (trangThai === TRANGTHAI_NGHIVIEC_) return; // đã nghỉ việc — đóng băng cả 2 sổ, không chốt thêm.
+    if (u.khongChamCongChung) return; // không chấm công chung với BQLDA — đóng băng Phép/Bù tương tự.
     const baseline = trangThai === TRANGTHAI_HOATDONG_ ? 1 : 0; // Thử việc: không có phép baseline (Bù vẫn có).
 
     const phepOfUser = allPhep.filter(p => p.userId === u.id).sort((a, b) => a.thang.localeCompare(b.thang));
@@ -1367,7 +1402,7 @@ function chotSoSachDenThangHienTai_(allUsers, ccByThang_) {
     let gioTCDauThangDangXet = lastBu.gioTCDauThang;
 
     while (thangDangXet < thangHienTai) {
-      const chiTiet = tinhChiTietThangChoNguoi_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet, gioTCDauThangDangXet);
+      const chiTiet = tinhChiTietThangChoNguoi_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet, tongBuThangDo, gioTCDauThangDangXet, tongPhepThangDo);
       // Chỉ áp dụng delta tháng này cho sổ nào ĐÃ tồn tại tới đúng thangDangXet — phòng trường hợp 1
       // trong 2 sổ có dữ liệu THẬT mới hơn (hiếm khi xảy ra vì luôn "mồi" bằng nhau ở trên).
       if (lastPhep.thang <= thangDangXet) tongPhepThangDo += chiTiet.congTruPhepThang;
@@ -1552,16 +1587,21 @@ function adminXoaNgayLe(userId, password, ngay) {
 //     (cộng dồn giờ dư tháng trước + giờ phát sinh tháng này) chốt 0,5 công, đủ 8h chốt 1 công; giờ lẻ
 //     CHƯA đủ 4h mang sang tháng sau cộng dồn tiếp (gioTCDauThang, lưu trong BuThang).
 //
-//   SỔ PHÉP (PhepThang) — CHỈ còn phụ thuộc ngày nghỉ P, KHÔNG còn liên quan cuối tuần/tăng ca nữa:
-//     Cộng/Trừ phép tháng = − Số ngày đánh dấu P (chỉ trừ khi tháng đó KHÔNG phát sinh Bù nào cả —
-//     có phát sinh Bù dù ít thì mọi ngày P trong tháng đó được miễn, không trừ phép).
-//     Baseline đầu tháng (+1): CHỈ áp dụng cho nhân sự CHÍNH THỨC (TRANGTHAI_HOATDONG_) — Thử việc
-//     không có. Nhân sự Nghỉ việc bị đóng băng hoàn toàn CẢ 2 SỔ, không cộng/trừ gì thêm (xem
-//     chotSoSachDenThangHienTai_).
+//   NGÀY NGHỈ PHÉP (P) — trả theo thứ tự THÁC NƯỚC (waterfall), ưu tiên Bù trước, không còn kiểu
+//   "miễn trừ toàn bộ nếu tháng có phát sinh Bù" như trước:
+//     1. Trừ vào Bù CUỐI THÁNG (đầu tháng + phát sinh tháng này) trước — coi như nghỉ phép CÓ LƯƠNG.
+//     2. Bù không đủ thì trừ tiếp vào Phép ĐẦU THÁNG — vẫn CÓ LƯƠNG.
+//     3. Cả 2 đều hết thì phần dư là nghỉ KHÔNG LƯƠNG (không cộng vào Số công tính lương).
 //
-//   Số công tính lương (getChamCongThang) KHÔNG cộng thêm gì từ Bù/tăng ca — cuối tuần dư định mức chỉ
-//   tính tới đúng định mức (phần dư đã chuyển sang Bù ở trên, không trả lương 2 lần); giờ tăng ca hoàn
-//   toàn không vào lương, chỉ vào Bù để nghỉ bù sau.
+//   SỔ PHÉP (PhepThang) — CHỈ còn phụ thuộc phần P không phủ được bởi Bù (bước 2 ở trên), KHÔNG còn
+//   liên quan cuối tuần/tăng ca nữa. Baseline đầu tháng (+1): CHỈ áp dụng cho nhân sự CHÍNH THỨC
+//   (TRANGTHAI_HOATDONG_) — Thử việc không có. Nhân sự Nghỉ việc bị đóng băng hoàn toàn CẢ 2 SỔ, không
+//   cộng/trừ gì thêm (xem chotSoSachDenThangHienTai_).
+//
+//   Số công tính lương (getChamCongThang) = công ngày thường + cuối tuần (chặn ở định mức) + số ngày P
+//   ĐƯỢC PHỦ bởi Bù/Phép (bước 1-2 ở trên, coi như đi làm đủ) — KHÔNG cộng gì từ phần Bù/tăng ca còn
+//   dư (đã ở trong sổ Bù để nghỉ bù sau, không trả lương 2 lần) hay từ phần P không phủ được (nghỉ
+//   không lương).
 // =======================================================
 
 const CHAMCONG_HEADERS_ = ['userId', 'ngay', 'buoi', 'gioBatDauTC', 'gioKetThucTC'];
@@ -1665,14 +1705,22 @@ function nhomChamCongTheoThang_(allCC) {
 // Tính TOÀN BỘ chi tiết Phép + Bù + tăng ca cho 1 nhân sự/1 tháng — DÙNG CHUNG bởi getChamCongThang
 // (hiển thị "dự kiến") và chotSoSachDenThangHienTai_ (chốt số THẬT khi sang tháng mới), để không lệch
 // công thức giữa 2 nơi. gioTCDauThangBu: giờ tăng ca lẻ mang từ tháng trước (đọc từ sổ Bù, KHÔNG phải
-// sổ Phép — xem BU_HEADERS_).
+// sổ Phép — xem BU_HEADERS_). buDauThang/phepDauThang: số dư ĐẦU THÁNG của 2 sổ (trước khi trừ ngày
+// P tháng này) — dùng để chạy "thác nước" (waterfall) trả ngày nghỉ phép bên dưới.
 // congCuoiTuan = congThu7 + congChuNhat: Chủ Nhật được tính GỘP CHUNG 1 định mức với Thứ 7 (làm Chủ
 // Nhật thay Thứ 7 vẫn đủ định mức bình thường, không bắt buộc phải đúng ngày Thứ 7).
 // congCuoiTuanDu (phần VƯỢT định mức) + congTangCaQuyDoi (tăng ca quy đổi block 4h/8h) CỘNG THÀNH
-// buTangThangNay — dồn vào sổ BÙ (không phải Phép). Làm THIẾU định mức không bị trừ ở đâu cả (Bù chỉ
-// tăng, không âm) — chỉ ảnh hưởng tới việc miễn trừ ngày P: ngày P CHỈ bị trừ khi tháng đó KHÔNG phát
-// sinh Bù nào (buTangThangNay = 0) — có phát sinh Bù (dù ít) thì mọi ngày P trong tháng đó được miễn.
-function tinhChiTietThangChoNguoi_(allCC, userId, thang, gioTCDauThangBu) {
+// buPhatSinhTruocKhiTruP — dồn vào sổ BÙ (không phải Phép). Làm THIẾU định mức không bị trừ ở đâu cả
+// (Bù chỉ tăng, không âm).
+//
+// Ngày nghỉ phép (P) được TRẢ theo thứ tự thác nước (waterfall), ưu tiên Bù trước:
+//   1. Trừ vào Bù CUỐI THÁNG (= buDauThang + Bù phát sinh tháng này) trước — phần P này vẫn coi như đi
+//      làm đủ công (nghỉ phép có lương, chỉ trừ số dư Bù).
+//   2. Bù không đủ thì trừ tiếp vào Phép ĐẦU THÁNG — vẫn coi như có lương.
+//   3. Cả Bù lẫn Phép đều hết thì phần dư ra là nghỉ KHÔNG LƯƠNG — không cộng vào Số công tính lương.
+// soNgayPDuocPhu (= buDungChoP + phepDungChoP) được CỘNG THẲNG vào "Số công tính lương" ở
+// getChamCongThang (coi như đi làm đủ, chỉ trừ sổ Bù/Phép thay vì trừ lương).
+function tinhChiTietThangChoNguoi_(allCC, userId, thang, buDauThang, gioTCDauThangBu, phepDauThang) {
   const { saturdays, sundays } = layThu7CNTrongThang_(thang);
   const quotaThu7 = Math.round(saturdays.length * 0.5 * 10) / 10;
 
@@ -1695,14 +1743,23 @@ function tinhChiTietThangChoNguoi_(allCC, userId, thang, gioTCDauThangBu) {
 
   const tongGioTC = tinhTongGioTangCaThang_(allCC, userId, thang);
   const quyDoiTC = tinhQuyDoiTangCaCong_(gioTCDauThangBu, tongGioTC);
+  const buPhatSinhTruocKhiTruP = Math.round((congCuoiTuanDu + quyDoiTC.soCong) * 10) / 10;
 
-  const buTangThangNay = Math.round((congCuoiTuanDu + quyDoiTC.soCong) * 10) / 10;
-  const phepTruDoP = buTangThangNay > 0 ? 0 : soNgayP;
-  const congTruPhepThang = -phepTruDoP;
+  // Waterfall trả ngày P: Bù cuối tháng (đầu tháng + phát sinh tháng này) trước, rồi tới Phép đầu
+  // tháng — Math.max(0, ...) phòng trường hợp số dư cũ đang âm (lịch sử trước khi có quy tắc này).
+  const buKhaDung = Math.round((Math.max(0, buDauThang) + buPhatSinhTruocKhiTruP) * 10) / 10;
+  const buDungChoP = Math.min(soNgayP, buKhaDung);
+  const pConLaiSauBu = Math.round((soNgayP - buDungChoP) * 10) / 10;
+  const phepDungChoP = Math.min(pConLaiSauBu, Math.max(0, phepDauThang));
+  const pKhongDuocPhu = Math.round((pConLaiSauBu - phepDungChoP) * 10) / 10;
+  const soNgayPDuocPhu = Math.round((soNgayP - pKhongDuocPhu) * 10) / 10;
+
+  const congTruPhepThang = -phepDungChoP;
+  const buTangThangNay = Math.round((buPhatSinhTruocKhiTruP - buDungChoP) * 10) / 10;
 
   return {
     quotaThu7, congThu7, congChuNhat, congCuoiTuan, congCuoiTuanThucLam, congCuoiTuanDu,
-    soNgayP, phepTruDoP, congTruPhepThang,
+    soNgayP, buDungChoP, phepDungChoP, pKhongDuocPhu, soNgayPDuocPhu, congTruPhepThang,
     tongGioTC: Math.round(tongGioTC * 10) / 10, gioTCDu: quyDoiTC.gioDu,
     congTangCaQuyDoi: quyDoiTC.soCong, buTangThangNay
   };
@@ -1746,7 +1803,22 @@ function getChamCongThang(thang) {
       if (r.gioBatDauTC && r.gioKetThucTC) tc[r.ngay] = { start: r.gioBatDauTC, end: r.gioKetThucTC };
     });
 
-    const chiTiet = tinhChiTietThangChoNguoi_(ccThang, u.id, thangXem, gioTCDauThang);
+    // Không chấm công chung với BQLDA — đóng băng hoàn toàn Phép/Bù/Số công tính lương (xem
+    // chotSoSachDenThangHienTai_), client hiện dấu "—" thay vì số (các field null bên dưới).
+    if (u.khongChamCongChung) {
+      return {
+        userId: u.id, hoTen: u.name, khongChamCongChung: true,
+        phepDauThang: null, buDauThang: null, cc, tc,
+        congThu7: 0, congChuNhat: 0, congCuoiTuan: 0, soNgayP: 0,
+        buDungChoP: 0, phepDungChoP: 0, pKhongDuocPhu: 0, congTruPhepThang: 0,
+        phepCuoiThang: null, buCuoiThang: null,
+        congThucLam: null, congTinhLuong: null,
+        tongGioTC: 0, gioTCDauThang: null, congTangCaQuyDoi: 0, gioTCConLaiDuKien: null,
+        congCuoiTuanDu: 0, buTangThangNay: 0
+      };
+    }
+
+    const chiTiet = tinhChiTietThangChoNguoi_(ccThang, u.id, thangXem, buDauThang, gioTCDauThang, phepDauThang);
     const congNgayThuong = Object.entries(cc).reduce((s, [ngay, v]) => {
       if (saturdays.includes(ngay) || sundays.includes(ngay)) return s;
       return s + (typeof v === 'number' ? v : 0);
@@ -1757,8 +1829,10 @@ function getChamCongThang(thang) {
     // Số công tính lương = cơ sở tính lương thực tế: cuối tuần LÀM DƯ định mức thì CHỈ tính tới đúng
     // định mức (phần dư đã dồn sang Bù ở trên, không cộng thêm vào đây kẻo trả 2 lần); LÀM THIẾU thì
     // KHÔNG bị trừ thêm ở cột này (không phạt kép). Tăng ca KHÔNG cộng vào lương — chỉ vào Bù để nghỉ
-    // bù sau (khác với chi trả tiền lương).
-    const congTinhLuong = congNgayThuong + chiTiet.congCuoiTuanThucLam;
+    // bù sau (khác với chi trả tiền lương). Ngày P được Bù/Phép "phủ" (soNgayPDuocPhu, xem
+    // tinhChiTietThangChoNguoi_) coi như đi làm đủ công nên CỘNG THẲNG vào đây; phần không đủ Bù/Phép
+    // để phủ (pKhongDuocPhu) là nghỉ không lương, không cộng gì.
+    const congTinhLuong = congNgayThuong + chiTiet.congCuoiTuanThucLam + chiTiet.soNgayPDuocPhu;
 
     return {
       userId: u.id, hoTen: u.name, phepDauThang, buDauThang,
@@ -1767,7 +1841,9 @@ function getChamCongThang(thang) {
       congChuNhat: chiTiet.congChuNhat,
       congCuoiTuan: chiTiet.congCuoiTuan,
       soNgayP: chiTiet.soNgayP,
-      phepTruDoP: chiTiet.phepTruDoP,
+      buDungChoP: chiTiet.buDungChoP,
+      phepDungChoP: chiTiet.phepDungChoP,
+      pKhongDuocPhu: chiTiet.pKhongDuocPhu,
       congTruPhepThang: chiTiet.congTruPhepThang,
       phepCuoiThang: Math.round((phepDauThang + chiTiet.congTruPhepThang) * 10) / 10,
       buCuoiThang: Math.round((buDauThang + chiTiet.buTangThangNay) * 10) / 10,
