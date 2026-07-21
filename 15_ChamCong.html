@@ -21,7 +21,11 @@
 
    DANH SÁCH HÀM CHÍNH:
    - renderChamCong()        : Điểm vào, đặt tháng mặc định rồi tải dữ liệu
-   - loadChamCong(thang)     : Gọi getChamCongThang, lưu kết quả, xoá pending rồi vẽ lại bảng
+   - loadChamCong(thang, forceReload) : Vẽ lại từ ccCache_ nếu tháng đã tải trước đó (tức thời, không
+                               gọi server); chỉ gọi getChamCongThang khi tháng chưa có trong cache hoặc
+                               forceReload=true (sau khi Lưu, hoặc bấm "Làm mới") — xem chú thích ở
+                               ccCache_ phía trên vì sao cache theo tháng quan trọng cho tốc độ.
+   - ccLamMoi_()             : Nút "Làm mới" — bỏ qua cache, luôn tải lại từ server
    - renderChamCongTable()   : Dựng thead (cột tổng hợp + từng ngày) + tbody
    - toggleChamCongCell()    : Bấm ô chấm công 1 ngày, xoay vòng trống→1→0,5→P→trống — CHỈ sửa cục bộ
    - openTangCaModal()       : Mở popup nhập giờ tăng ca cho 1 ngày, có breakdown 22h trực tiếp
@@ -36,6 +40,14 @@ let ccData = null;
 let ccModalCtx = null; // { userId, ngay } của popup Tăng ca đang mở
 let ccPendingCC = {};  // key "userId|ngay" -> { targetUserId, ngay, buoi } — chấm công CHƯA lưu
 let ccPendingTC = {};  // key "userId|ngay" -> { targetUserId, ngay, gioBatDau, gioKetThuc } — tăng ca CHƯA lưu
+// Cache dữ liệu đã tải theo tháng (key 'yyyy-MM' -> object đã parse) — mỗi lượt getChamCongThang tốn
+// ~3-4 giây (đọc 3 sheet trên Apps Script, mỗi lượt đọc ~0,4-1 giây CỐ ĐỊNH bất kể sheet to hay nhỏ),
+// trong khi trước đây bấm ra/vào tab này nhiều lần trong 1 phiên làm việc là gọi lại server MỖI LẦN
+// dù dữ liệu chưa hề đổi — đây mới là nguyên nhân chính khiến "bấm vào tab lại chậm" (không phải chỉ
+// chậm ở lần mở đầu tiên). Có cache rồi thì bấm lại tab/đổi qua lại giữa các tháng đã xem chỉ còn vẽ
+// lại từ bộ nhớ (tức thời) — CHỈ gọi server khi: xem tháng chưa từng tải, vừa Lưu xong (dữ liệu đổi),
+// hoặc người dùng chủ động bấm nút "Làm mới" (đề phòng người khác vừa sửa trên máy khác).
+let ccCache_ = {};
 
 function chuanHoaChucDanhClient_(s) {
   return String(s || '').trim().toLowerCase();
@@ -104,12 +116,33 @@ function renderChamCong() {
   loadChamCong(ccCurrentThang);
 }
 
-function loadChamCong(thang) {
-  document.getElementById('ccBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Đang tải…</td></tr>';
+// forceReload=true bỏ qua cache, luôn gọi lại server (dùng sau khi Lưu, hoặc bấm nút "Làm mới").
+function loadChamCong(thang, forceReload) {
   ccPendingCC = {}; ccPendingTC = {};
+
+  if (!forceReload && ccCache_[thang]) {
+    ccData = ccCache_[thang];
+    renderChamCongTable();
+    ccCapNhatNutLuu_();
+    return;
+  }
+
+  document.getElementById('ccBody').innerHTML = '<tr><td colspan="20" class="text-center" style="padding:20px; color:gray;">Đang tải…</td></tr>';
   gsRun('getChamCongThang', thang)
-    .then(json => { ccData = JSON.parse(json); renderChamCongTable(); ccCapNhatNutLuu_(); })
+    .then(json => {
+      ccData = JSON.parse(json);
+      ccCache_[thang] = ccData;
+      renderChamCongTable();
+      ccCapNhatNutLuu_();
+    })
     .catch(handleBackendError);
+}
+
+// Nút "Làm mới" — chủ động bỏ cache, tải lại đúng tháng đang xem từ server (đề phòng người khác vừa
+// chấm công/tăng ca trên máy khác mà cache ở đây chưa biết).
+function ccLamMoi_() {
+  if (ccIsDirty_() && !confirm('Bạn có thay đổi chấm công/tăng ca chưa lưu. Làm mới sẽ MẤT các thay đổi này, tiếp tục?')) return;
+  loadChamCong(ccCurrentThang, true);
 }
 
 function ccDowLabel_(ngayISO) {
@@ -302,7 +335,7 @@ function luuThayDoiChamCong() {
       ccKeys.forEach(k => delete ccPendingCC[k]);
       tcKeys.forEach(k => delete ccPendingTC[k]);
       showCustomAlert('Đã lưu chấm công/tăng ca.', 'success');
-      if (!ccIsDirty_()) loadChamCong(ccCurrentThang);
+      if (!ccIsDirty_()) loadChamCong(ccCurrentThang, true);
       else renderChamCongTable();
     })
     .catch(handleBackendError)
@@ -371,7 +404,7 @@ function savePhepDauThangCC(userId, inputEl) {
   const val = inputEl.value;
   inputEl.disabled = true;
   gsRun('adminCapNhatPhepDauThang', myUserId, myPassword, userId, ccCurrentThang, val)
-    .then(() => loadChamCong(ccCurrentThang))
+    .then(() => loadChamCong(ccCurrentThang, true))
     .catch(err => { inputEl.disabled = false; handleBackendError(err); });
 }
 </script>
