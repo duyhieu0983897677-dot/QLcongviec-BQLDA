@@ -10,9 +10,10 @@
    - switchTab()      : Chuyển tab đang xem
    - (cuối file)      : Gọi getData() ngay khi script này chạy (không đợi window.onload) để tải
                         dữ liệu (Hạng mục/Gói thầu/Công việc/User) từ Google Sheet khi mở trang
-   - reloadData()/reloadCongViecData()/reloadHopDongData() : Tải lại dữ liệu sau khi lưu — gọi đúng
-                        hàm theo module đang thao tác để đỡ 1 round-trip backend (xem chú thích tại
-                        định nghĩa của reloadData() bên dưới)
+   - reloadData()/reloadCongViecData()/reloadHopDongData()/reloadHopDongChiTiet_() : Tải lại dữ liệu
+                        sau khi lưu — gọi đúng hàm theo module đang thao tác để đỡ round-trip backend
+                        và tránh tính lại dữ liệu KHÔNG đổi (xem chú thích tại định nghĩa của
+                        reloadData()/reloadHopDongChiTiet_() bên dưới)
    - gsRun()           : Bọc google.script.run thành Promise, dùng để chain nhiều lệnh backend
    - showCustomAlert() : Hiện thông báo xanh/đỏ
    - round0(), formatVN(), convertDMYtoISO()... : Hàm tiện ích dùng khắp nơi
@@ -118,6 +119,37 @@ function applyLoadedHopDongData(response) {
     updateUI();
 }
 
+// Gộp (merge) dữ liệu của ĐÚNG 1 Hợp đồng — từ getHopDongChiTietMotHopDong() — vào cache hiện có,
+// thay vì ghi đè nguyên mảng như applyLoadedHopDongData() ở trên: giữ nguyên dữ liệu của các Hợp
+// đồng KHÁC đang cache (chúng không hề đổi, không cần server tính lại). Đây là cách "thu hẹp" chi
+// phí tải lại sau mỗi lần Lưu ở BOQ/Phụ lục/Nghiệm thu/Thanh toán/Quyết toán/Tiến độ — xem
+// reloadHopDongChiTiet_() ngay dưới và chú thích ở getHopDongChiTietMotHopDong() trong Code.js.
+function applyLoadedHopDongChiTiet_(response) {
+    const parsed = JSON.parse(response);
+    const maHD = parsed.maHopDong;
+
+    // Phải tính TRƯỚC các tập mã (BOQ/Phụ lục/Đợt thanh toán) thuộc Hợp đồng này theo cache CŨ, vì
+    // phuLucThayDoi/nghiemThu/dotThanhToanChiTiet không có sẵn trường maHopDong trực tiếp (chỉ có
+    // maPhuLuc/maBOQ/maDotThanhToan) — cần tập mã CŨ để biết đúng dòng nào cần bỏ đi trước khi thay
+    // bằng dữ liệu mới (nếu tính SAU khi đã gán lại boq/phuLuc/dotThanhToan thì mất dấu tập mã cũ).
+    const boqIdsCu_ = new Set(boq.filter(b => b.maHopDong === maHD).map(b => b.maBOQ));
+    const phuLucIdsCu_ = new Set(phuLuc.filter(p => p.maHopDong === maHD).map(p => p.maPhuLuc));
+    const dotIdsCu_ = new Set(dotThanhToan.filter(d => d.maHopDong === maHD).map(d => d.maDotThanhToan));
+
+    const gopTrucTiep_ = (cacheArr, moiArr) => cacheArr.filter(x => x.maHopDong !== maHD).concat(moiArr);
+    hopDong = gopTrucTiep_(hopDong, parsed.hopDong);
+    boq = gopTrucTiep_(boq, parsed.boq);
+    phuLuc = gopTrucTiep_(phuLuc, parsed.phuLuc);
+    dotThanhToan = gopTrucTiep_(dotThanhToan, parsed.dotThanhToan);
+    quyetToan = gopTrucTiep_(quyetToan, parsed.quyetToan);
+
+    phuLucThayDoi = phuLucThayDoi.filter(ch => !phuLucIdsCu_.has(ch.maPhuLuc)).concat(parsed.phuLucThayDoi);
+    nghiemThu = nghiemThu.filter(n => !boqIdsCu_.has(n.maBOQ)).concat(parsed.nghiemThu);
+    dotThanhToanChiTiet = dotThanhToanChiTiet.filter(c => !dotIdsCu_.has(c.maDotThanhToan)).concat(parsed.dotThanhToanChiTiet);
+
+    updateUI();
+}
+
 // Màn hình nhỏ (điện thoại, <768px): mở trang chủ dạng ô lớn thay vì thẳng vào Tổng quan.
 if (window.innerWidth < 768 && document.getElementById('home')) {
     switchTab('home');
@@ -160,6 +192,16 @@ function reloadCongViecData() {
 function reloadHopDongData() {
     loadThongBao();
     return gsRun('getHopDongData').then(applyLoadedHopDongData);
+}
+
+// Tải lại + gộp dữ liệu của ĐÚNG 1 Hợp đồng (getHopDongChiTietMotHopDong) — dùng thay
+// reloadHopDongData() sau MỌI thao tác Lưu chỉ đụng tới 1 Hợp đồng cụ thể (BOQ/Phụ lục/Nghiệm thu/
+// Thanh toán/Quyết toán/Tiến độ, và cả Thêm/Sửa/Xóa chính Hợp đồng đó) — xem
+// applyLoadedHopDongChiTiet_() ở trên. reloadHopDongData() (tải lại TOÀN BỘ hệ thống) chỉ còn cần
+// cho nút "Làm mới" (không biết trước đang sửa Hợp đồng nào).
+function reloadHopDongChiTiet_(maHopDong) {
+    loadThongBao();
+    return gsRun('getHopDongChiTietMotHopDong', maHopDong).then(applyLoadedHopDongChiTiet_);
 }
 
 // Nhận TÊN CHUỖI của hàm (không nhận thẳng tham chiếu hàm) và tra qua window[...] —

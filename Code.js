@@ -1222,14 +1222,21 @@ function thangCong_(thang, soThang) {
 // phepDauThang(tháng mới) = TổngCộng(tháng cũ) + 1 (1 phép baseline/tháng).
 // tinhPhepChiTietTuChamCong_ định nghĩa ở phần CHẤM CÔNG & TĂNG CA bên dưới (cùng công thức hiển thị
 // ở getChamCongThang, tránh lệch số giữa "dự kiến" trên giao diện và số THẬT được chốt ở đây).
-function chotPhepDenThangHienTai_() {
+// allUsers/ccByThang_ do getChamCongThang() đọc + nhóm sẵn truyền vào — KHÔNG tự đọc lại
+// ChamCongThang ở đây nữa (trước đây hàm này đọc 1 lần, rồi getChamCongThang() đọc lại lần 2 NGUYÊN
+// SHEET đó ngay sau khi hàm này chạy xong, lãng phí 1 lượt đọc trùng mỗi lần mở tab/đổi tháng).
+// Trả về LUÔN mảng allPhep đã gồm cả các dòng vừa chốt thêm (nếu có) — trước đây hàm này chỉ ghi
+// vào Sheet rồi thôi, buộc getChamCongThang() phải đọc lại NGUYÊN sheet PhepThang lần thứ 2 ngay sau
+// đó để lấy đúng dữ liệu mới nhất, dù dữ liệu đó vốn đã có sẵn trong bộ nhớ ở đây rồi — mỗi lượt đọc
+// sheet tốn ~0,4-1 giây CỐ ĐỊNH ở nền tảng Apps Script bất kể sheet nhỏ hay lớn (đã đo thực tế: 23
+// nhân sự/317 dòng ChamCongThang vẫn mất 3,8 giây tổng cộng cho getChamCongThang, chủ yếu do CÁC LƯỢT
+// ĐỌC SHEET RIÊNG LẺ, không phải do khối lượng dữ liệu) — bớt được 1 lượt đọc trùng là bớt được ~1
+// giây mỗi lần mở tab/đổi tháng.
+function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
   const phepSheet = layHoacTaoSheet_('PhepThang', PHEP_HEADERS_);
-  const ccSheet = layHoacTaoSheet_('ChamCongThang', CHAMCONG_HEADERS_);
 
   const thangHienTai = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-  const allUsers = listSupervisors();
   const allPhep = readPhepThangRows_(phepSheet);
-  const allCC = readChamCongRows_(ccSheet);
 
   const rowsToAppend = [];
   allUsers.forEach(u => {
@@ -1239,25 +1246,29 @@ function chotPhepDenThangHienTai_() {
     if (!lastRow) {
       // Chưa từng có dòng nào — chỉ bắt đầu từ tháng hiện tại, không truy hồi lùi các tháng trước.
       rowsToAppend.push([u.id, thangHienTai, 1, 0, new Date()]);
+      allPhep.push({ userId: u.id, thang: thangHienTai, phepDauThang: 1, soNgayNghi: 0 });
       return;
     }
 
     let thangDangXet = lastRow.thang;
     let tongCongThangDo = lastRow.phepDauThang
-      + tinhPhepChiTietTuChamCong_(allCC, u.id, thangDangXet).congTruPhepThang
+      + tinhPhepChiTietTuChamCong_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet).congTruPhepThang
       - lastRow.soNgayNghi;
 
     while (thangDangXet < thangHienTai) {
       thangDangXet = thangCong_(thangDangXet, 1);
       const phepDauThangMoi = Math.round((tongCongThangDo + 1) * 10) / 10;
       rowsToAppend.push([u.id, thangDangXet, phepDauThangMoi, 0, new Date()]);
-      tongCongThangDo = phepDauThangMoi + tinhPhepChiTietTuChamCong_(allCC, u.id, thangDangXet).congTruPhepThang;
+      allPhep.push({ userId: u.id, thang: thangDangXet, phepDauThang: phepDauThangMoi, soNgayNghi: 0 });
+      tongCongThangDo = phepDauThangMoi + tinhPhepChiTietTuChamCong_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet).congTruPhepThang;
     }
   });
 
   if (rowsToAppend.length) {
     phepSheet.getRange(phepSheet.getLastRow() + 1, 1, rowsToAppend.length, PHEP_HEADERS_.length).setValues(rowsToAppend);
   }
+
+  return allPhep;
 }
 
 // Chỉ Admin (không áp dụng cho Thư ký BQLDA) được sửa trực tiếp "Phép + bù" — dùng để nhập số dư
@@ -1374,6 +1385,23 @@ function readChamCongRows_(sheet) {
   return result;
 }
 
+// Nhóm mảng đọc từ readChamCongRows_() theo 'yyyy-MM' — tra 1 tháng bất kỳ chỉ còn O(1) thay vì mỗi
+// nơi cần dữ liệu 1 tháng phải .filter() lại NGUYÊN mảng toàn bộ lịch sử chấm công từ trước tới giờ
+// (ngày càng dài theo thời gian dự án, vì ChamCongThang không bao giờ dọn/lưu trữ riêng theo tháng).
+// Trước đây getChamCongThang() lặp allUsers.map() rồi bên trong mỗi vòng lặp lại .filter() nguyên
+// allCC 1-2 lần (kể cả gọi qua chotPhepDenThangHienTai_) — với N nhân sự và M dòng lịch sử, tổng chi
+// phí tỉ lệ O(N×M), càng chấm công nhiều tháng thì mở tab càng chậm dù chỉ xem đúng 1 tháng. Gom 1
+// lần thành Map rồi tra theo tháng đưa chi phí về gần O(N + M).
+function nhomChamCongTheoThang_(allCC) {
+  const map = new Map();
+  allCC.forEach(r => {
+    const t = r.ngay.slice(0, 7);
+    if (!map.has(t)) map.set(t, []);
+    map.get(t).push(r);
+  });
+  return map;
+}
+
 // { quotaThu7, congThu7, congChuNhat, congCuoiTuan, soNgayP, phepTruDoP, congTruPhepThang } cho 1
 // nhân sự/1 tháng — DÙNG CHUNG bởi getChamCongThang (hiển thị "dự kiến") và chotPhepDenThangHienTai_
 // (chốt số THẬT khi sang tháng mới), để không lệch công thức giữa 2 nơi.
@@ -1405,27 +1433,41 @@ function tinhPhepChiTietTuChamCong_(allCC, userId, thang) {
 }
 
 // thang: 'yyyy-MM', bỏ trống = tháng hiện tại. KHÔNG cần đăng nhập để xem (giống getData()).
+//
+// Đã đo thực tế (23 nhân sự, 317 dòng ChamCongThang, chỉ 1 tháng dữ liệu — rất nhỏ) mà vẫn mất ~3,8
+// giây: phần lớn là do CÁC LƯỢT ĐỌC SHEET RIÊNG LẺ (mỗi lượt ~0,4-1 giây CỐ ĐỊNH ở nền tảng Apps
+// Script, không phụ thuộc sheet nhỏ hay lớn), không phải do vòng lặp tính toán. Vì vậy tối ưu quan
+// trọng nhất là GIẢM SỐ LƯỢT ĐỌC SHEET, không phải tối ưu thuật toán — hàm này chỉ còn đọc đúng 3
+// sheet 1 lần mỗi sheet: DanhSachUser (qua listSupervisors), ChamCongThang, PhepThang (qua
+// chotPhepDenThangHienTai_, đã trả thẳng dữ liệu mới nhất, KHÔNG đọc lại PhepThang lần 2 như trước).
 function getChamCongThang(thang) {
   const thangXem = String(thang || '').trim() || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-  chotPhepDenThangHienTai_(); // tái dùng cơ chế tự chốt "Phép đầu tháng" đã có, không tính lại ở đây
 
   const { soNgay, saturdays, sundays } = layThu7CNTrongThang_(thangXem);
 
   const allUsers = listSupervisors();
-  const allPhep = readPhepThangRows_(layHoacTaoSheet_('PhepThang', PHEP_HEADERS_));
+  // Đọc + nhóm theo tháng ĐÚNG 1 LẦN cho cả lượt gọi này — chotPhepDenThangHienTai_() và vòng lặp
+  // allUsers.map() bên dưới đều tra theo tháng qua Map (O(1)/tháng) thay vì mỗi nơi tự .filter() lại
+  // NGUYÊN mảng toàn bộ lịch sử chấm công (xem chú thích ở nhomChamCongTheoThang_()) — có lợi khi
+  // lịch sử chấm công tích lũy nhiều tháng, dù đây không phải chi phí chính hiện tại (xem trên).
   const allCC = readChamCongRows_(layHoacTaoSheet_('ChamCongThang', CHAMCONG_HEADERS_));
+  const ccByThang_ = nhomChamCongTheoThang_(allCC);
+  // Trả thẳng allPhep đã gồm dòng vừa chốt thêm (nếu có) — KHÔNG đọc lại PhepThang lần 2.
+  const allPhep = chotPhepDenThangHienTai_(allUsers, ccByThang_);
+
+  const ccThang = ccByThang_.get(thangXem) || [];
 
   const rows = allUsers.map(u => {
     const phepRow = allPhep.find(p => p.userId === u.id && p.thang === thangXem);
     const phepDauThang = phepRow ? phepRow.phepDauThang : 0;
 
     const cc = {}, tc = {};
-    allCC.filter(r => r.userId === u.id && r.ngay.slice(0, 7) === thangXem).forEach(r => {
+    ccThang.filter(r => r.userId === u.id).forEach(r => {
       if (r.buoi !== '') cc[r.ngay] = r.buoi;
       if (r.gioBatDauTC && r.gioKetThucTC) tc[r.ngay] = { start: r.gioBatDauTC, end: r.gioKetThucTC };
     });
 
-    const chiTiet = tinhPhepChiTietTuChamCong_(allCC, u.id, thangXem);
+    const chiTiet = tinhPhepChiTietTuChamCong_(ccThang, u.id, thangXem);
     // Công thực làm = công các ngày trong tuần + công cuối tuần đã bị chặn trần theo định mức (phần
     // cuối tuần vượt định mức được cộng sang Phép thay vì tính vào công thực làm, xem congCuoiTuanThucLam).
     const congNgayThuong = Object.entries(cc).reduce((s, [ngay, v]) => {
@@ -2005,6 +2047,61 @@ function getHopDongData() {
   });
 
   return JSON.stringify({ hopDong, boq, phuLuc, phuLucThayDoi, nghiemThu, dotThanhToan, dotThanhToanChiTiet, quyetToan });
+}
+
+// Giống getHopDongData() nhưng CHỈ đọc/tính lại dữ liệu của ĐÚNG 1 Hợp đồng — dùng để tải lại sau
+// khi Lưu ở BOQ/Phụ lục/Nghiệm thu/Thanh toán/Quyết toán/Tiến độ (mọi thao tác Lưu ở các tab đó đều
+// biết chắc đang sửa Hợp đồng nào qua currentHopDongId). getHopDongData() ở trên vẫn phải giữ
+// nguyên (đọc + tính lại TOÀN BỘ hệ thống) vì tab "Hợp đồng" cần tổng hợp giá trị/đã thanh toán của
+// MỌI Hợp đồng cùng lúc — nhưng gọi lại nguyên hàm đó sau MỌI lần Lưu, kể cả khi chỉ sửa 1 Hợp đồng,
+// khiến việc tính lại hiệu lực/quyết toán tốn công theo TOÀN BỘ dữ liệu tích lũy cả dự án (càng
+// nhiều Hợp đồng/BOQ/Nghiệm thu qua các năm càng chậm dần), dù chỉ vừa sửa 1 dòng — đây chính là lý
+// do "bấm Lưu xong load lâu". Cùng 8 lượt đọc sheet (chi phí đọc Google Sheets không đổi vì Sheets
+// API luôn phải đọc nguyên cột), nhưng vòng lặp tính hiệu lực + payload JSON trả về client chỉ còn
+// tỉ lệ với 1 Hợp đồng thay vì cả hệ thống. Trả kèm maHopDong để client biết chính xác đang gộp dữ
+// liệu của Hợp đồng nào vào cache (xem applyLoadedHopDongChiTiet_ ở 0_TienIch.html).
+function getHopDongChiTietMotHopDong(maHopDong) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const maHD = String(maHopDong || '').trim();
+
+  const hopDongAll = readHopDongRows_(ss.getSheetByName('HopDong'));
+  const hd = hopDongAll.find(h => h.maHopDong === maHD);
+  const hopDong = hd ? [hd] : [];
+
+  const boq = readBOQRows_(ss.getSheetByName('BOQHangMuc')).filter(b => b.maHopDong === maHD);
+  const boqIds_ = new Set(boq.map(b => b.maBOQ));
+
+  const phuLuc = readPhuLucRows_(ss.getSheetByName('PhuLucHopDong'), true).filter(p => p.maHopDong === maHD);
+  const phuLucIds_ = new Set(phuLuc.map(p => p.maPhuLuc));
+  const phuLucThayDoi = readPhuLucThayDoiRows_(ss.getSheetByName('PhuLucThayDoi')).filter(ch => phuLucIds_.has(ch.maPhuLuc));
+
+  const nghiemThu = readNghiemThuRows_(ss.getSheetByName('NghiemThu')).filter(n => boqIds_.has(n.maBOQ));
+  const dotThanhToan = readDotThanhToanRows_(ss.getSheetByName('DotThanhToan')).filter(d => d.maHopDong === maHD);
+  const dotIds_ = new Set(dotThanhToan.map(d => d.maDotThanhToan));
+  const dotThanhToanChiTiet = readDotThanhToanChiTietRows_(ss.getSheetByName('DotThanhToanChiTiet')).filter(c => dotIds_.has(c.maDotThanhToan));
+  const quyetToan = readQuyetToanRows_(ss.getSheetByName('QuyetToan')).filter(q => q.maHopDong === maHD);
+
+  const activePhuLucIds_ = new Set(phuLuc.filter(p => p.active).map(p => p.maPhuLuc));
+  const phuLucThayDoiHieuLuc_ = phuLucThayDoi.filter(ch => activePhuLucIds_.has(ch.maPhuLuc));
+  const effectiveQtyMap = tinhKhoiLuongHieuLuc_(boq, phuLucThayDoiHieuLuc_);
+  const donGiaHieuLucMap = tinhDonGiaHieuLuc_(boq, phuLucThayDoiHieuLuc_);
+  const executedByBOQ = {};
+  nghiemThu.forEach(n => { executedByBOQ[n.maBOQ] = Math.round(((executedByBOQ[n.maBOQ] || 0) + n.khoiLuong) * 1000) / 1000; });
+  const paidByBOQ = {};
+  dotThanhToanChiTiet.forEach(c => { paidByBOQ[c.maBOQ] = Math.round(((paidByBOQ[c.maBOQ] || 0) + c.khoiLuong) * 1000) / 1000; });
+
+  boq.forEach(item => {
+    item.khoiLuongHieuLuc = effectiveQtyMap[item.maBOQ] != null ? effectiveQtyMap[item.maBOQ] : item.khoiLuongHopDong;
+    item.donGiaHieuLuc = donGiaHieuLucMap[item.maBOQ] != null ? donGiaHieuLucMap[item.maBOQ] : item.donGia;
+    item.khoiLuongDaNghiemThu = executedByBOQ[item.maBOQ] || 0;
+    item.khoiLuongDaThanhToan = paidByBOQ[item.maBOQ] || 0;
+  });
+
+  quyetToan.forEach(qt => {
+    Object.assign(qt, tinhQuyetToanHopDong_(qt.maHopDong, { hopDong, boq, dotThanhToan, dotThanhToanChiTiet }));
+  });
+
+  return JSON.stringify({ maHopDong: maHD, hopDong, boq, phuLuc, phuLucThayDoi, nghiemThu, dotThanhToan, dotThanhToanChiTiet, quyetToan });
 }
 
 // --- CRUD Hợp đồng ---

@@ -52,7 +52,7 @@ function renderBOQTotalBlock_(hd) {
 
     document.getElementById('boqTongTruocThue').textContent = tienHienThi_(tongTruocThue) + 'đ';
     const giamGiaInput = document.getElementById('boqGiamGiaInput');
-    // Không ghi đè giá trị đang gõ dở nếu ô đang được focus — tránh giật con trỏ khi reloadHopDongData()
+    // Không ghi đè giá trị đang gõ dở nếu ô đang được focus — tránh giật con trỏ khi reloadHopDongChiTiet_()
     // chạy lại renderBOQ() ngay sau khi lưu.
     if (document.activeElement !== giamGiaInput) setTienValue_(giamGiaInput, hd.giamGia || 0);
     giamGiaInput.disabled = !canEditHopDong();
@@ -70,7 +70,7 @@ function capNhatGiamGiaBOQ_() {
     const newVal = parseTienInput_(document.getElementById('boqGiamGiaInput').value) || 0;
     if (newVal === (hd.giamGia || 0)) return;
     gsRun('adminSaveHopDong', myUserId, myPassword, Object.assign({}, hd, { giamGia: newVal }))
-        .then(() => { showCustomAlert('Đã cập nhật Giá trị giảm giá.', 'success'); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã cập nhật Giá trị giảm giá.', 'success'); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
@@ -237,7 +237,7 @@ function saveBOQItemModal() {
 
     btnLuu.disabled = true;
     gsRun('adminSaveBOQItem', myUserId, myPassword, payload)
-        .then(() => { showCustomAlert('Đã lưu hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã lưu hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError)
         .finally(() => { btnLuu.disabled = false; });
 }
@@ -247,7 +247,7 @@ function deleteBOQItem(maBOQ) {
     if (!item) return;
     if (!confirm(`Xác nhận XÓA hạng mục "${item.tenHangMuc}"?`)) return;
     gsRun('adminXoaBOQItem', myUserId, myPassword, maBOQ)
-        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã xóa hạng mục BOQ.', 'success'); closeBOQItemModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
@@ -321,7 +321,7 @@ function savePhuLucModal() {
     const call = maPhuLuc
         ? gsRun('adminSuaPhuLuc', myUserId, myPassword, maPhuLuc, soHieu, ngay, ghiChu)
         : gsRun('adminTaoPhuLuc', myUserId, myPassword, currentHopDongId, soHieu, ngay, ghiChu);
-    call.then(() => { showCustomAlert('Đã lưu Phụ lục.', 'success'); closePhuLucModal(); reloadHopDongData(); })
+    call.then(() => { showCustomAlert('Đã lưu Phụ lục.', 'success'); closePhuLucModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
@@ -333,7 +333,7 @@ function toggleTrangThaiPhuLuc(maPhuLuc) {
     if (!confirm(`Xác nhận ${hanhDong} Phụ lục "${pl.soHieu}"? Toàn bộ thay đổi khối lượng/đơn giá của Phụ lục này sẽ ${dangVoHieu ? 'được áp dụng lại' : 'tạm ngừng áp dụng'}, dữ liệu Phụ lục vẫn được giữ lại để tra cứu.`)) return;
 
     gsRun('adminToggleTrangThaiPhuLuc', myUserId, myPassword, maPhuLuc)
-        .then(() => { showCustomAlert(`Đã ${hanhDong} Phụ lục.`, 'success'); reloadHopDongData(); })
+        .then(() => { showCustomAlert(`Đã ${hanhDong} Phụ lục.`, 'success'); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
@@ -386,7 +386,7 @@ function saveThayDoiModal() {
 
     btnLuu.disabled = true;
     gsRun('adminThemThayDoiPhuLuc', myUserId, myPassword, thayDoiPhuLucId_, payload)
-        .then(() => { showCustomAlert('Đã thêm thay đổi vào Phụ lục.', 'success'); closeThayDoiModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã thêm thay đổi vào Phụ lục.', 'success'); closeThayDoiModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError)
         .finally(() => { btnLuu.disabled = false; });
 }
@@ -441,7 +441,7 @@ function importBOQFromExcel() {
                 showCustomAlert(`Đã nhập ${ok} dòng vào BOQ.`, ok > 0 ? 'success' : 'error');
                 fileInput.value = '';
                 if (ok > 0) document.getElementById('boqExcelModal').classList.remove('active');
-                reloadHopDongData();
+                reloadHopDongChiTiet_(currentHopDongId);
             })
             .catch(handleBackendError)
             .finally(() => { btn.disabled = false; btn.innerHTML = origText; });

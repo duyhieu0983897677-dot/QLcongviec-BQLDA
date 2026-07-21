@@ -204,14 +204,14 @@ function createPaymentRound() {
         chiTiet
     };
     gsRun('adminTaoDotThanhToan', myUserId, myPassword, payload)
-        .then(() => { showCustomAlert('Đã tạo Đợt thanh toán.', 'success'); closePaymentModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã tạo Đợt thanh toán.', 'success'); closePaymentModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
 function deleteDotThanhToan(maDotThanhToan) {
     if (!confirm('Xác nhận XÓA Đợt thanh toán này?')) return;
     gsRun('adminXoaDotThanhToan', myUserId, myPassword, maDotThanhToan)
-        .then(() => { showCustomAlert('Đã xóa Đợt thanh toán.', 'success'); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã xóa Đợt thanh toán.', 'success'); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 
@@ -238,7 +238,7 @@ function saveDieuChinh() {
         ghiChuKhauTru: document.getElementById('dcOtherNote').value.trim()
     };
     gsRun('adminSuaDieuChinhThanhToan', myUserId, myPassword, dieuChinhId_, payload)
-        .then(() => { showCustomAlert('Đã lưu điều chỉnh.', 'success'); closeDieuChinhModal(); reloadHopDongData(); })
+        .then(() => { showCustomAlert('Đã lưu điều chỉnh.', 'success'); closeDieuChinhModal(); reloadHopDongChiTiet_(currentHopDongId); })
         .catch(handleBackendError);
 }
 </script>
