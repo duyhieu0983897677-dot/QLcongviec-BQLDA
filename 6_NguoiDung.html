@@ -19,7 +19,7 @@
    - openUserModal()        : Mở modal thêm/sửa Giám sát
    - saveUserModal()        : Lưu Giám sát từ Modal
    - deleteUser()           : Xóa 1 Giám sát
-   - doiTrangThaiNhanSu_()  : Đổi dropdown Trạng thái (Đang hoạt động/Nghỉ việc) 1 dòng
+   - doiTrangThaiNhanSu_()  : Đổi dropdown Trạng thái (Đang hoạt động/Thử việc/Nghỉ việc) 1 dòng
    ================================================================ */
 
 function renderNguoiDung() {
@@ -33,7 +33,9 @@ function renderNguoiDung() {
         return;
     }
     body.innerHTML = users.map((u, idx) => {
-        const ngiViec = u.trangThai === 'Nghỉ việc';
+        const tt = u.trangThai || 'Đang hoạt động';
+        const ngiViec = tt === 'Nghỉ việc';
+        const mauTT = tt === 'Nghỉ việc' ? 'var(--danger)' : (tt === 'Thử việc' ? 'var(--warning, #d97706)' : 'var(--success)');
         return `<tr>
         <td class="text-center">${idx + 1}</td>
         <td>${u.id}</td>
@@ -42,9 +44,10 @@ function renderNguoiDung() {
         <td>${escapeHtml(u.chucDanh || '--')}</td>
         <td class="text-center">${u.phanMacDinh === 'ca_hai' ? 'Cả hai' : (PHAN_LOAI_LABEL[u.phanMacDinh] || '-- Chưa gán --')}</td>
         <td class="text-center">
-            <select style="width:150px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.83rem; ${ngiViec ? 'color:var(--danger);' : 'color:var(--success);'} font-weight:600;" ${u.id === myUserId ? 'disabled title="Không thể tự đổi trạng thái của chính mình"' : ''} onchange="doiTrangThaiNhanSu_('${u.id}', this)">
-                <option value="Đang hoạt động"${!ngiViec ? ' selected' : ''}>Đang hoạt động</option>
-                <option value="Nghỉ việc"${ngiViec ? ' selected' : ''}>Nghỉ việc</option>
+            <select style="width:150px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.83rem; color:${mauTT}; font-weight:600;" ${u.id === myUserId ? 'disabled title="Không thể tự đổi trạng thái của chính mình"' : ''} onchange="doiTrangThaiNhanSu_('${u.id}', this)">
+                <option value="Đang hoạt động"${tt === 'Đang hoạt động' ? ' selected' : ''}>Đang hoạt động</option>
+                <option value="Thử việc"${tt === 'Thử việc' ? ' selected' : ''}>Thử việc</option>
+                <option value="Nghỉ việc"${tt === 'Nghỉ việc' ? ' selected' : ''}>Nghỉ việc</option>
             </select>
         </td>
         <td class="text-center">${congViecCountByUser[u.id] || 0}</td>

@@ -7,8 +7,11 @@ function include(filename) {
 // adminSetTrangThaiNhanSu). Cột này thêm SAU khi nhiều tài khoản đã tồn tại nên các dòng cũ trống ô
 // này — coi trống = TRANGTHAI_HOATDONG_ (đang hoạt động) để không khoá nhầm ai (xem listSupervisors/
 // login). "Nghỉ việc": khoá đăng nhập hẳn (login() chặn), tên hiển thị gạch ngang, ẩn khỏi các danh
-// sách CHỌN MỚI (giao việc, mời vào phòng chat...) — nhưng dữ liệu lịch sử vẫn giữ nguyên.
+// sách CHỌN MỚI (giao việc, mời vào phòng chat...) — nhưng dữ liệu lịch sử vẫn giữ nguyên. "Thử việc":
+// vẫn đăng nhập/chấm công bình thường nhưng KHÔNG được cộng 1 ngày phép baseline mỗi tháng (chỉ nhân
+// sự chính thức — TRANGTHAI_HOATDONG_ — mới được, xem chotPhepDenThangHienTai_).
 const TRANGTHAI_HOATDONG_ = 'Đang hoạt động';
+const TRANGTHAI_THUVIEC_ = 'Thử việc';
 const TRANGTHAI_NGHIVIEC_ = 'Nghỉ việc';
 
 // HangMuc nay CHỈ là dữ liệu tham chiếu (mã/tên/cây cha-con) để lọc & để Gói thầu gộp —
@@ -35,7 +38,10 @@ const NHATKY_HEADERS_ = ['logId', 'maCongViec', 'ngayBaoCao', 'phanTramNgay', 'g
 // PhepThang: sổ phép/tháng (phepDauThang = baseline đầu tháng, tự cộng 1 ngày/tháng — xem
 // chotPhepDenThangHienTai_). ChamCongThang (định nghĩa ở phần CHẤM CÔNG & TĂNG CA phía dưới): chấm
 // công + tăng ca CẢ THÁNG — "Cộng/Trừ phép tháng" luôn tính lại từ 2 sheet này, không lưu cột riêng.
-const PHEP_HEADERS_ = ['userId', 'thang', 'phepDauThang', 'soNgayNghi', 'chotLuc'];
+// gioTCDauThang: số GIỜ tăng ca lẻ (chưa đủ 4h để quy đổi thành 0,5 công) mang từ tháng trước sang —
+// tận dụng luôn sổ phép này (đã đọc/ghi mỗi lần mở tab) để khỏi tốn thêm 1 lượt đọc sheet riêng cho
+// việc chốt tăng ca (xem tinhQuyDoiTangCaCong_/chotPhepDenThangHienTai_).
+const PHEP_HEADERS_ = ['userId', 'thang', 'phepDauThang', 'soNgayNghi', 'chotLuc', 'gioTCDauThang'];
 const THU_KY_CHUC_DANH_ = 'thư ký bqlda';
 
 // ==== QUẢN LÝ HỢP ĐỒNG (Hợp đồng - BOQ - Phụ lục - Nghiệm thu - Thanh toán - Quyết toán) ====
@@ -476,14 +482,16 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
   return "Success";
 }
 
-// (Admin) Đổi Trạng thái 1 nhân sự — 'Đang hoạt động'/'Nghỉ việc' (xem TRANGTHAI_*_ đầu file).
-// Nghỉ việc = khoá đăng nhập hẳn (login() chặn), KHÔNG xoá tài khoản/dữ liệu lịch sử liên quan.
+// (Admin) Đổi Trạng thái 1 nhân sự — 'Đang hoạt động'/'Thử việc'/'Nghỉ việc' (xem TRANGTHAI_*_ đầu
+// file). Nghỉ việc = khoá đăng nhập hẳn (login() chặn), KHÔNG xoá tài khoản/dữ liệu lịch sử liên quan.
 function adminSetTrangThaiNhanSu(adminId, adminPass, targetId, trangThai) {
   const adminUser = login(adminId, adminPass);
   if (adminUser.role !== 'ADMIN') throw new Error("Chỉ Quản trị mới có quyền đổi Trạng thái nhân sự!");
 
   const tt = String(trangThai || '').trim();
-  if (tt !== TRANGTHAI_HOATDONG_ && tt !== TRANGTHAI_NGHIVIEC_) throw new Error("Trạng thái không hợp lệ!");
+  if (tt !== TRANGTHAI_HOATDONG_ && tt !== TRANGTHAI_THUVIEC_ && tt !== TRANGTHAI_NGHIVIEC_) {
+    throw new Error("Trạng thái không hợp lệ!");
+  }
   if (String(targetId).trim() === String(adminId).trim() && tt === TRANGTHAI_NGHIVIEC_) {
     throw new Error("Không thể tự đặt chính mình thành Nghỉ việc!");
   }
@@ -1245,7 +1253,10 @@ function readPhepThangRows_(sheet) {
     const userId = String(r[0] || '').trim();
     const thang = formatThangCell_(r[1]);
     if (!userId || !thang) return;
-    result.push({ userId, thang, phepDauThang: Number(r[2]) || 0, soNgayNghi: Number(r[3]) || 0 });
+    result.push({
+      userId, thang, phepDauThang: Number(r[2]) || 0, soNgayNghi: Number(r[3]) || 0,
+      gioTCDauThang: Number(r[5]) || 0
+    });
   });
   return result;
 }
@@ -1260,9 +1271,14 @@ function thangCong_(thang, soThang) {
 // Chốt ngầm mỗi khi có người mở tab: với mỗi nhân sự, tạo tuần tự các dòng PhepThang còn thiếu cho
 // tới tháng hiện tại thật (không nhảy cóc nếu app bị bỏ quên nhiều tháng liền), theo công thức:
 // TổngCộng(tháng cũ) = phepDauThang + Cộng/TrừPhépThángTừChấmCông - soNgayNghi (lịch sử cũ, nếu có);
-// phepDauThang(tháng mới) = TổngCộng(tháng cũ) + 1 (1 phép baseline/tháng).
+// phepDauThang(tháng mới) = TổngCộng(tháng cũ) + baseline (1 nếu là nhân sự CHÍNH THỨC — TRANGTHAI_
+// HOATDONG_ —, 0 nếu đang Thử việc; dùng ĐÚNG trạng thái hiện tại của tài khoản cho mọi tháng bù lại,
+// vì sheet không lưu lịch sử trạng thái theo từng tháng). Nhân sự Nghỉ việc bị ĐÓNG BĂNG hoàn toàn —
+// không tạo/chốt thêm dòng PhepThang nào nữa kể từ khi phát hiện trạng thái Nghỉ việc.
 // tinhPhepChiTietTuChamCong_ định nghĩa ở phần CHẤM CÔNG & TĂNG CA bên dưới (cùng công thức hiển thị
-// ở getChamCongThang, tránh lệch số giữa "dự kiến" trên giao diện và số THẬT được chốt ở đây).
+// ở getChamCongThang, tránh lệch số giữa "dự kiến" trên giao diện và số THẬT được chốt ở đây) — tương
+// tự, tinhTongGioTangCaThang_/tinhQuyDoiTangCaCong_ (cũng định nghĩa bên dưới) chốt luôn số GIỜ tăng
+// ca lẻ (gioTCDauThang) mang sang tháng kế tiếp trong CÙNG vòng lặp, không cần đọc/ghi sheet riêng.
 // allUsers/ccByThang_ do getChamCongThang() đọc + nhóm sẵn truyền vào — KHÔNG tự đọc lại
 // ChamCongThang ở đây nữa (trước đây hàm này đọc 1 lần, rồi getChamCongThang() đọc lại lần 2 NGUYÊN
 // SHEET đó ngay sau khi hàm này chạy xong, lãng phí 1 lượt đọc trùng mỗi lần mở tab/đổi tháng).
@@ -1281,13 +1297,17 @@ function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
 
   const rowsToAppend = [];
   allUsers.forEach(u => {
+    const trangThai = u.trangThai || TRANGTHAI_HOATDONG_;
+    if (trangThai === TRANGTHAI_NGHIVIEC_) return; // đã nghỉ việc — đóng băng, không chốt thêm dòng nào.
+    const baseline = trangThai === TRANGTHAI_HOATDONG_ ? 1 : 0; // Thử việc: không có phép baseline.
+
     const phepOfUser = allPhep.filter(p => p.userId === u.id).sort((a, b) => a.thang.localeCompare(b.thang));
     const lastRow = phepOfUser.length ? phepOfUser[phepOfUser.length - 1] : null;
 
     if (!lastRow) {
       // Chưa từng có dòng nào — chỉ bắt đầu từ tháng hiện tại, không truy hồi lùi các tháng trước.
-      rowsToAppend.push([u.id, thangHienTai, 1, 0, new Date()]);
-      allPhep.push({ userId: u.id, thang: thangHienTai, phepDauThang: 1, soNgayNghi: 0 });
+      rowsToAppend.push([u.id, thangHienTai, baseline, 0, new Date(), 0]);
+      allPhep.push({ userId: u.id, thang: thangHienTai, phepDauThang: baseline, soNgayNghi: 0, gioTCDauThang: 0 });
       return;
     }
 
@@ -1295,13 +1315,18 @@ function chotPhepDenThangHienTai_(allUsers, ccByThang_) {
     let tongCongThangDo = lastRow.phepDauThang
       + tinhPhepChiTietTuChamCong_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet).congTruPhepThang
       - lastRow.soNgayNghi;
+    let gioTCDauThangDangXet = lastRow.gioTCDauThang;
 
     while (thangDangXet < thangHienTai) {
+      const gioPhatSinhThangDo = tinhTongGioTangCaThang_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet);
+      const { gioDu } = tinhQuyDoiTangCaCong_(gioTCDauThangDangXet, gioPhatSinhThangDo);
+
       thangDangXet = thangCong_(thangDangXet, 1);
-      const phepDauThangMoi = Math.round((tongCongThangDo + 1) * 10) / 10;
-      rowsToAppend.push([u.id, thangDangXet, phepDauThangMoi, 0, new Date()]);
-      allPhep.push({ userId: u.id, thang: thangDangXet, phepDauThang: phepDauThangMoi, soNgayNghi: 0 });
+      const phepDauThangMoi = Math.round((tongCongThangDo + baseline) * 10) / 10;
+      rowsToAppend.push([u.id, thangDangXet, phepDauThangMoi, 0, new Date(), gioDu]);
+      allPhep.push({ userId: u.id, thang: thangDangXet, phepDauThang: phepDauThangMoi, soNgayNghi: 0, gioTCDauThang: gioDu });
       tongCongThangDo = phepDauThangMoi + tinhPhepChiTietTuChamCong_(ccByThang_.get(thangDangXet) || [], u.id, thangDangXet).congTruPhepThang;
+      gioTCDauThangDangXet = gioDu;
     }
   });
 
@@ -1363,6 +1388,17 @@ function adminCapNhatPhepDauThang(userId, password, targetUserId, thang, phepDau
 //   cả tháng đó có 0 công cuối tuần (không đi làm Thứ 7 lẫn Chủ Nhật buổi nào) — hễ có đi làm cuối
 //   tuần (Thứ 7 hoặc Chủ Nhật, dù không dư định mức) thì mọi ngày P trong tháng đó được miễn, không
 //   trừ phép (theo yêu cầu thực tế của BQLDA).
+//
+// Phép baseline đầu tháng (+1): CHỈ áp dụng cho nhân sự CHÍNH THỨC (TRANGTHAI_HOATDONG_) — nhân sự
+// Thử việc không có, nhân sự Nghỉ việc bị đóng băng hoàn toàn, không cộng/trừ gì thêm (xem
+// chotPhepDenThangHienTai_). Khi sang tháng mới: Phép đầu tháng mới = Phép đầu tháng cũ + Cộng/Trừ
+// phép tháng cũ (công thức trên) − Số ngày nghỉ đã trừ + baseline — đúng ý "cộng/trừ phép tháng + số
+// phép hiện có được đưa vào phép đầu tháng".
+//
+// Quy tắc quy đổi Tăng ca -> Công (xem tinhQuyDoiTangCaCong_): dùng GIỜ QUY ĐỔI (đã nhân hệ số đêm
+// x2 ở trên) — cứ đủ 4h (cộng dồn từ giờ dư tháng trước + giờ phát sinh tháng này) chốt 0,5 công, đủ
+// 8h chốt 1 công; giờ lẻ CHƯA đủ 4h không quy đổi mà mang sang tháng sau cộng dồn tiếp (gioTCDauThang
+// trong PhepThang). Số công tăng ca quy đổi được CỘNG THẲNG vào "Số công tính lương", không tách cột.
 // =======================================================
 
 const CHAMCONG_HEADERS_ = ['userId', 'ngay', 'buoi', 'gioBatDauTC', 'gioKetThucTC'];
@@ -1390,6 +1426,26 @@ function tinhGioTangCa_(gioBatDau, gioKetThuc) {
   else { gioThuong = boundary - s; gioDem = e - boundary; }
   gioThuong /= 60; gioDem /= 60;
   return { gioThuong, gioDem, quyDoi: gioThuong + gioDem * 2, quaNgay };
+}
+
+// Tổng GIỜ tăng ca quy đổi (đã nhân hệ số đêm x2 qua tinhGioTangCa_) của 1 nhân sự/1 tháng — DÙNG
+// CHUNG bởi getChamCongThang (hiển thị "dự kiến") và chotPhepDenThangHienTai_ (chốt số THẬT khi sang
+// tháng mới), cùng nguyên tắc với tinhPhepChiTietTuChamCong_ để không lệch công thức giữa 2 nơi.
+function tinhTongGioTangCaThang_(allCC, userId, thang) {
+  return allCC
+    .filter(r => r.userId === userId && r.ngay.slice(0, 7) === thang && r.gioBatDauTC && r.gioKetThucTC)
+    .reduce((s, r) => s + tinhGioTangCa_(r.gioBatDauTC, r.gioKetThucTC).quyDoi, 0);
+}
+
+// Quy đổi giờ tăng ca -> Công theo block 4h (=0,5 công): cứ đủ 4h chốt 0,5 công, đủ 8h chốt 1 công,
+// giờ lẻ chưa đủ 4h KHÔNG quy đổi mà mang sang tháng sau cộng dồn tiếp (gioTCDauThang trong PhepThang
+// — xem chotPhepDenThangHienTai_). { gioKhaDung, soCong, gioDu }.
+function tinhQuyDoiTangCaCong_(gioDauThang, gioPhatSinhThang) {
+  const gioKhaDung = Math.round(((Number(gioDauThang) || 0) + (Number(gioPhatSinhThang) || 0)) * 100) / 100;
+  const soBlock = Math.floor(gioKhaDung / 4 + 1e-9); // +epsilon: tránh lỗi làm tròn số thực (VD 3.999999)
+  const soCong = Math.round(soBlock * 0.5 * 10) / 10;
+  const gioDu = Math.round((gioKhaDung - soBlock * 4) * 100) / 100;
+  return { gioKhaDung, soCong, gioDu };
 }
 
 // { soNgay, saturdays: ['yyyy-MM-dd', ...], sundays: [...] } cho 1 tháng 'yyyy-MM'.
@@ -1465,9 +1521,11 @@ function tinhPhepChiTietTuChamCong_(allCC, userId, thang) {
   const soNgayP = Object.values(cc).filter(v => v === 'P').length;
   const phepTruDoP = congCuoiTuan > 0 ? 0 : soNgayP;
   const congTruPhepThang = Math.round((congCuoiTuan - quotaThu7 - phepTruDoP) * 10) / 10;
-  // Công cuối tuần chỉ tính vào "công thực làm" TỐI ĐA bằng định mức (VD 4 Thứ 7 => tối đa 4 nửa =
-  // 2 công); phần vượt định mức không cộng thêm vào công thực làm nữa mà đã được cộng sang Phép ở
-  // congTruPhepThang phía trên rồi (tránh tính 2 lần).
+  // congCuoiTuanThucLam: phần cuối tuần được TÍNH VÀO LƯƠNG, tối đa bằng định mức (VD 4 Thứ 7 => tối
+  // đa 4 nửa = 2 công) — dùng cho "Số công tính lương" ở getChamCongThang, KHÔNG dùng cho "Số công
+  // thực làm" (cột đó hiện đúng số đã chấm, không chặn). Làm dư định mức thì phần dư không cộng thêm
+  // vào lương nữa vì đã cộng sang Phép ở congTruPhepThang phía trên rồi (tránh trả 2 lần); làm thiếu
+  // thì KHÔNG bị trừ thêm ở đây (chỉ trừ Phép, không phạt kép vào lương).
   const congCuoiTuanThucLam = Math.min(congCuoiTuan, quotaThu7);
 
   return { quotaThu7, congThu7, congChuNhat, congCuoiTuan, congCuoiTuanThucLam, soNgayP, phepTruDoP, congTruPhepThang };
@@ -1501,6 +1559,7 @@ function getChamCongThang(thang) {
   const rows = allUsers.map(u => {
     const phepRow = allPhep.find(p => p.userId === u.id && p.thang === thangXem);
     const phepDauThang = phepRow ? phepRow.phepDauThang : 0;
+    const gioTCDauThang = phepRow ? phepRow.gioTCDauThang : 0;
 
     const cc = {}, tc = {};
     ccThang.filter(r => r.userId === u.id).forEach(r => {
@@ -1509,14 +1568,25 @@ function getChamCongThang(thang) {
     });
 
     const chiTiet = tinhPhepChiTietTuChamCong_(ccThang, u.id, thangXem);
-    // Công thực làm = công các ngày trong tuần + công cuối tuần đã bị chặn trần theo định mức (phần
-    // cuối tuần vượt định mức được cộng sang Phép thay vì tính vào công thực làm, xem congCuoiTuanThucLam).
     const congNgayThuong = Object.entries(cc).reduce((s, [ngay, v]) => {
       if (saturdays.includes(ngay) || sundays.includes(ngay)) return s;
       return s + (typeof v === 'number' ? v : 0);
     }, 0);
-    const congThucLam = congNgayThuong + chiTiet.congCuoiTuanThucLam;
-    const tongGioTC = Object.values(tc).reduce((s, e) => s + tinhGioTangCa_(e.start, e.end).quyDoi, 0);
+    // Số công thực làm = TOÀN BỘ công đã chấm (ngày thường + Thứ 7 + Chủ Nhật), KHÔNG chặn theo định
+    // mức — thể hiện đúng số ngày/buổi đã thực sự đi làm trong tháng, thuần tuý ghi nhận chấm công.
+    const congThucLam = congNgayThuong + chiTiet.congCuoiTuan;
+    // Tăng ca quy đổi -> Công: block 4h (=0,5 công), giờ lẻ chưa đủ 4h mang sang tháng sau (xem
+    // tinhQuyDoiTangCaCong_/chotPhepDenThangHienTai_) — CHỈ LÀ DỰ KIẾN cho tới khi tháng này thực sự
+    // chốt (số THẬT được ghi vào gioTCDauThang của tháng kế tiếp khi đó).
+    const tongGioTC = tinhTongGioTangCaThang_(ccThang, u.id, thangXem);
+    const quyDoiTC = tinhQuyDoiTangCaCong_(gioTCDauThang, tongGioTC);
+    // Số công tính lương = cơ sở tính lương thực tế: cuối tuần LÀM DƯ định mức thì CHỈ tính tới đúng
+    // định mức (phần dư đã quy đổi sang Phép ở congTruPhepThang rồi, không cộng thêm vào đây kẻo trả
+    // 2 lần); LÀM THIẾU thì KHÔNG bị trừ thêm ở cột này (chỉ trừ Phép qua congTruPhepThang, người lao
+    // động vẫn được tính lương đúng số ngày đã thực sự đi làm, không bị phạt kép) — vì vậy dùng
+    // congCuoiTuanThucLam (đã là min(congCuoiTuan, quotaThu7)) chứ không cộng/trừ thêm congTruPhepThang.
+    // Cộng thêm quyDoiTC.soCong: công tăng ca quy đổi (block 4h/8h) tính thẳng vào lương, không tách cột.
+    const congTinhLuong = congNgayThuong + chiTiet.congCuoiTuanThucLam + quyDoiTC.soCong;
 
     return {
       userId: u.id, hoTen: u.name, phepDauThang,
@@ -1529,8 +1599,11 @@ function getChamCongThang(thang) {
       congTruPhepThang: chiTiet.congTruPhepThang,
       phepCuoiThang: Math.round((phepDauThang + chiTiet.congTruPhepThang) * 10) / 10,
       congThucLam: Math.round(congThucLam * 10) / 10,
+      congTinhLuong: Math.round(congTinhLuong * 10) / 10,
       tongGioTC: Math.round(tongGioTC * 10) / 10,
-      ngayCongTC: Math.round((tongGioTC / 8) * 100) / 100
+      gioTCDauThang: Math.round(gioTCDauThang * 10) / 10,
+      congTangCaQuyDoi: quyDoiTC.soCong,
+      gioTCConLaiDuKien: quyDoiTC.gioDu
     };
   });
 

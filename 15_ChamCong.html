@@ -167,8 +167,9 @@ function renderChamCongTable() {
     '<th class="cc-sumcol" rowspan="2">Cộng/Trừ<br><small>phép tháng</small></th>' +
     '<th class="cc-sumcol cc-highlight" rowspan="2">Phép cuối<br><small>tháng (dự kiến)</small></th>' +
     '<th class="cc-sumcol" rowspan="2">Số công<br><small>thực làm</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Giờ TC<br><small>quy đổi</small></th>' +
-    '<th class="cc-sumcol" rowspan="2">Ngày công<br><small>TC (bù)</small></th>';
+    '<th class="cc-sumcol cc-highlight" rowspan="2">Số công<br><small>tính lương</small></th>' +
+    '<th class="cc-sumcol" rowspan="2">Giờ TC<br><small>phát sinh</small></th>' +
+    '<th class="cc-sumcol cc-highlight" rowspan="2">Công TC<br><small>quy đổi (đã cộng lương)</small></th>';
   let row2 = '<tr>';
   for (let d = 1; d <= soNgay; d++) {
     const iso = thang + '-' + String(d).padStart(2, '0');
@@ -206,8 +207,9 @@ function renderChamCongTable() {
       <td class="cc-sumcol">${ccFmtDelta_(r.congTruPhepThang)}</td>
       <td class="cc-sumcol cc-highlight">${ccFmt1_(r.phepCuoiThang)}</td>
       <td class="cc-sumcol">${ccFmt1_(r.congThucLam)}</td>
+      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.congTinhLuong)}</td>
       <td class="cc-sumcol">${ccFmt1_(r.tongGioTC)}h</td>
-      <td class="cc-sumcol">${ccFmt2_(r.ngayCongTC)}</td>`;
+      <td class="cc-sumcol cc-highlight">${ccFmt1_(r.congTangCaQuyDoi)}</td>`;
 
     for (let d = 1; d <= soNgay; d++) {
       const iso = thang + '-' + String(d).padStart(2, '0');
@@ -371,8 +373,12 @@ function openChiTietCongModal(userId) {
     <div class="cc-brk-row cc-brk-total"><span>Phép cuối tháng (dự kiến)</span><span>${ccFmt1_(row.phepCuoiThang)}</span></div>
     <div class="cc-brk-divider"></div>
     <div class="cc-brk-row"><span class="cc-brk-lbl">Số công thực làm</span><span>${ccFmt1_(row.congThucLam)}</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ tăng ca quy đổi</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
-    <div class="cc-brk-row"><span class="cc-brk-lbl">Ngày công TC quy đổi (bù)</span><span>${ccFmt2_(row.ngayCongTC)}</span></div>
+    <div class="cc-brk-row cc-brk-total"><span>Số công tính lương</span><span>${ccFmt1_(row.congTinhLuong)}</span></div>
+    <div class="cc-brk-divider"></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư từ tháng trước</span><span>${ccFmt1_(row.gioTCDauThang)}h</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC phát sinh tháng này</span><span>${ccFmt1_(row.tongGioTC)}h</span></div>
+    <div class="cc-brk-row cc-brk-total"><span>Công TC quy đổi (đã cộng vào lương)</span><span>${ccFmt1_(row.congTangCaQuyDoi)}</span></div>
+    <div class="cc-brk-row"><span class="cc-brk-lbl">Giờ TC dư, chuyển tháng sau (dự kiến)</span><span>${ccFmt1_(row.gioTCConLaiDuKien)}h</span></div>
   `;
 
   const otDays = Object.keys(row.tc).sort();
