@@ -25,7 +25,7 @@ let cvMentionStart_ = -1;
 
 function cvMentionCandidates_(query) {
     const q = String(query || '').toLowerCase();
-    return users.filter(u => u.id !== mySupervisorId && u.name.toLowerCase().includes(q)).slice(0, 8);
+    return users.filter(u => u.id !== mySupervisorId && u.trangThai !== 'Nghỉ việc' && u.name.toLowerCase().includes(q)).slice(0, 8);
 }
 
 function renderCvMentionDropdown_(list) {

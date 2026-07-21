@@ -85,6 +85,7 @@ function toggleAdmin() {
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
         setBellVisibleState(false);
+        chatKetThuc_();
         switchTab(window.innerWidth < 768 ? 'home' : 'dashboard');
     }
 }
@@ -130,6 +131,7 @@ function confirmPassword() {
             setUserInfoState(true, myUserName);
             setBellVisibleState(true);
             loadThongBao();
+            chatBatDau_();
             luuPhienDangNhap_();
 
             btnSubmit.innerHTML = originalText;
@@ -205,6 +207,7 @@ function handleBackendError(error) {
         setLockBtnState('admin-btn locked', '<i class="fa-solid fa-lock"></i> Đăng nhập');
         setUserInfoState(false);
         setBellVisibleState(false);
+        chatKetThuc_();
     }
 }
 
@@ -237,6 +240,7 @@ function khoiPhucPhienDangNhap_() {
             setUserInfoState(true, myUserName);
             setBellVisibleState(true);
             loadThongBao();
+            chatBatDau_();
             updateUI();
         })
         .withFailureHandler(function () { xoaPhienDangNhap_(); })

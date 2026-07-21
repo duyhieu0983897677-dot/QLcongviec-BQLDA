@@ -1,0 +1,281 @@
+<script>
+/* ================================================================
+   FILE 16: 16_ChatNoiBo.html
+   ------------------------------------------------------------------
+   PHẠM VI: Widget chat nội bộ (bong bóng góc dưới phải, hiện trên MỌI
+   tab) — nhân sự tự tạo phòng, tự mời thành viên, trao đổi công việc.
+   Nội dung MÃ HÓA tại nơi lưu trữ (xem maHoaChat_/giaiMaChat_ ở
+   Code.js — không phải end-to-end thực sự, xem chú thích ở đó). Phòng
+   chat CHỈ thành viên được mời mới thấy tồn tại — kể cả Admin cũng bị
+   loại trừ nếu không được mời. Tin nhắn tự xoá sau N ngày do CHỦ
+   PHÒNG tự đặt lúc tạo (sửa được sau qua "Cài đặt phòng").
+
+   Không có WebSocket trên Apps Script — cập nhật theo polling (hỏi
+   lại server định kỳ), không phải tức thời tuyệt đối:
+   - Danh sách phòng (đếm chưa đọc): mỗi CHAT_POLL_LIST_MS, chạy suốt
+     lúc đã đăng nhập (kể cả khi đóng panel) để bong bóng luôn đúng số.
+   - Khung chat đang mở: mỗi CHAT_POLL_THREAD_MS, CHỈ khi đang mở đúng
+     phòng đó (dừng ngay khi đóng panel/chuyển phòng khác).
+
+   Chỉ hiện với người ĐÃ ĐĂNG NHẬP (VIEW không dùng được) — xem
+   chatBatDau_()/chatKetThuc_(), được gọi từ 1_DangNhap.html.
+
+   DANH SÁCH HÀM CHÍNH:
+   - chatBatDau_()/chatKetThuc_()   : Bật/tắt widget theo trạng thái đăng nhập
+   - chatToggleBong_()              : Bấm bong bóng mở/đóng panel
+   - chatTaiDanhSachPhong_()        : Gọi getDanhSachPhongChat, vẽ lại list + badge
+   - chatMoPhong_(maPhong)          : Mở khung chat 1 phòng, bắt đầu poll tin nhắn
+   - chatGuiTinNhan_()              : Gửi tin nhắn đang gõ trong khung chat đang mở
+   - chatMoTaoPhong_()/chatTaoPhongSubmit_() : Form tạo phòng mới
+   - chatMoCaiDatPhong_()           : Xem/sửa số ngày lưu trữ, danh sách thành viên, Rời/Xoá phòng
+   ================================================================ */
+
+const CHAT_POLL_LIST_MS = 15000;
+const CHAT_POLL_THREAD_MS = 2500;
+
+let chatDanhSachPhong_ = [];
+let chatPhongDangMo_ = null;   // object phòng đang mở (từ getTinNhanPhongChat) hoặc null
+let chatPollListTimer_ = null;
+let chatPollThreadTimer_ = null;
+let chatDangTai_ = false;
+
+function chatBatDau_() {
+    document.getElementById('chatBubble').style.display = 'flex';
+    chatTaiDanhSachPhong_();
+    if (chatPollListTimer_) clearInterval(chatPollListTimer_);
+    chatPollListTimer_ = setInterval(chatTaiDanhSachPhong_, CHAT_POLL_LIST_MS);
+}
+
+function chatKetThuc_() {
+    document.getElementById('chatBubble').style.display = 'none';
+    document.getElementById('chatPanel').classList.remove('open');
+    if (chatPollListTimer_) { clearInterval(chatPollListTimer_); chatPollListTimer_ = null; }
+    if (chatPollThreadTimer_) { clearInterval(chatPollThreadTimer_); chatPollThreadTimer_ = null; }
+    chatDanhSachPhong_ = [];
+    chatPhongDangMo_ = null;
+}
+
+function chatToggleBong_() {
+    const panel = document.getElementById('chatPanel');
+    const opening = !panel.classList.contains('open');
+    panel.classList.toggle('open');
+    if (opening) chatTaiDanhSachPhong_();
+}
+
+function chatDongPanel_() {
+    document.getElementById('chatPanel').classList.remove('open');
+}
+
+function chatFmtGio_(d) {
+    const dt = new Date(d);
+    const homNay = new Date();
+    const cungNgay = dt.toDateString() === homNay.toDateString();
+    const hhmm = String(dt.getHours()).padStart(2, '0') + ':' + String(dt.getMinutes()).padStart(2, '0');
+    return cungNgay ? hhmm : (String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0') + ' ' + hhmm);
+}
+
+// ---------- Danh sách phòng ----------
+
+function chatTaiDanhSachPhong_() {
+    if (currentRole === 'VIEW') return;
+    gsRun('getDanhSachPhongChat', myUserId, myPassword)
+        .then(json => {
+            chatDanhSachPhong_ = JSON.parse(json);
+            chatCapNhatBadge_();
+            const view = document.getElementById('chatViewList');
+            if (view && view.classList.contains('active')) chatRenderDanhSachPhong_();
+        })
+        .catch(() => { /* im lặng — polling nền, không làm phiền bằng lỗi lặp lại */ });
+}
+
+function chatCapNhatBadge_() {
+    const tong = chatDanhSachPhong_.reduce((s, p) => s + (p.soChuaDoc || 0), 0);
+    const badge = document.getElementById('chatBubbleBadge');
+    if (tong > 0) { badge.textContent = tong > 99 ? '99+' : tong; badge.style.display = 'flex'; }
+    else badge.style.display = 'none';
+}
+
+function chatXemDanhSach_() {
+    if (chatPollThreadTimer_) { clearInterval(chatPollThreadTimer_); chatPollThreadTimer_ = null; }
+    chatPhongDangMo_ = null;
+    chatShowView_('chatViewList', 'Chat nội bộ', false);
+    chatRenderDanhSachPhong_();
+    chatTaiDanhSachPhong_();
+}
+
+function chatShowView_(id, title, showBack) {
+    document.querySelectorAll('#chatPanel .chat-view').forEach(v => v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    document.getElementById('chatPanelTitle').textContent = title;
+    document.getElementById('chatBackBtn').style.display = showBack ? 'flex' : 'none';
+    document.getElementById('chatSettingsBtn').style.display = 'none'; // chỉ chatMoPhong_() bật lại khi vào đúng khung chat
+}
+
+function chatRenderDanhSachPhong_() {
+    const box = document.getElementById('chatRoomList');
+    if (!chatDanhSachPhong_.length) {
+        box.innerHTML = '<div class="chat-empty">Chưa có phòng chat nào.<br>Bấm "Tạo phòng chat mới" bên dưới để bắt đầu.</div>';
+        return;
+    }
+    box.innerHTML = chatDanhSachPhong_.map(p => {
+        const initials = escapeHtml((p.tenPhong || '?').trim().slice(0, 2).toUpperCase());
+        const lastText = p.tinCuoi
+            ? (p.tinCuoi.userId === myUserId ? 'Bạn: ' : '') + escapeHtml(p.tinCuoi.noiDung)
+            : '<i>Chưa có tin nhắn</i>';
+        return `<button type="button" class="chat-room-item" onclick="chatMoPhong_('${p.maPhong}')">
+            <div class="chat-avatar">${initials}</div>
+            <div class="chat-room-info">
+                <div class="chat-r-name">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><rect x="4" y="11" width="16" height="9" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+                    ${escapeHtml(p.tenPhong)}
+                </div>
+                <div class="chat-r-last">${lastText}</div>
+            </div>
+            <div class="chat-room-meta">
+                <span class="chat-r-time">${chatFmtGio_(p.thoiGianHoatDong)}</span>
+                ${p.soChuaDoc > 0 ? `<span class="chat-r-unread">${p.soChuaDoc > 99 ? '99+' : p.soChuaDoc}</span>` : ''}
+            </div>
+        </button>`;
+    }).join('');
+}
+
+// ---------- Khung chat 1 phòng ----------
+
+function chatMoPhong_(maPhong) {
+    chatShowView_('chatViewThread', 'Đang tải…', true);
+    document.getElementById('chatThreadBody').innerHTML = '<div class="chat-empty">Đang tải…</div>';
+    gsRun('getTinNhanPhongChat', myUserId, myPassword, maPhong)
+        .then(data => {
+            chatPhongDangMo_ = JSON.parse(data);
+            document.getElementById('chatPanelTitle').textContent = chatPhongDangMo_.tenPhong;
+            document.getElementById('chatSettingsBtn').style.display = 'flex';
+            chatRenderThread_(true);
+            chatTaiDanhSachPhong_(); // cập nhật lại badge (phòng vừa mở coi như đã đọc)
+            if (chatPollThreadTimer_) clearInterval(chatPollThreadTimer_);
+            chatPollThreadTimer_ = setInterval(() => chatPollThread_(maPhong), CHAT_POLL_THREAD_MS);
+        })
+        .catch(err => { chatXemDanhSach_(); handleBackendError(err); });
+}
+
+function chatPollThread_(maPhong) {
+    if (!chatPhongDangMo_ || chatPhongDangMo_.maPhong !== maPhong) return;
+    gsRun('getTinNhanPhongChat', myUserId, myPassword, maPhong)
+        .then(data => {
+            if (!chatPhongDangMo_ || chatPhongDangMo_.maPhong !== maPhong) return; // đã chuyển phòng khác trong lúc chờ
+            const soCu = chatPhongDangMo_.tinNhan.length;
+            chatPhongDangMo_ = JSON.parse(data);
+            chatRenderThread_(chatPhongDangMo_.tinNhan.length !== soCu);
+        })
+        .catch(() => { /* im lặng — polling nền */ });
+}
+
+function chatRenderThread_(cuonXuongDuoi) {
+    const body = document.getElementById('chatThreadBody');
+    const p = chatPhongDangMo_;
+    if (!p.tinNhan.length) {
+        body.innerHTML = `<div class="chat-sys-note">Chỉ ${p.thanhVien.length} thành viên trong phòng nhìn thấy nội dung này${p.soNgayLuu ? ' — tin nhắn tự xoá sau ' + p.soNgayLuu + ' ngày' : ''}</div>`;
+    } else {
+        body.innerHTML = `<div class="chat-sys-note">Chỉ ${p.thanhVien.length} thành viên trong phòng nhìn thấy nội dung này${p.soNgayLuu ? ' — tin nhắn tự xoá sau ' + p.soNgayLuu + ' ngày' : ''}</div>` +
+            p.tinNhan.map(m => {
+                const laToi = m.userId === myUserId;
+                return `<div class="chat-msg ${laToi ? 'me' : 'them'}">
+                    ${laToi ? '' : `<div class="chat-m-sender">${escapeHtml(m.tenNguoiGui)}</div>`}
+                    ${escapeHtml(m.noiDung)}
+                    <div class="chat-m-time">${chatFmtGio_(m.thoiGian)}</div>
+                </div>`;
+            }).join('');
+    }
+    if (cuonXuongDuoi) body.scrollTop = body.scrollHeight;
+}
+
+function chatGuiTinNhan_(ev) {
+    if (ev) ev.preventDefault();
+    const input = document.getElementById('chatMsgInput');
+    const noi = input.value.trim();
+    if (!noi || !chatPhongDangMo_) return;
+    const maPhong = chatPhongDangMo_.maPhong;
+    input.value = '';
+    input.disabled = true;
+    gsRun('guiTinNhanChat', myUserId, myPassword, maPhong, noi)
+        .then(() => { input.disabled = false; input.focus(); chatPollThread_(maPhong); })
+        .catch(err => { input.disabled = false; input.value = noi; handleBackendError(err); });
+}
+
+// ---------- Tạo phòng ----------
+
+function chatMoTaoPhong_() {
+    document.getElementById('chatNewTen').value = '';
+    document.getElementById('chatNewSoNgay').value = '30';
+    const box = document.getElementById('chatNewMemberPick');
+    const list = (users || []).filter(u => u.id !== myUserId && u.trangThai !== 'Nghỉ việc');
+    box.innerHTML = list.length
+        ? list.map(u => `<label><input type="checkbox" value="${u.id}"> ${escapeHtml(u.name)}${u.chucDanh ? ' — ' + escapeHtml(u.chucDanh) : ''}</label>`).join('')
+        : '<div class="chat-empty" style="padding:8px 0;">Không có nhân sự nào khác đang hoạt động.</div>';
+    chatShowView_('chatViewCreate', 'Tạo phòng chat', true);
+}
+
+function chatTaoPhongSubmit_(ev) {
+    if (ev) ev.preventDefault();
+    const ten = document.getElementById('chatNewTen').value.trim();
+    if (!ten) { showCustomAlert('Vui lòng nhập tên phòng!', 'error'); return; }
+    const soNgay = parseInt(document.getElementById('chatNewSoNgay').value, 10) || 30;
+    const thanhVien = Array.from(document.querySelectorAll('#chatNewMemberPick input:checked')).map(cb => cb.value);
+
+    const btn = document.getElementById('chatNewSubmitBtn');
+    const orig = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = 'Đang tạo…';
+
+    gsRun('taoPhongChat', myUserId, myPassword, ten, thanhVien, soNgay)
+        .then(maPhong => {
+            btn.disabled = false; btn.innerHTML = orig;
+            showCustomAlert('Đã tạo phòng chat.', 'success');
+            chatTaiDanhSachPhong_();
+            chatMoPhong_(maPhong);
+        })
+        .catch(err => { btn.disabled = false; btn.innerHTML = orig; handleBackendError(err); });
+}
+
+// ---------- Cài đặt phòng (chỉ chủ phòng đổi được số ngày lưu / xoá phòng) ----------
+
+function chatMoCaiDatPhong_() {
+    const p = chatPhongDangMo_;
+    if (!p) return;
+    document.getElementById('chatSetTen').textContent = p.tenPhong;
+    document.getElementById('chatSetThanhVien').textContent = p.thanhVien.join(', ');
+    document.getElementById('chatSetSoNgay').value = p.soNgayLuu;
+    document.getElementById('chatSetSoNgay').disabled = !p.laChuPhong;
+    document.getElementById('chatSetSoNgayBtn').style.display = p.laChuPhong ? '' : 'none';
+    document.getElementById('chatSetRoiBtn').style.display = p.laChuPhong ? 'none' : '';
+    document.getElementById('chatSetXoaBtn').style.display = p.laChuPhong ? '' : 'none';
+    chatShowView_('chatViewSettings', 'Cài đặt phòng', true);
+}
+
+function chatQuayLaiThread_() {
+    chatShowView_('chatViewThread', chatPhongDangMo_ ? chatPhongDangMo_.tenPhong : 'Chat nội bộ', true);
+    document.getElementById('chatSettingsBtn').style.display = 'flex';
+}
+
+function chatDoiSoNgayLuu_() {
+    const p = chatPhongDangMo_;
+    const soNgay = parseInt(document.getElementById('chatSetSoNgay').value, 10) || 30;
+    gsRun('capNhatSoNgayLuuPhongChat', myUserId, myPassword, p.maPhong, soNgay)
+        .then(() => { p.soNgayLuu = soNgay; showCustomAlert('Đã cập nhật số ngày lưu trữ.', 'success'); })
+        .catch(handleBackendError);
+}
+
+function chatRoiPhong_() {
+    const p = chatPhongDangMo_;
+    if (!p || !confirm(`Rời khỏi phòng "${p.tenPhong}"? Bạn sẽ không còn thấy phòng này nữa.`)) return;
+    gsRun('roiPhongChat', myUserId, myPassword, p.maPhong)
+        .then(() => { showCustomAlert('Đã rời phòng chat.', 'success'); chatXemDanhSach_(); })
+        .catch(handleBackendError);
+}
+
+function chatXoaPhong_() {
+    const p = chatPhongDangMo_;
+    if (!p || !confirm(`XOÁ VĨNH VIỄN phòng "${p.tenPhong}" cùng toàn bộ tin nhắn? Không thể hoàn tác.`)) return;
+    gsRun('xoaPhongChat', myUserId, myPassword, p.maPhong)
+        .then(() => { showCustomAlert('Đã xoá phòng chat.', 'success'); chatXemDanhSach_(); })
+        .catch(handleBackendError);
+}
+</script>

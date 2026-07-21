@@ -3,6 +3,14 @@ function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
+// Trạng thái nhân sự (cột 'TrangThai' trong DanhSachUser, cột G/index 6) — chỉ Admin đặt được (xem
+// adminSetTrangThaiNhanSu). Cột này thêm SAU khi nhiều tài khoản đã tồn tại nên các dòng cũ trống ô
+// này — coi trống = TRANGTHAI_HOATDONG_ (đang hoạt động) để không khoá nhầm ai (xem listSupervisors/
+// login). "Nghỉ việc": khoá đăng nhập hẳn (login() chặn), tên hiển thị gạch ngang, ẩn khỏi các danh
+// sách CHỌN MỚI (giao việc, mời vào phòng chat...) — nhưng dữ liệu lịch sử vẫn giữ nguyên.
+const TRANGTHAI_HOATDONG_ = 'Đang hoạt động';
+const TRANGTHAI_NGHIVIEC_ = 'Nghỉ việc';
+
 // HangMuc nay CHỈ là dữ liệu tham chiếu (mã/tên/cây cha-con) để lọc & để Gói thầu gộp —
 // không còn nhận Nhật ký tiến độ trực tiếp (xem CongViec bên dưới).
 // stt (số thứ tự hiển thị) thêm ở CUỐI mỗi bảng — không chèn giữa để không xáo trộn cột của các
@@ -76,9 +84,9 @@ function thietLapBanDauSheet() {
 
   if (!ss.getSheetByName('DanhSachUser')) {
     const sh = ss.insertSheet('DanhSachUser');
-    sh.getRange(1, 1, 2, 6).setValues([
-      ['ID', 'MatKhau', 'VaiTro', 'HoTen', 'ChucDanh', 'PhanMacDinh'],
-      ['admin', '123456', 'ADMIN', 'Ban QLDA', '', '']
+    sh.getRange(1, 1, 2, 7).setValues([
+      ['ID', 'MatKhau', 'VaiTro', 'HoTen', 'ChucDanh', 'PhanMacDinh', 'TrangThai'],
+      ['admin', '123456', 'ADMIN', 'Ban QLDA', '', '', TRANGTHAI_HOATDONG_]
     ]);
   }
 
@@ -424,7 +432,8 @@ function listSupervisors() {
       role: String(data[i][2]).trim().toUpperCase(),
       name: String(data[i][3]).trim(),
       chucDanh: String(data[i][4] || '').trim(),
-      phanMacDinh: String(data[i][5] || '').trim()
+      phanMacDinh: String(data[i][5] || '').trim(),
+      trangThai: String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_
     });
   }
   return result;
@@ -442,6 +451,7 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
   if (!sheet) throw new Error("Chưa cấu hình Tab DanhSachUser trên Google Sheet!");
   if (!sheet.getRange(1, 5).getValue()) sheet.getRange(1, 5).setValue('ChucDanh');
   if (!sheet.getRange(1, 6).getValue()) sheet.getRange(1, 6).setValue('PhanMacDinh');
+  if (!sheet.getRange(1, 7).getValue()) sheet.getRange(1, 7).setValue('TrangThai');
   const data = sheet.getDataRange().getValues();
 
   for (let i = 1; i < data.length; i++) {
@@ -457,9 +467,36 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
   }
 
   if (!newPassword) throw new Error("Vui lòng đặt mật khẩu ban đầu cho tài khoản mới!");
-  sheet.appendRow([targetId, newPassword, role, name, chucDanh || '', phanMacDinh || '']);
+  sheet.appendRow([targetId, newPassword, role, name, chucDanh || '', phanMacDinh || '', TRANGTHAI_HOATDONG_]);
   logActivity(adminId, adminUser.name, "Thêm Giám sát", `Thêm tài khoản ${targetId}`);
   return "Success";
+}
+
+// (Admin) Đổi Trạng thái 1 nhân sự — 'Đang hoạt động'/'Nghỉ việc' (xem TRANGTHAI_*_ đầu file).
+// Nghỉ việc = khoá đăng nhập hẳn (login() chặn), KHÔNG xoá tài khoản/dữ liệu lịch sử liên quan.
+function adminSetTrangThaiNhanSu(adminId, adminPass, targetId, trangThai) {
+  const adminUser = login(adminId, adminPass);
+  if (adminUser.role !== 'ADMIN') throw new Error("Chỉ Quản trị mới có quyền đổi Trạng thái nhân sự!");
+
+  const tt = String(trangThai || '').trim();
+  if (tt !== TRANGTHAI_HOATDONG_ && tt !== TRANGTHAI_NGHIVIEC_) throw new Error("Trạng thái không hợp lệ!");
+  if (String(targetId).trim() === String(adminId).trim() && tt === TRANGTHAI_NGHIVIEC_) {
+    throw new Error("Không thể tự đặt chính mình thành Nghỉ việc!");
+  }
+
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
+  if (!sheet) throw new Error("Chưa cấu hình Tab DanhSachUser trên Google Sheet!");
+  if (!sheet.getRange(1, 7).getValue()) sheet.getRange(1, 7).setValue('TrangThai');
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(targetId).trim()) {
+      sheet.getRange(i + 1, 7).setValue(tt);
+      logActivity(adminId, adminUser.name, "Đổi Trạng thái nhân sự", `${targetId} -> ${tt}`);
+      return "Success";
+    }
+  }
+  throw new Error("Không tìm thấy nhân sự!");
 }
 
 // (Admin) Xóa 1 tài khoản Giám sát khỏi tab DanhSachUser.
@@ -1639,6 +1676,11 @@ function login(userId, password) {
       const storedPass = String(data[i][1]).trim();
 
       if (storedPass === hashedInput || storedPass === plainInput) {
+        const trangThai = String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_;
+        if (trangThai === TRANGTHAI_NGHIVIEC_) {
+          throw new Error("Tài khoản đã Nghỉ việc, không thể đăng nhập. Liên hệ Quản trị nếu có nhầm lẫn.");
+        }
+
         // TỰ ĐỘNG BẢO MẬT: nếu pass trong Sheet vẫn là pass thường, lập tức mã hóa và lưu đè lại
         if (storedPass !== hashedInput) {
           sheet.getRange(i + 1, 2).setValue(hashedInput);
@@ -1649,7 +1691,8 @@ function login(userId, password) {
           name: String(data[i][3]).trim(),
           supervisorId: String(data[i][0]).trim(),
           chucDanh: String(data[i][4] || '').trim(),
-          phanMacDinh: String(data[i][5] || '').trim()
+          phanMacDinh: String(data[i][5] || '').trim(),
+          trangThai: trangThai
         };
       } else {
         throw new Error("Sai Tên đăng nhập (ID) hoặc Mật khẩu!");
@@ -2558,4 +2601,340 @@ function adminXoaQuyetToan(userId, password, maQuyetToan) {
     }
   }
   throw new Error('Không tìm thấy Quyết toán!');
+}
+
+// =======================================================
+// CHAT NỘI BỘ (phòng chat riêng theo nhóm nhân sự tự chọn)
+// =======================================================
+//
+// 4 sheet: ChatPhong (danh sách phòng), ChatThanhVien (ai được ở trong phòng nào — CHỈ thành viên
+// mới thấy phòng tồn tại, kể cả Admin cũng bị loại trừ nếu không được mời), ChatTinNhan (nội dung đã
+// MÃ HÓA tại nơi lưu trữ — mở Sheet trực tiếp chỉ thấy chuỗi mã hoá, xem giaiMaChat_/maHoaChat_ —
+// LƯU Ý: đây là mã hoá bảo vệ khỏi xem trực tiếp trong Sheet, KHÔNG phải end-to-end thực sự chống lại
+// người cố tình đọc code Apps Script để lấy khoá, vì nền tảng này không có hạ tầng quản lý khoá riêng
+// cho từng người dùng), ChatDaDoc (mốc thời gian mỗi người đã đọc đến đâu trong 1 phòng — dùng tính
+// số tin nhắn CHƯA đọc). Tin nhắn tự xoá theo số ngày do CHỦ PHÒNG tự đặt qua trigger hàng ngày
+// donDepTinNhanChatQuaHan_() (xem chatDamBaoTrigger_(), tự cài đặt khi ai đó tạo phòng đầu tiên,
+// không cần Admin chạy tay 1 hàm setup riêng).
+//
+// Real-time: Apps Script không có WebSocket — client tự hỏi lại server theo chu kỳ (polling, xem
+// 16_ChatNoiBo.html), không phải tức thời tuyệt đối.
+
+const CHAT_PHONG_HEADERS_ = ['maPhong', 'tenPhong', 'chuPhong', 'soNgayLuu', 'ngayTao'];
+const CHAT_THANHVIEN_HEADERS_ = ['maPhong', 'userId', 'ngayThamGia'];
+const CHAT_TINNHAN_HEADERS_ = ['maTinNhan', 'maPhong', 'userId', 'noiDungMaHoa', 'thoiGian'];
+const CHAT_DADOC_HEADERS_ = ['maPhong', 'userId', 'thoiGianDaDoc'];
+
+function chatKhoaBiMat_() {
+  const props = PropertiesService.getScriptProperties();
+  let key = props.getProperty('CHAT_MA_HOA_KEY');
+  if (!key) {
+    key = Utilities.getUuid() + Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('CHAT_MA_HOA_KEY', key);
+  }
+  return key;
+}
+
+// Mã hoá/giải mã đối xứng đơn giản (XOR theo khoá bí mật lưu ở Script Properties, không nằm trong
+// Sheet) — đủ để nội dung KHÔNG hiện dạng chữ thường khi mở trực tiếp Google Sheet, xem chú thích ở
+// đầu khối CHAT NỘI BỘ về giới hạn thực tế của cách này.
+function maHoaChat_(text) {
+  const keyBytes = Utilities.newBlob(chatKhoaBiMat_()).getBytes();
+  const textBytes = Utilities.newBlob(String(text == null ? '' : text)).getBytes();
+  const out = textBytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
+  return Utilities.base64Encode(out);
+}
+
+function giaiMaChat_(encoded) {
+  if (!encoded) return '';
+  try {
+    const keyBytes = Utilities.newBlob(chatKhoaBiMat_()).getBytes();
+    const bytes = Utilities.base64Decode(String(encoded));
+    const out = bytes.map((b, i) => b ^ keyBytes[i % keyBytes.length]);
+    return Utilities.newBlob(out).getDataAsString();
+  } catch (e) {
+    return '(Không đọc được nội dung)';
+  }
+}
+
+function readChatPhongRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, CHAT_PHONG_HEADERS_.length).getValues()
+    .filter(r => r[0])
+    .map(r => ({ maPhong: String(r[0]).trim(), tenPhong: String(r[1] || ''), chuPhong: String(r[2] || '').trim(), soNgayLuu: Number(r[3]) || 30, ngayTao: r[4] }));
+}
+
+function readChatThanhVienRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, CHAT_THANHVIEN_HEADERS_.length).getValues()
+    .filter(r => r[0] && r[1])
+    .map(r => ({ maPhong: String(r[0]).trim(), userId: String(r[1]).trim(), ngayThamGia: r[2] }));
+}
+
+function readChatTinNhanRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, CHAT_TINNHAN_HEADERS_.length).getValues()
+    .filter(r => r[0] && r[1])
+    .map((r, i) => ({ maTinNhan: String(r[0]).trim(), maPhong: String(r[1]).trim(), userId: String(r[2]).trim(), noiDungMaHoa: String(r[3] || ''), thoiGian: r[4] instanceof Date ? r[4] : new Date(r[4]) }));
+}
+
+function readChatDaDocRows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, CHAT_DADOC_HEADERS_.length).getValues()
+    .filter(r => r[0] && r[1])
+    .map((r, i) => ({ maPhong: String(r[0]).trim(), userId: String(r[1]).trim(), thoiGianDaDoc: r[2] instanceof Date ? r[2] : new Date(r[2]), rowIdx: i + 2 }));
+}
+
+// Idempotent — tự kiểm tra đã có trigger hàng ngày dọn tin nhắn quá hạn chưa, chưa có thì tạo (chạy
+// lúc 2h sáng, ít ảnh hưởng người dùng). Gọi mỗi khi tạo phòng mới thay vì bắt Admin chạy tay 1 hàm
+// setup riêng — rẻ (chỉ đọc danh sách trigger, không tốn gì nếu đã tồn tại).
+function chatDamBaoTrigger_() {
+  const daCo = ScriptApp.getProjectTriggers().some(t => t.getHandlerFunction() === 'donDepTinNhanChatQuaHan_');
+  if (!daCo) {
+    ScriptApp.newTrigger('donDepTinNhanChatQuaHan_').timeBased().everyDays(1).atHour(2).create();
+  }
+}
+
+// Hàm PUBLIC (không có dấu "_" cuối tên) để CHẠY TAY 1 LẦN trong Apps Script Editor (chọn hàm này ở
+// dropdown "Run" trên thanh công cụ rồi bấm Run) — xin quyền quản lý Trigger cho Chat nội bộ. Các hàm
+// kết thúc bằng "_" (chatDamBaoTrigger_, donDepTinNhanChatQuaHan_...) KHÔNG hiện trong dropdown đó vì
+// Apps Script coi đó là quy ước đặt tên hàm nội bộ/riêng tư — đây là hàm "vỏ" public để chạy được.
+function thietLapChatNoiBo() {
+  chatDamBaoTrigger_();
+  return 'Đã thiết lập xong: trigger tự xoá tin nhắn Chat nội bộ quá hạn (chạy hàng ngày lúc 2h sáng).';
+}
+
+function chatXacThucThanhVien_(maPhong, userId, allThanhVien) {
+  if (!allThanhVien.some(tv => tv.maPhong === maPhong && tv.userId === userId)) {
+    throw new Error("Bạn không có quyền xem/thao tác phòng chat này!");
+  }
+}
+
+// thanhVienIds: mảng userId được mời (không cần tự thêm userId của người tạo, hàm tự thêm).
+function taoPhongChat(userId, password, tenPhong, thanhVienIds, soNgayLuu) {
+  const user = login(userId, password);
+  const ten = String(tenPhong || '').trim();
+  if (!ten) throw new Error("Vui lòng nhập tên phòng chat!");
+
+  let soNgay = Math.round(Number(soNgayLuu));
+  if (!soNgay || soNgay < 1) soNgay = 30;
+  if (soNgay > 365) soNgay = 365;
+
+  const phongSheet = layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_);
+  const tvSheet = layHoacTaoSheet_('ChatThanhVien', CHAT_THANHVIEN_HEADERS_);
+
+  const maPhong = Utilities.getUuid();
+  const now = new Date();
+  phongSheet.appendRow([maPhong, ten, userId, soNgay, now]);
+
+  const memberSet = new Set((Array.isArray(thanhVienIds) ? thanhVienIds : []).map(id => String(id).trim()).filter(Boolean));
+  memberSet.add(String(userId).trim());
+  const rows = Array.from(memberSet).map(uid => [maPhong, uid, now]);
+  tvSheet.getRange(tvSheet.getLastRow() + 1, 1, rows.length, CHAT_THANHVIEN_HEADERS_.length).setValues(rows);
+
+  chatDamBaoTrigger_();
+  logActivity(userId, user.name, "Tạo phòng chat", ten);
+  return maPhong;
+}
+
+// Danh sách phòng CỦA CHÍNH NGƯỜI GỌI (chỉ phòng mình là thành viên) + tin nhắn cuối + số chưa đọc.
+function getDanhSachPhongChat(userId, password) {
+  login(userId, password);
+  const uid = String(userId).trim();
+
+  const allPhong = readChatPhongRows_(layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_));
+  const allThanhVien = readChatThanhVienRows_(layHoacTaoSheet_('ChatThanhVien', CHAT_THANHVIEN_HEADERS_));
+  const allTinNhan = readChatTinNhanRows_(layHoacTaoSheet_('ChatTinNhan', CHAT_TINNHAN_HEADERS_));
+  const allDaDoc = readChatDaDocRows_(layHoacTaoSheet_('ChatDaDoc', CHAT_DADOC_HEADERS_));
+
+  const maPhongCuaToi = new Set(allThanhVien.filter(tv => tv.userId === uid).map(tv => tv.maPhong));
+  const tinNhanTheoPhong_ = new Map();
+  allTinNhan.forEach(tn => {
+    if (!tinNhanTheoPhong_.has(tn.maPhong)) tinNhanTheoPhong_.set(tn.maPhong, []);
+    tinNhanTheoPhong_.get(tn.maPhong).push(tn);
+  });
+  const daDocMap_ = new Map(); // "maPhong|userId" -> Date
+  allDaDoc.forEach(d => daDocMap_.set(d.maPhong + '|' + d.userId, d.thoiGianDaDoc));
+
+  const rows = allPhong.filter(p => maPhongCuaToi.has(p.maPhong)).map(p => {
+    const tinPhong = (tinNhanTheoPhong_.get(p.maPhong) || []).slice().sort((a, b) => a.thoiGian - b.thoiGian);
+    const tinCuoi = tinPhong[tinPhong.length - 1];
+    const daDocLuc = daDocMap_.get(p.maPhong + '|' + uid) || null;
+    const soChuaDoc = tinPhong.filter(tn => tn.userId !== uid && (!daDocLuc || tn.thoiGian > daDocLuc)).length;
+    const soThanhVien = allThanhVien.filter(tv => tv.maPhong === p.maPhong).length;
+
+    return {
+      maPhong: p.maPhong, tenPhong: p.tenPhong, chuPhong: p.chuPhong, laChuPhong: p.chuPhong === uid,
+      soNgayLuu: p.soNgayLuu, soThanhVien,
+      tinCuoi: tinCuoi ? { noiDung: giaiMaChat_(tinCuoi.noiDungMaHoa), userId: tinCuoi.userId, thoiGian: tinCuoi.thoiGian } : null,
+      thoiGianHoatDong: tinCuoi ? tinCuoi.thoiGian : p.ngayTao,
+      soChuaDoc
+    };
+  }).sort((a, b) => new Date(b.thoiGianHoatDong) - new Date(a.thoiGianHoatDong));
+
+  return JSON.stringify(rows);
+}
+
+// Mở 1 phòng: xác thực thành viên, trả tin nhắn đã giải mã + đánh dấu đã đọc đến hiện tại.
+function getTinNhanPhongChat(userId, password, maPhong) {
+  login(userId, password);
+  const uid = String(userId).trim();
+  const maP = String(maPhong || '').trim();
+
+  const allThanhVien = readChatThanhVienRows_(layHoacTaoSheet_('ChatThanhVien', CHAT_THANHVIEN_HEADERS_));
+  chatXacThucThanhVien_(maP, uid, allThanhVien);
+
+  const allPhong = readChatPhongRows_(layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_));
+  const phong = allPhong.find(p => p.maPhong === maP);
+  if (!phong) throw new Error("Phòng chat không tồn tại (có thể đã bị xoá)!");
+
+  const allTinNhan = readChatTinNhanRows_(layHoacTaoSheet_('ChatTinNhan', CHAT_TINNHAN_HEADERS_));
+  const allUsers = listSupervisors();
+  const tenTheoId_ = {};
+  allUsers.forEach(u => { tenTheoId_[u.id] = u.name; });
+
+  const tinNhan = allTinNhan.filter(tn => tn.maPhong === maP)
+    .sort((a, b) => a.thoiGian - b.thoiGian)
+    .map(tn => ({ userId: tn.userId, tenNguoiGui: tenTheoId_[tn.userId] || tn.userId, noiDung: giaiMaChat_(tn.noiDungMaHoa), thoiGian: tn.thoiGian }));
+
+  const thanhVienPhong = allThanhVien.filter(tv => tv.maPhong === maP).map(tv => tenTheoId_[tv.userId] || tv.userId);
+
+  // Đánh dấu đã đọc đến hiện tại — upsert 1 dòng ChatDaDoc.
+  const daDocSheet = layHoacTaoSheet_('ChatDaDoc', CHAT_DADOC_HEADERS_);
+  const allDaDoc = readChatDaDocRows_(daDocSheet);
+  const hienTai = new Date();
+  const dong = allDaDoc.find(d => d.maPhong === maP && d.userId === uid);
+  if (dong) daDocSheet.getRange(dong.rowIdx, 3).setValue(hienTai);
+  else daDocSheet.appendRow([maP, uid, hienTai]);
+
+  return JSON.stringify({
+    maPhong: maP, tenPhong: phong.tenPhong, chuPhong: phong.chuPhong, laChuPhong: phong.chuPhong === uid,
+    soNgayLuu: phong.soNgayLuu, thanhVien: thanhVienPhong, tinNhan
+  });
+}
+
+function guiTinNhanChat(userId, password, maPhong, noiDung) {
+  login(userId, password);
+  const uid = String(userId).trim();
+  const maP = String(maPhong || '').trim();
+  const noi = String(noiDung || '').trim();
+  if (!noi) throw new Error("Nội dung tin nhắn không được để trống!");
+  if (noi.length > 2000) throw new Error("Tin nhắn quá dài (tối đa 2000 ký tự)!");
+
+  const allThanhVien = readChatThanhVienRows_(layHoacTaoSheet_('ChatThanhVien', CHAT_THANHVIEN_HEADERS_));
+  chatXacThucThanhVien_(maP, uid, allThanhVien);
+
+  const tnSheet = layHoacTaoSheet_('ChatTinNhan', CHAT_TINNHAN_HEADERS_);
+  tnSheet.appendRow([Utilities.getUuid(), maP, uid, maHoaChat_(noi), new Date()]);
+  return "Success";
+}
+
+function capNhatSoNgayLuuPhongChat(userId, password, maPhong, soNgayLuu) {
+  login(userId, password);
+  const uid = String(userId).trim();
+  const maP = String(maPhong || '').trim();
+  let soNgay = Math.round(Number(soNgayLuu));
+  if (!soNgay || soNgay < 1) soNgay = 30;
+  if (soNgay > 365) soNgay = 365;
+
+  const phongSheet = layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_);
+  const data = phongSheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === maP) {
+      if (String(data[i][2]).trim() !== uid) throw new Error("Chỉ chủ phòng mới đổi được số ngày lưu trữ!");
+      phongSheet.getRange(i + 1, 4).setValue(soNgay);
+      return "Success";
+    }
+  }
+  throw new Error("Phòng chat không tồn tại!");
+}
+
+// Thành viên thường rời phòng — chủ phòng KHÔNG rời được (phải Xóa phòng nếu muốn kết thúc hẳn),
+// tránh tình trạng phòng còn thành viên mà mất chủ, không ai đổi được số ngày lưu trữ/xoá phòng nữa.
+function roiPhongChat(userId, password, maPhong) {
+  login(userId, password);
+  const uid = String(userId).trim();
+  const maP = String(maPhong || '').trim();
+
+  const phongSheet = layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_);
+  const phong = readChatPhongRows_(phongSheet).find(p => p.maPhong === maP);
+  if (phong && phong.chuPhong === uid) throw new Error("Chủ phòng không thể rời phòng — hãy Xóa phòng nếu muốn kết thúc.");
+
+  const tvSheet = layHoacTaoSheet_('ChatThanhVien', CHAT_THANHVIEN_HEADERS_);
+  const data = tvSheet.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]).trim() === maP && String(data[i][1]).trim() === uid) {
+      tvSheet.deleteRow(i + 1);
+      return "Success";
+    }
+  }
+  throw new Error("Bạn không ở trong phòng chat này!");
+}
+
+// Chủ phòng xoá hẳn phòng — dọn sạch cả 4 sheet liên quan (Phòng/Thành viên/Tin nhắn/Đã đọc).
+function xoaPhongChat(userId, password, maPhong) {
+  login(userId, password);
+  const uid = String(userId).trim();
+  const maP = String(maPhong || '').trim();
+
+  const phongSheet = layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_);
+  const phongData = phongSheet.getDataRange().getValues();
+  let found = false;
+  for (let i = phongData.length - 1; i >= 1; i--) {
+    if (String(phongData[i][0]).trim() === maP) {
+      if (String(phongData[i][2]).trim() !== uid) throw new Error("Chỉ chủ phòng mới xoá được phòng chat!");
+      phongSheet.deleteRow(i + 1);
+      found = true;
+      break;
+    }
+  }
+  if (!found) throw new Error("Phòng chat không tồn tại!");
+
+  [['ChatThanhVien', CHAT_THANHVIEN_HEADERS_], ['ChatTinNhan', CHAT_TINNHAN_HEADERS_], ['ChatDaDoc', CHAT_DADOC_HEADERS_]].forEach(([tenSheet, headers]) => {
+    const sh = layHoacTaoSheet_(tenSheet, headers);
+    const data = sh.getDataRange().getValues();
+    for (let i = data.length - 1; i >= 1; i--) {
+      if (String(data[i][0]).trim() === maP) sh.deleteRow(i + 1);
+    }
+  });
+  return "Success";
+}
+
+// Trigger hàng ngày (xem chatDamBaoTrigger_()) — xoá tin nhắn quá hạn theo số ngày CHỦ PHÒNG tự đặt
+// cho từng phòng. Đọc hết 1 lần, tính danh sách còn giữ lại, ghi đè nguyên vùng dữ liệu 1 lượt thay
+// vì xoá từng dòng lẻ tẻ (rẻ hơn khi số dòng cần xoá lớn).
+function donDepTinNhanChatQuaHan_() {
+  const phongSheet = layHoacTaoSheet_('ChatPhong', CHAT_PHONG_HEADERS_);
+  const tnSheet = layHoacTaoSheet_('ChatTinNhan', CHAT_TINNHAN_HEADERS_);
+
+  const soNgayTheoPhong_ = {};
+  readChatPhongRows_(phongSheet).forEach(p => { soNgayTheoPhong_[p.maPhong] = p.soNgayLuu; });
+
+  const allTinNhan = readChatTinNhanRows_(tnSheet);
+  if (!allTinNhan.length) return;
+
+  const now = new Date();
+  const conGiu = allTinNhan.filter(tn => {
+    const soNgay = soNgayTheoPhong_[tn.maPhong];
+    if (soNgay == null) return false; // phòng đã bị xoá — dọn theo luôn
+    const hanCuoi = new Date(tn.thoiGian.getTime() + soNgay * 24 * 60 * 60 * 1000);
+    return hanCuoi > now;
+  });
+
+  if (conGiu.length === allTinNhan.length) return; // không có gì quá hạn
+
+  const lastRow = tnSheet.getLastRow();
+  if (lastRow >= 2) tnSheet.getRange(2, 1, lastRow - 1, CHAT_TINNHAN_HEADERS_.length).clearContent();
+  if (conGiu.length) {
+    const rows = conGiu.map(tn => [tn.maTinNhan, tn.maPhong, tn.userId, tn.noiDungMaHoa, tn.thoiGian]);
+    tnSheet.getRange(2, 1, rows.length, CHAT_TINNHAN_HEADERS_.length).setValues(rows);
+  }
 }

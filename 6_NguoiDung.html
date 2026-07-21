@@ -15,10 +15,11 @@
    động mã hóa lại (xem login() trong Code.js).
 
    DANH SÁCH HÀM CHÍNH:
-   - renderNguoiDung()  : Vẽ bảng danh sách Giám sát
-   - openUserModal()    : Mở modal thêm/sửa Giám sát
-   - saveUserModal()    : Lưu Giám sát từ Modal
-   - deleteUser()       : Xóa 1 Giám sát
+   - renderNguoiDung()      : Vẽ bảng danh sách Giám sát
+   - openUserModal()        : Mở modal thêm/sửa Giám sát
+   - saveUserModal()        : Lưu Giám sát từ Modal
+   - deleteUser()           : Xóa 1 Giám sát
+   - doiTrangThaiNhanSu_()  : Đổi dropdown Trạng thái (Đang hoạt động/Nghỉ việc) 1 dòng
    ================================================================ */
 
 function renderNguoiDung() {
@@ -28,16 +29,24 @@ function renderNguoiDung() {
 
     const body = document.getElementById('nguoiDungBody');
     if (users.length === 0) {
-        body.innerHTML = '<tr><td colspan="8" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
+        body.innerHTML = '<tr><td colspan="9" class="text-center" style="color:gray; padding:15px;">Chưa có tài khoản nào.</td></tr>';
         return;
     }
-    body.innerHTML = users.map((u, idx) => `<tr>
+    body.innerHTML = users.map((u, idx) => {
+        const ngiViec = u.trangThai === 'Nghỉ việc';
+        return `<tr>
         <td class="text-center">${idx + 1}</td>
         <td>${u.id}</td>
-        <td>${u.name}</td>
+        <td${ngiViec ? ' style="text-decoration:line-through; color:var(--text-muted);"' : ''}>${u.name}</td>
         <td class="text-center">${u.role === 'ADMIN' ? 'Quản trị' : 'Giám sát'}</td>
         <td>${u.chucDanh || '--'}</td>
         <td class="text-center">${u.phanMacDinh === 'ca_hai' ? 'Cả hai' : (PHAN_LOAI_LABEL[u.phanMacDinh] || '-- Chưa gán --')}</td>
+        <td class="text-center">
+            <select style="width:150px; padding:5px 8px; border:1px solid var(--border); border-radius:6px; font-size:0.83rem; ${ngiViec ? 'color:var(--danger);' : 'color:var(--success);'} font-weight:600;" ${u.id === myUserId ? 'disabled title="Không thể tự đổi trạng thái của chính mình"' : ''} onchange="doiTrangThaiNhanSu_('${u.id}', this)">
+                <option value="Đang hoạt động"${!ngiViec ? ' selected' : ''}>Đang hoạt động</option>
+                <option value="Nghỉ việc"${ngiViec ? ' selected' : ''}>Nghỉ việc</option>
+            </select>
+        </td>
         <td class="text-center">${congViecCountByUser[u.id] || 0}</td>
         <td class="text-center">
             <div class="action-cell">
@@ -45,7 +54,17 @@ function renderNguoiDung() {
                 <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')" aria-label="Xóa nhân sự" title="Xóa nhân sự"><i class="fa-solid fa-trash"></i></button>
             </div>
         </td>
-    </tr>`).join('');
+    </tr>`;
+    }).join('');
+}
+
+// Lưu ngay lập tức (không gộp batch) — đổi trạng thái là thao tác hiếm, đơn lẻ, không cần Lưu hàng loạt.
+function doiTrangThaiNhanSu_(userId, selEl) {
+    const trangThai = selEl.value;
+    selEl.disabled = true;
+    gsRun('adminSetTrangThaiNhanSu', myUserId, myPassword, userId, trangThai)
+        .then(() => { showCustomAlert('Đã cập nhật Trạng thái nhân sự.', 'success'); reloadCongViecData(); })
+        .catch(err => { selEl.disabled = false; handleBackendError(err); });
 }
 
 function openUserModal(userId) {

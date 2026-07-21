@@ -240,7 +240,7 @@ function openThemCongViecHangLoatModal() {
     if (currentRole === 'ADMIN') {
         const sel = document.getElementById('cvhlGiaoCho');
         sel.innerHTML = '<option value="">-- Tự đảm nhận --</option>' +
-            users.filter(u => u.role !== 'ADMIN').map(u => `<option value="${u.id}">${u.name}</option>`).join('');
+            users.filter(u => u.role !== 'ADMIN' && u.trangThai !== 'Nghỉ việc').map(u => `<option value="${u.id}">${u.name}</option>`).join('');
         sel.value = '';
     }
     onCvhlGiaoChoChange();
