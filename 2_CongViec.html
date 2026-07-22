@@ -256,7 +256,7 @@ function saveCongViecModal() {
         .then(() => {
             closeCongViecModal();
             showCustomAlert('Đã lưu công việc.', 'success');
-            reloadCongViecData();
+            reloadCongViecMot_(maCongViec);
         })
         .catch(handleBackendError)
         .finally(() => { btnLuu.disabled = false; });
@@ -271,7 +271,7 @@ function deleteCongViec(maCongViec) {
     gsRun('adminDeleteCongViec', myUserId, myPassword, maCongViec)
         .then(() => {
             showCustomAlert('Đã xoá công việc.', 'success');
-            reloadCongViecData();
+            reloadCongViecMot_(maCongViec);
         })
         .catch(handleBackendError);
 }

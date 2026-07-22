@@ -464,6 +464,51 @@ function getDataKhoiDong() {
   return JSON.stringify({ congViecData: JSON.parse(getData()), hopDongData: JSON.parse(getHopDongData()) });
 }
 
+// Giống getData() nhưng chỉ đọc + tính lại ĐÚNG 1 Công việc — dùng để tải lại sau khi Sửa/Xóa 1 Công
+// việc (xem saveCongViecModal/deleteCongViec ở 2_CongViec.html), CÙNG triết lý với
+// getHopDongChiTietMotHopDong() cho module Hợp đồng: getData() phải quét lại NGUYÊN NhatKyTienDo/
+// BinhLuanCongViec (cộng dồn lũy kế cho MỌI Công việc) mỗi lần gọi — càng nhiều Công việc/lịch sử
+// càng chậm dần, dù chỉ vừa sửa đúng 1 dòng. Hàm này chỉ đọc phần dữ liệu LIÊN QUAN tới đúng
+// maCongViec đó (lọc ngay lúc đọc, không tải cả sheet vào rồi mới lọc), phần Hạng mục/Gói thầu/User
+// KHÔNG đổi khi sửa 1 Công việc nên không cần trả lại (client giữ nguyên cache hiện có).
+// Trả về congViec: null nếu không tìm thấy (VD vừa bị người khác xoá thật ở nơi khác — hiếm).
+function getCongViecChiTietMotCongViec(maCongViec) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ma = String(maCongViec || '').trim();
+
+  const cv = readCongViecRows_(ss.getSheetByName('CongViec'), true).find(c => c.maCongViec === ma);
+  if (!cv) return JSON.stringify({ maCongViec: ma, congViec: null });
+
+  const logs = readNhatKyRows_(ss.getSheetByName('NhatKyTienDo')).filter(l => l.active && l.maCongViec === ma);
+  logs.sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao));
+  const binhLuan = readBinhLuanRows_(ss.getSheetByName('BinhLuanCongViec')).filter(c => c.maCongViec === ma);
+
+  const luyKe = Math.round(logs.reduce((s, l) => s + l.phanTramNgay, 0) * 10) / 10;
+  cv.luyKe = luyKe;
+  cv.recentLogs = logs.slice().sort((a, b) => b.logId.localeCompare(a.logId)).slice(0, 5);
+  cv.soBinhLuan = binhLuan.length;
+  cv.recentComments = binhLuan.slice().sort((a, b) => b.id.localeCompare(a.id)).slice(0, 5);
+
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  if (luyKe >= 100) {
+    let ngayHoanThanhThucTe = null;
+    let running = 0;
+    for (let i = 0; i < logs.length; i++) {
+      running += logs[i].phanTramNgay;
+      if (running >= 99.999) { ngayHoanThanhThucTe = logs[i].ngayBaoCao; break; }
+    }
+    cv.trangThaiMau = (cv.ngayKetThucKH && ngayHoanThanhThucTe && ngayHoanThanhThucTe > cv.ngayKetThucKH) ? 'overdue' : 'done';
+    if (cv.trangThaiMau === 'overdue') cv.soNgayTre = soNgayGiuaHaiNgayISO_(ngayHoanThanhThucTe, cv.ngayKetThucKH);
+  } else if (cv.ngayBatDauKH && today < cv.ngayBatDauKH) {
+    cv.trangThaiMau = 'pending';
+  } else {
+    cv.trangThaiMau = (cv.ngayKetThucKH && today > cv.ngayKetThucKH) ? 'overdue' : 'inprogress';
+    if (cv.trangThaiMau === 'overdue') cv.soNgayTre = soNgayGiuaHaiNgayISO_(today, cv.ngayKetThucKH);
+  }
+
+  return JSON.stringify({ maCongViec: ma, congViec: cv });
+}
+
 // Giống getData() nhưng chỉ giữ Công việc còn hoạt động (active) — dùng cho màn Báo cáo tổng hợp.
 // KHÔNG đọc lại NhatKyTienDo nữa (getData() ở trên đã gắn sẵn recentLogs), tránh round-trip kép.
 function getBaoCaoTongHop() {

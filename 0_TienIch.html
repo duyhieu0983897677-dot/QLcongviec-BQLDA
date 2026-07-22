@@ -106,6 +106,25 @@ function applyLoadedData(response) {
     updateUI();
 }
 
+// Gộp (merge) dữ liệu của ĐÚNG 1 Công việc — từ getCongViecChiTietMotCongViec() — vào cache congViec
+// hiện có, thay vì gọi lại reloadCongViecData() (tải lại + tính lũy kế cho TOÀN BỘ Công việc chỉ để
+// cập nhật 1 dòng vừa Sửa/Xóa). Cùng triết lý với applyLoadedHopDongChiTiet_() bên dưới cho Hợp đồng.
+function applyLoadedCongViecMot_(response) {
+    const parsed = JSON.parse(response);
+    if (!parsed.congViec) { congViec = congViec.filter(cv => cv.maCongViec !== parsed.maCongViec); updateUI(); return; }
+    const idx = congViec.findIndex(cv => cv.maCongViec === parsed.maCongViec);
+    if (idx >= 0) congViec[idx] = parsed.congViec; else congViec.push(parsed.congViec);
+    updateUI();
+}
+
+// Tải lại + gộp dữ liệu của ĐÚNG 1 Công việc — dùng thay reloadCongViecData() sau khi Sửa/Xóa 1 Công
+// việc cụ thể (xem applyLoadedCongViecMot_ ở trên). reloadCongViecData() (tải lại TOÀN BỘ) chỉ còn
+// cần cho các thao tác gộp/hàng loạt hoặc đổi dữ liệu Hạng mục/Gói thầu/Giám sát.
+function reloadCongViecMot_(maCongViec) {
+    loadThongBao();
+    return gsRun('getCongViecChiTietMotCongViec', maCongViec).then(applyLoadedCongViecMot_);
+}
+
 function applyLoadedHopDongData(response) {
     const parsed = JSON.parse(response);
     hopDong = parsed.hopDong || [];
