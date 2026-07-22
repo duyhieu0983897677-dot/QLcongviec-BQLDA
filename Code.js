@@ -226,7 +226,10 @@ function doGet() {
 // Sheet khi nhiều lượt gọi backend rơi vào cùng khung thời gian ngắn (nhiều người mở trang gần nhau,
 // hoặc 1 người bấm qua lại nhiều tab). BẮT BUỘC gọi cacheXoa_(key) ngay sau MỌI lần ghi vào sheet
 // tương ứng (xem các hàm adminSave*/adminXoa*/adminDelete* liên quan) — nếu quên, dữ liệu cũ còn hiện
-// tới hết TTL. KHÔNG dùng cho CongViec/NhatKyTienDo/ChamCongThang (đổi liên tục, cache lợi bất cập hại).
+// tới hết TTL. KHÔNG dùng cho CongViec/NhatKyTienDo/ChamCongThang (đổi liên tục, cache lợi bất cập hại)
+// — NGOẠI LỆ riêng cho NhatKyTienDo xem lamNongCacheNhatKyTheoViec_()/getNhatKyGanNhat() bên dưới:
+// cache theo TỪNG Công việc (khoá nhỏ, TTL ngắn, "làm nóng" luôn khi getData() đã quét sẵn sheet này)
+// thay vì cache nguyên sheet — khác hẳn cách dùng ở đây nên tách hàm riêng, không dùng cacheLay_.
 function cacheLay_(key, ttlGiay, fnDoc) {
   const cache = CacheService.getScriptCache();
   const cached = cache.get(key);
@@ -237,6 +240,22 @@ function cacheLay_(key, ttlGiay, fnDoc) {
 }
 function cacheXoa_(key) {
   CacheService.getScriptCache().remove(key);
+}
+
+// getData() dù sao cũng BẮT BUỘC quét nguyên sheet NhatKyTienDo 1 lần để tính lũy kế cho MỌI Công
+// việc (không tránh được) — tiện thể "làm nóng" luôn cache log CHI TIẾT theo TỪNG Công việc (khoá
+// 'NKTD_<maCongViec>', TTL 90s) bằng ĐÚNG 1 lệnh putAll() (không lặp N lần put() riêng kẻo làm chậm
+// ngược lại chính getData()) — nhờ vậy getNhatKyGanNhat() (popup "Lịch sử báo cáo" ở tab Tổng quan)
+// thường phục vụ được ngay từ cache thay vì phải tự quét lại NGUYÊN sheet mỗi lần mở popup, vốn là
+// nguyên nhân chính khiến popup đó mở chậm (càng chậm dần khi NhatKyTienDo tích lũy nhiều lịch sử).
+// Mỗi khoá chỉ chứa log của 1 Công việc (nhỏ, an toàn với giới hạn 100KB/khoá) — khác với việc gộp
+// CẢ logsByCongViec vào 1 khoá duy nhất (dễ vượt 100KB khi dự án tích lũy nhiều Công việc/lịch sử).
+function lamNongCacheNhatKyTheoViec_(logsByCongViec) {
+  try {
+    const payload = {};
+    Object.keys(logsByCongViec).forEach(id => { payload['NKTD_' + id] = JSON.stringify(logsByCongViec[id]); });
+    if (Object.keys(payload).length) CacheService.getScriptCache().putAll(payload, 90);
+  } catch (e) { /* hiếm khi lỗi (vượt tổng dung lượng cho phép...) — bỏ qua, không chặn getData() */ }
 }
 
 // =======================================================
@@ -417,6 +436,7 @@ function getData() {
     recentLogsByCongViec[id] = logsByCongViec[id].slice().sort((a, b) => b.logId.localeCompare(a.logId)).slice(0, 5);
     logsByCongViec[id].sort((a, b) => a.ngayBaoCao.localeCompare(b.ngayBaoCao));
   });
+  lamNongCacheNhatKyTheoViec_(logsByCongViec);
 
   // Gắn sẵn số lượng + 5 bình luận gần nhất cho mỗi Công việc (giống recentLogs ở trên) — để chuông
   // số trên tên Công việc + tooltip xem nhanh không cần round-trip getBinhLuanCongViec() riêng.
@@ -519,11 +539,17 @@ function getBaoCaoTongHop() {
   return JSON.stringify(parsed);
 }
 
+// Ưu tiên đọc cache do getData() "làm nóng" sẵn cho ĐÚNG Công việc này (xem
+// lamNongCacheNhatKyTheoViec_) — chỉ khi cache trống (quá 90s kể từ lần getData()/reloadCongViecData()
+// gần nhất, hoặc server vừa khởi động lại) mới quét lại NGUYÊN sheet NhatKyTienDo như trước.
 function getNhatKyGanNhat(maCongViec, limit) {
-  const logs = readNhatKyRows_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NhatKyTienDo'))
-    .filter(l => l.active && l.maCongViec === maCongViec);
-  logs.sort((a, b) => b.logId.localeCompare(a.logId));
-  return JSON.stringify(logs.slice(0, limit || 5));
+  const ma = String(maCongViec || '').trim();
+  const cached = CacheService.getScriptCache().get('NKTD_' + ma);
+  const logs = cached
+    ? JSON.parse(cached)
+    : readNhatKyRows_(SpreadsheetApp.getActiveSpreadsheet().getSheetByName('NhatKyTienDo')).filter(l => l.active && l.maCongViec === ma);
+  const sorted = logs.slice().sort((a, b) => b.logId.localeCompare(a.logId));
+  return JSON.stringify(sorted.slice(0, limit || 5));
 }
 
 // Đọc danh sách tài khoản (Giám sát/Admin) trực tiếp từ tab DanhSachUser — KHÔNG trả về mật khẩu.

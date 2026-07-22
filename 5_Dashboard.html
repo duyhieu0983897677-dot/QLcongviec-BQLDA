@@ -668,10 +668,13 @@ function formatTienGon_(value) {
 
 // =======================================================
 // NHẬT KÝ BÁO CÁO THEO NGÀY — popup khi bấm tên công việc ở bảng "Báo cáo chi tiết" (renderBcDetail
-// ở trên), cho biết ngày nào đã báo cáo (kèm %) và ngày nào bị thiếu, để biết cần nhắc nhân sự nào
-// vào đúng ngày nào. Dùng lại getNhatKyGanNhat() đã có sẵn ở Code.js (truyền limit lớn để lấy TOÀN
-// BỘ log của 1 công việc — cv.recentLogs trong congViec toàn cục chỉ giữ 5 log gần nhất, không đủ để
-// vẽ lịch), KHÔNG cần thêm hàm backend mới.
+// ở trên). Hiển thị dạng DANH SÁCH (mới nhất trước): mỗi dòng là 1 ngày đã báo cáo (% ngày đó + ghi
+// chú + giờ) hoặc 1 ngày tới hạn mà thiếu báo cáo (chen đúng vị trí thời gian, tô đỏ) — Chủ nhật/Ngày
+// lễ không hiện dòng. Người phụ trách/Lũy kế chỉ hiện 1 lần ở đầu popup, không lặp lại ở từng dòng.
+// Dùng lại getNhatKyGanNhat() đã có sẵn ở Code.js (truyền limit lớn để lấy TOÀN BỘ log của 1 công
+// việc — cv.recentLogs trong congViec toàn cục chỉ giữ 5 log gần nhất, không đủ để vẽ danh sách này);
+// getNhatKyGanNhat() nay đọc ưu tiên từ cache do getData() "làm nóng" sẵn theo từng Công việc (xem
+// lamNongCacheNhatKyTheoViec_ ở Code.js) thay vì quét lại nguyên sheet NhatKyTienDo mỗi lần mở popup.
 // =======================================================
 const BCNK_DOW_ = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 let bcNkNgayLeSet_ = null; // Set các ngày lễ 'yyyy-MM-dd' — tải 1 lần rồi dùng lại cho mọi lần mở popup.
@@ -715,6 +718,13 @@ function closeBcNhatKyModal() {
     document.getElementById('bcnkModal').classList.remove('active');
 }
 
+// Lấy riêng "HH:mm" từ chuỗi thoiGianNhap dạng 'dd/MM/yyyy HH:mm:ss' (xem formatDateTimeCell_ ở
+// Code.js) — bỏ hẳn phần ngày/tháng/năm vì cột ngày bên trái mỗi dòng đã ghi rồi, tránh lặp lại.
+function bcNkGioTuThoiGianNhap_(s) {
+    const parts = String(s || '').trim().split(' ');
+    return parts[1] ? parts[1].slice(0, 5) : '';
+}
+
 function renderBcNkBody_(cv, logs) {
     const body = document.getElementById('bcnkBody');
     if (!cv.ngayBatDauKH) {
@@ -727,9 +737,11 @@ function renderBcNkBody_(cv, logs) {
         return;
     }
 
-    // Cộng dồn % theo từng ngày — 1 ngày có thể có nhiều dòng log (báo cáo bổ sung cùng ngày).
+    // Gộp theo ngày — 1 ngày có thể có nhiều dòng log (báo cáo bổ sung cùng ngày).
+    const logsByDate = {};
+    logs.forEach(l => { (logsByDate[l.ngayBaoCao] = logsByDate[l.ngayBaoCao] || []).push(l); });
     const pctByDate = {};
-    logs.forEach(l => { pctByDate[l.ngayBaoCao] = (pctByDate[l.ngayBaoCao] || 0) + l.phanTramNgay; });
+    Object.keys(logsByDate).forEach(d => { pctByDate[d] = logsByDate[d].reduce((s, l) => s + l.phanTramNgay, 0); });
 
     // Việc đã Hoàn thành: chỉ tính đến đúng ngày lũy kế chạm mốc 100% (không kéo dài tới hôm nay) —
     // giống hệt cách getData() ở Code.js xác định ngày hoàn thành thực tế cho trạng thái "Trễ tiến độ".
@@ -742,99 +754,57 @@ function renderBcNkBody_(cv, logs) {
     }
     if (end < cv.ngayBatDauKH) end = cv.ngayBatDauKH;
 
-    // Toàn bộ ngày từ lúc bắt đầu tới "end" — ngày nào không phải Chủ nhật/Ngày lễ mà không có báo
-    // cáo thì coi là "Chưa báo cáo" (validateVaGhiNhatKy_ ở Code.js chỉ cho báo cáo đúng ngày hôm đó
-    // nên không có báo cáo tức là hôm đó nhân sự đã không nhập gì).
-    const days = [];
+    // Chỉ giữ ngày "có ý nghĩa" (đã báo cáo hoặc tới hạn mà thiếu) — Chủ nhật/Ngày lễ không hiện dòng
+    // nào, giữ danh sách gọn (validateVaGhiNhatKy_ ở Code.js chỉ cho báo cáo đúng ngày hôm đó nên
+    // không có báo cáo tức là hôm đó nhân sự đã không nhập gì).
+    const items = [];
     for (let iso = cv.ngayBatDauKH; iso <= end; iso = addDaysIso_(iso, 1)) {
         const dow = new Date(iso + 'T00:00:00').getDay();
-        const isOff = dow === 0 || bcNkNgayLeSet_.has(iso);
-        const pct = pctByDate[iso];
-        days.push({ iso, dow, isOff, pct, state: isOff ? 'off' : (pct > 0 ? 'reported' : 'missing') });
+        if (dow === 0 || bcNkNgayLeSet_.has(iso)) continue;
+        if (logsByDate[iso]) {
+            const dayLogs = logsByDate[iso].slice().sort((a, b) => a.logId.localeCompare(b.logId));
+            const note = dayLogs.map(l => l.ghiChu).filter(Boolean).join('; ');
+            const gio = bcNkGioTuThoiGianNhap_(dayLogs[dayLogs.length - 1].thoiGianNhap);
+            items.push({ iso, dow, state: 'reported', pct: Math.round(pctByDate[iso] * 10) / 10, note, gio });
+        } else {
+            items.push({ iso, dow, state: 'missing' });
+        }
     }
+    items.reverse(); // mới nhất lên đầu
 
-    const expected = days.filter(d => !d.isOff).length;
-    const reported = days.filter(d => d.state === 'reported').length;
-    const missingDays = days.filter(d => d.state === 'missing');
-    const pctReported = expected > 0 ? Math.round((reported / expected) * 100) : 0;
-    const pctMissing = expected > 0 ? Math.round((missingDays.length / expected) * 100) : 0;
+    const reportedCount = items.filter(i => i.state === 'reported').length;
+    const missingCount = items.filter(i => i.state === 'missing').length;
 
-    const statHtml = `<div class="bcnk-stat-row">
-        <div class="bcnk-stat"><div class="bcnk-stat-label">Lũy kế hiện tại</div><div class="bcnk-stat-value">${cv.luyKe || 0}%</div></div>
-        <div class="bcnk-stat"><div class="bcnk-stat-label">Ngày phải báo cáo</div><div class="bcnk-stat-value">${expected}</div><div class="bcnk-stat-sub">${formatVN(cv.ngayBatDauKH)} → ${formatVN(end)}</div></div>
-        <div class="bcnk-stat ok"><div class="bcnk-stat-label">Đã báo cáo</div><div class="bcnk-stat-value">${reported}</div><div class="bcnk-stat-sub">${pctReported}% số ngày</div></div>
-        <div class="bcnk-stat ${missingDays.length > 0 ? 'warn' : 'ok'}"><div class="bcnk-stat-label">Chưa báo cáo</div><div class="bcnk-stat-value">${missingDays.length}</div><div class="bcnk-stat-sub">${pctMissing}% số ngày</div></div>
+    // Lũy kế chỉ hiện 1 lần ở đây (không lặp lại ở từng dòng bên dưới) — người phụ trách cũng chỉ
+    // hiện 1 lần ở khối bcnkMeta phía trên (chỉ đúng người phụ trách mới báo cáo được cho việc này).
+    const statHtml = `<div class="bcnk-inline-stats">
+        <div class="is-item"><span class="is-label">Lũy kế:</span><span class="is-value">${cv.luyKe || 0}%</span></div>
+        <div class="is-item"><span class="is-label">Đã báo cáo:</span><span class="is-value ok">${reportedCount} ngày</span></div>
+        <div class="is-item"><span class="is-label">Thiếu báo cáo:</span><span class="is-value ${missingCount > 0 ? 'warn' : 'ok'}">${missingCount} ngày</span></div>
     </div>`;
 
-    body.innerHTML = statHtml + renderBcNkCalendar_(days) + renderBcNkMissing_(missingDays, today) +
+    body.innerHTML = statHtml +
+        '<div class="bcnk-log-head"><span>Lịch sử báo cáo (mới nhất trước)</span></div>' +
+        renderBcNkLogList_(items) +
         '<p class="bcnk-note">* Không tính Chủ nhật và các ngày đã khai báo trong danh sách Ngày lễ (mục Chấm công).</p>';
 }
 
-// Vẽ lịch dạng lưới theo từng tháng có mặt trong khoảng [ngày bắt đầu KH .. end] — ngày ngoài
-// khoảng này (trước lúc bắt đầu, hoặc sau "end" trong cùng tháng cuối) hiện mờ (lớp "na"), chỉ để
-// nhìn trọn tháng cho dễ theo dõi, không tính vào thống kê.
-function renderBcNkCalendar_(days) {
-    const dataByIso = {};
-    days.forEach(d => { dataByIso[d.iso] = d; });
-    const startYm = days[0].iso.slice(0, 7);
-    const lastYm = days[days.length - 1].iso.slice(0, 7);
-    const today = getTodayDate();
-
-    const months = [];
-    for (let ym = startYm; ym <= lastYm;) {
-        months.push(ym);
-        const [y, m] = ym.split('-').map(Number);
-        const next = new Date(y, m, 1);
-        ym = next.getFullYear() + '-' + String(next.getMonth() + 1).padStart(2, '0');
-    }
-
-    const monthBlocks = months.map(ym => {
-        const [y, m] = ym.split('-').map(Number);
-        const firstOfMonth = new Date(y, m - 1, 1);
-        const daysInMonth = new Date(y, m, 0).getDate();
-        const leadPad = (firstOfMonth.getDay() + 6) % 7; // Lưới bắt đầu từ T2 — CN(0) phải rơi cột cuối.
-
-        let cells = '';
-        for (let i = 0; i < leadPad; i++) cells += '<div class="bcnk-cell pad"></div>';
-        for (let dnum = 1; dnum <= daysInMonth; dnum++) {
-            const iso = ym + '-' + String(dnum).padStart(2, '0');
-            const info = dataByIso[iso];
-            if (!info) {
-                cells += `<div class="bcnk-cell na"><span class="bcnk-d">${dnum}</span><span class="bcnk-v">—</span></div>`;
-            } else {
-                const cls = info.state + (iso === today ? ' today' : '');
-                const val = info.state === 'reported' ? (Math.round(info.pct * 10) / 10) + '%'
-                    : info.state === 'missing' ? 'Thiếu' : BCNK_DOW_[info.dow];
-                cells += `<div class="bcnk-cell ${cls}"><span class="bcnk-d">${dnum}</span><span class="bcnk-v">${val}</span></div>`;
-            }
+// Danh sách dọc, cuộn trong khung cao cố định — thay cho lịch lưới theo tháng trước đây, ngày thiếu
+// báo cáo chen thẳng vào đúng vị trí thời gian của nó (tô đỏ nhạt), không tách khối riêng.
+function renderBcNkLogList_(items) {
+    if (items.length === 0) return '<div class="bcnk-log-list"><div class="bcnk-log-empty">Chưa có báo cáo nào.</div></div>';
+    const rows = items.map(it => {
+        const dateHtml = `<div class="bcnk-log-date"><span class="bcnk-log-dow">${BCNK_DOW_[it.dow]}</span><span class="bcnk-log-d">${formatVN(it.iso).slice(0, 5)}</span></div>`;
+        if (it.state === 'missing') {
+            return `<div class="bcnk-log-item missing">${dateHtml}<div class="bcnk-log-main"><div class="bcnk-log-missing-label">Thiếu báo cáo</div></div></div>`;
         }
-
-        return `<div class="bcnk-month-lbl">Tháng ${m}/${y}</div>
-            <div class="bcnk-cal-grid">
-                <div class="bcnk-dow">T2</div><div class="bcnk-dow">T3</div><div class="bcnk-dow">T4</div><div class="bcnk-dow">T5</div><div class="bcnk-dow">T6</div><div class="bcnk-dow">T7</div><div class="bcnk-dow">CN</div>
-                ${cells}
-            </div>`;
+        return `<div class="bcnk-log-item">${dateHtml}
+            <div class="bcnk-log-main">
+                <div class="bcnk-log-top"><span class="bcnk-log-pct">+${it.pct}%</span><span class="bcnk-log-meta">${escapeHtml(it.gio)}</span></div>
+                ${it.note ? `<div class="bcnk-log-note">${escapeHtml(it.note)}</div>` : ''}
+            </div>
+        </div>`;
     }).join('');
-
-    return monthBlocks + `<div class="bcnk-legend">
-        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:var(--ok-dim); border:1px solid var(--ok);"></span>Đã báo cáo (% ngày đó)</div>
-        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:var(--warn-dim); border:1.5px solid var(--warn);"></span>Chưa báo cáo</div>
-        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:var(--late-dim);"></span>Chủ nhật / Ngày lễ</div>
-        <div class="bcnk-legend-item"><span class="bcnk-legend-sw" style="background:#fff; border:1px dashed var(--border);"></span>Ngoài kế hoạch</div>
-    </div>`;
-}
-
-function renderBcNkMissing_(missingDays, today) {
-    if (missingDays.length === 0) {
-        return `<div class="bcnk-ok"><i class="fa-solid fa-circle-check"></i><p>Đã báo cáo đầy đủ tất cả các ngày làm việc trong kế hoạch — không có ngày nào bị thiếu.</p></div>`;
-    }
-    const chips = missingDays.map(d => {
-        const label = BCNK_DOW_[d.dow] + ', ' + formatVN(d.iso) + (d.iso === today ? ' (hôm nay)' : '');
-        return `<span class="bcnk-chip">${label}</span>`;
-    }).join('');
-    return `<div class="bcnk-miss">
-        <div class="bcnk-miss-head"><i class="fa-solid fa-triangle-exclamation"></i> ${missingDays.length} ngày chưa nhập báo cáo — cần nhắc nhân sự</div>
-        <div class="bcnk-chip-row">${chips}</div>
-    </div>`;
+    return `<div class="bcnk-log-list">${rows}</div>`;
 }
 </script>

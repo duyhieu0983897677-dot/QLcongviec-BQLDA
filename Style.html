@@ -440,57 +440,44 @@
         .t-name-link:hover .t-name, .t-name-link:focus-visible .t-name { color: var(--primary-dark); text-decoration: underline; }
         .t-name-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 3px; }
 
-        /* --- Modal "Nhật ký báo cáo theo ngày" (#bcnkModal) --- */
+        /* --- Modal "Nhật ký báo cáo theo ngày" (#bcnkModal) — dạng danh sách, xem
+           renderBcNkBody_/renderBcNkLogList_ ở 5_Dashboard.html --- */
         .bcnk-meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.78rem; color: var(--text-muted); margin-bottom: 14px; align-items: center; }
         .bcnk-meta b { color: var(--text-main); }
         .bcnk-meta .sep { color: var(--border); }
-        .bcnk-stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 16px; }
-        .bcnk-stat { border: 1px solid var(--border); border-left: 3px solid var(--primary-dark); border-radius: 9px; padding: 8px 10px; background: var(--card-bg); }
-        .bcnk-stat.warn { border-left-color: var(--warn); }
-        .bcnk-stat.ok { border-left-color: var(--ok); }
-        .bcnk-stat-label { font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-muted); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .bcnk-stat-value { font-size: 1.1rem; font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; }
-        .bcnk-stat.warn .bcnk-stat-value { color: #B91C1C; }
-        .bcnk-stat.ok .bcnk-stat-value { color: var(--ok-text); }
-        .bcnk-stat-sub { font-size: 0.68rem; color: var(--text-muted); margin-top: 1px; }
 
-        .bcnk-month-lbl { font-size: 0.76rem; font-weight: 700; color: var(--text-main); margin: 0 0 6px; }
-        .bcnk-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 14px; }
-        .bcnk-dow { text-align: center; font-size: 0.64rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; padding-bottom: 2px; }
-        .bcnk-cell { aspect-ratio: 1/1; border-radius: 7px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border: 1px solid transparent; }
-        .bcnk-cell .bcnk-d { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); }
-        .bcnk-cell .bcnk-v { font-size: 0.64rem; font-weight: 800; line-height: 1; }
-        .bcnk-cell.pad { visibility: hidden; }
-        .bcnk-cell.reported { background: var(--ok-dim); border-color: var(--ok); }
-        .bcnk-cell.reported .bcnk-d, .bcnk-cell.reported .bcnk-v { color: var(--ok-text); }
-        /* --warn dùng chung màu --danger, chữ trên nền --warn-dim cần đậm hơn để đủ tương phản —
-           cùng lý do đã tách riêng --ok-text cho nền --ok-dim ở trên. */
-        .bcnk-cell.missing { background: var(--warn-dim); border: 1.5px solid var(--warn); }
-        .bcnk-cell.missing .bcnk-d, .bcnk-cell.missing .bcnk-v { color: #B91C1C; }
-        .bcnk-cell.off { background: var(--late-dim); }
-        .bcnk-cell.off .bcnk-d, .bcnk-cell.off .bcnk-v { color: var(--late); }
-        .bcnk-cell.na { background: var(--card-bg); border: 1px dashed var(--border); }
-        .bcnk-cell.na .bcnk-d, .bcnk-cell.na .bcnk-v { color: #CBD5E1; }
-        .bcnk-cell.today { box-shadow: 0 0 0 2px var(--primary) inset; }
+        /* Hàng số liệu gọn (1 dòng) — lũy kế/đã báo cáo/thiếu báo cáo mỗi số chỉ hiện đúng 1 lần ở
+           đây, KHÔNG lặp lại ở từng dòng trong danh sách bên dưới. */
+        .bcnk-inline-stats { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 8px 10px; margin-bottom: 12px; background: var(--bg); border-radius: 8px; font-size: 0.78rem; }
+        .bcnk-inline-stats .is-item { display: flex; align-items: baseline; gap: 5px; }
+        .bcnk-inline-stats .is-label { color: var(--text-muted); }
+        .bcnk-inline-stats .is-value { font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; }
+        .bcnk-inline-stats .is-value.ok { color: var(--ok-text); }
+        .bcnk-inline-stats .is-value.warn { color: var(--warn); }
 
-        .bcnk-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.72rem; color: var(--text-muted); margin: 0 0 14px; }
-        .bcnk-legend-item { display: flex; align-items: center; gap: 6px; }
-        .bcnk-legend-sw { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+        .bcnk-log-head { margin-bottom: 6px; }
+        .bcnk-log-head span { font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
 
-        .bcnk-miss { background: var(--warn-dim); border: 1px solid #FECACA; border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
-        .bcnk-miss-head { display: flex; align-items: center; gap: 7px; font-size: 0.82rem; font-weight: 700; color: #B91C1C; margin-bottom: 7px; }
-        .bcnk-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
-        .bcnk-chip { background: #fff; border: 1px solid var(--warn); color: #B91C1C; font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+        .bcnk-log-list { max-height: 320px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+        .bcnk-log-item { display: flex; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+        .bcnk-log-item:last-child { border-bottom: none; }
+        .bcnk-log-item.missing { background: var(--warn-dim); }
 
-        .bcnk-ok { background: var(--ok-dim); border: 1px solid #A7F3D0; border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; display: flex; gap: 9px; align-items: flex-start; color: var(--ok-text); }
-        .bcnk-ok i { margin-top: 2px; }
-        .bcnk-ok p { margin: 0; font-size: 0.82rem; font-weight: 600; line-height: 1.4; }
+        .bcnk-log-date { flex-shrink: 0; width: 40px; text-align: center; padding-top: 1px; }
+        .bcnk-log-dow { display: block; font-size: 0.6rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+        .bcnk-log-d { display: block; font-size: 0.78rem; font-weight: 700; color: var(--text-main); font-variant-numeric: tabular-nums; }
+        .bcnk-log-item.missing .bcnk-log-d, .bcnk-log-item.missing .bcnk-log-dow { color: var(--warn); }
+
+        .bcnk-log-main { flex: 1; min-width: 0; }
+        .bcnk-log-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+        .bcnk-log-pct { font-size: 0.82rem; font-weight: 800; color: var(--ok-text); font-variant-numeric: tabular-nums; }
+        .bcnk-log-note { font-size: 0.78rem; color: var(--text-main); margin-top: 2px; line-height: 1.4; }
+        .bcnk-log-meta { font-size: 0.68rem; color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+        .bcnk-log-missing-label { font-size: 0.78rem; font-weight: 700; color: var(--warn); }
 
         .bcnk-note { font-size: 0.7rem; color: var(--text-muted); margin: 8px 0 0; }
         .bcnk-empty { text-align: center; color: var(--text-muted); font-size: 0.85rem; padding: 20px 10px; }
-        @media (max-width: 480px) {
-            .bcnk-stat-row { grid-template-columns: repeat(2, 1fr); }
-        }
+        .bcnk-log-empty { padding: 24px 10px; text-align: center; color: var(--text-muted); font-size: 0.82rem; }
 
         .gantt-bar-wrap { display: flex; align-items: center; gap: 8px; min-width: 130px; }
         .gantt-track { flex: 1; height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; }
