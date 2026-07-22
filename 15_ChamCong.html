@@ -177,9 +177,15 @@ function ccDowLabel_(ngayISO) {
   const d = new Date(ngayISO + 'T00:00:00');
   return ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
 }
-function ccIsWeekend_(ngayISO) {
+// Phân loại 1 ngày để tô màu riêng Thứ 7/Chủ nhật/Ngày lễ (khác hẳn tô chung 1 màu "cuối tuần" như
+// trước) — Ngày lễ ưu tiên hiện nếu trùng Chủ nhật (hiếm khi xảy ra, VD lễ rơi đúng Chủ nhật), vì đây
+// là thông tin đặc biệt hơn, đáng chú ý hơn "chỉ là Chủ nhật". Trả về '' nếu là ngày thường.
+function ccDayKind_(ngayISO, ngayLeSet) {
+  if (ngayLeSet.has(ngayISO)) return 'cc-holiday';
   const dow = new Date(ngayISO + 'T00:00:00').getDay();
-  return dow === 0 || dow === 6;
+  if (dow === 0) return 'cc-sunday';
+  if (dow === 6) return 'cc-saturday';
+  return '';
 }
 
 function renderChamCongTable() {
@@ -199,6 +205,8 @@ function renderChamCongTable() {
     captionEl.innerHTML = `Số công tính lương tháng ${thang.split('-').reverse().join('/')}: ${ccFmt1_(ccData.soNgayCongChuan)} ngày${ghiChuLe}`;
   }
 
+  const ngayLeSet = new Set((ccData.ngayLeThang || []).map(nl => nl.ngay));
+
   let row1 = '<tr><th class="cc-stt" rowspan="2">STT</th><th class="cc-name" rowspan="2" style="text-align:left;">Họ và tên</th>' +
     '<th class="cc-sumcol cc-highlight" rowspan="2">Số công<br><small>tính lương</small></th>' +
     '<th class="cc-sumcol cc-highlight" rowspan="2">Phép<br><small>còn lại</small></th>' +
@@ -207,17 +215,31 @@ function renderChamCongTable() {
   let row2 = '<tr>';
   for (let d = 1; d <= soNgay; d++) {
     const iso = thang + '-' + String(d).padStart(2, '0');
-    const weekend = ccIsWeekend_(iso);
+    const kind = ccDayKind_(iso, ngayLeSet);
     row1 += '';
-    row2 += `<th class="${weekend ? 'cc-weekend' : ''}"><span class="cc-d-num">${d}</span><span class="cc-d-dow">${ccDowLabel_(iso)}</span></th>`;
+    row2 += `<th class="${kind}"><span class="cc-d-num">${d}</span><span class="cc-d-dow">${ccDowLabel_(iso)}</span></th>`;
   }
   row1 += '</tr>';
   row2 += '</tr>';
   document.getElementById('ccThead').innerHTML = row1 + row2;
 
-  const rows = ccData.rows || [];
+  const allRows = ccData.rows || [];
+  // Nhân sự "Không chấm công chung" ẩn hẳn khỏi bảng chính (đỡ rối cho người xem thường) — Admin vẫn
+  // cần lối vào để đổi lại (bỏ tick) nên hiện 1 dòng gọn phía trên bảng, bấm tên để mở lại đúng popup
+  // Chi tiết công (openChiTietCongModal) — CHỈ Admin thấy dòng này (khớp phạm vi Admin-only của
+  // saveDetKhongChamCongChung_ ở dưới).
+  const rows = allRows.filter(r => !r.khongChamCongChung);
+  const hiddenRows = allRows.filter(r => r.khongChamCongChung);
+  const hiddenNoteEl = document.getElementById('ccHiddenStaffNote');
+  if (hiddenNoteEl) {
+    hiddenNoteEl.innerHTML = (currentRole === 'ADMIN' && hiddenRows.length > 0)
+      ? `<i class="fa-solid fa-eye-slash"></i> Đã ẩn ${hiddenRows.length} nhân sự không chấm công chung: ` +
+        hiddenRows.map(r => `<span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')" title="Bấm để xem/bỏ đánh dấu">${escapeHtml(r.hoTen)}</span>`).join(', ')
+      : '';
+  }
+
   if (rows.length === 0) {
-    document.getElementById('ccBody').innerHTML = '<tr><td colspan="16" class="text-center" style="padding:20px; color:gray;">Chưa có nhân sự nào.</td></tr>';
+    document.getElementById('ccBody').innerHTML = `<tr><td colspan="16" class="text-center" style="padding:20px; color:gray;">${allRows.length === 0 ? 'Chưa có nhân sự nào.' : 'Mọi nhân sự đều đang ở trạng thái "Không chấm công chung".'}</td></tr>`;
     return;
   }
 
@@ -228,7 +250,6 @@ function renderChamCongTable() {
         <div class="cc-name-inner">
           <span class="cc-name-text" onclick="openChiTietCongModal('${r.userId}')" title="Bấm để xem chi tiết công">${escapeHtml(r.hoTen)}</span>
           ${laToi ? '<span class="cc-name-badge">Bạn</span>' : ''}
-          ${r.khongChamCongChung ? '<span class="cc-name-badge" style="background:var(--text-muted);" title="Không tham gia chấm công/tăng ca chung với BQLDA"><i class="fa-solid fa-ban"></i> Không chấm công</span>' : ''}
         </div>
       </td>
       <td class="cc-sumcol cc-highlight">${ccFmtOrDash_(r.congTinhLuong)}</td>
@@ -238,7 +259,7 @@ function renderChamCongTable() {
 
     for (let d = 1; d <= soNgay; d++) {
       const iso = thang + '-' + String(d).padStart(2, '0');
-      const weekend = ccIsWeekend_(iso);
+      const kind = ccDayKind_(iso, ngayLeSet);
       const buoi = r.cc[iso];
       const attCls = buoi === 1 ? 'cc-full' : (buoi === 0.5 ? 'cc-half' : (buoi === 'P' ? 'cc-phep' : ''));
       const attLabel = buoi === 1 ? '<i class="fa-solid fa-check"></i>' : (buoi === 0.5 ? '½' : (buoi === 'P' ? 'P' : ''));
@@ -249,7 +270,7 @@ function renderChamCongTable() {
         otCls = 'cc-filled';
         otLabel = ccFmt1_(bd.quyDoi) + 'h';
       }
-      cells += `<td class="cc-daycell ${weekend ? 'cc-weekend' : ''}">
+      cells += `<td class="cc-daycell ${kind}">
         <div class="cc-daycell-stack">
           ${editable
             ? `<button type="button" class="cc-att-btn ${attCls}" onclick="toggleChamCongCell('${r.userId}','${iso}',this)" aria-label="Chấm công">${attLabel}</button>`

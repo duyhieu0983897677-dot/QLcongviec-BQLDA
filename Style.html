@@ -248,8 +248,14 @@
         #ccTable thead tr:last-child th { padding: 6px 1px 8px; font-size: 0.66rem; }
         .cc-d-num { display: block; font-size: 0.78rem; font-weight: 800; color: var(--text-main); }
         .cc-d-dow { display: block; font-weight: 600; color: var(--text-muted); text-transform: none; }
-        #ccTable thead th.cc-weekend { background: #FFF9E6; }
-        #ccTable thead th.cc-weekend .cc-d-dow { color: #B8860B; }
+        /* Thứ 7/Chủ nhật/Ngày lễ — 3 màu riêng để phân biệt (Ngày lễ ưu tiên hiện nếu trùng Chủ nhật,
+           xem ccDayKind_ ở 15_ChamCong.html). */
+        #ccTable thead th.cc-saturday { background: #FFF9E6; }
+        #ccTable thead th.cc-saturday .cc-d-dow { color: #B8860B; }
+        #ccTable thead th.cc-sunday { background: #FFEEE3; }
+        #ccTable thead th.cc-sunday .cc-d-dow { color: #C2570C; }
+        #ccTable thead th.cc-holiday { background: #F3ECFB; }
+        #ccTable thead th.cc-holiday .cc-d-dow { color: #7C3AED; }
 
         #ccTable td { padding: 3px; text-align: center; }
         /* Rê chuột vào 1 hàng — nổi bật + đậm chữ để dò đúng hàng của ai khi bảng có nhiều cột ngày */
@@ -285,7 +291,9 @@
         .cc-delta-zero { color: var(--text-muted); }
 
         .cc-daycell { min-width: 40px; padding: 0 !important; vertical-align: middle; }
-        .cc-daycell.cc-weekend { background: #FFFDF5; }
+        .cc-daycell.cc-saturday { background: #FFFDF5; }
+        .cc-daycell.cc-sunday { background: #FFF8F3; }
+        .cc-daycell.cc-holiday { background: #FBF8FE; }
         .cc-daycell-stack { display: flex; flex-direction: column; width: 100%; }
         .cc-att-btn { width: 100%; height: 22px; border: none; border-bottom: 1px solid var(--border-faint); background: transparent; cursor: default; display: flex; align-items: center; justify-content: center; color: var(--border); font-weight: 800; font-size: 0.7rem; }
         button.cc-att-btn { cursor: pointer; }
@@ -307,7 +315,9 @@
         .cc-swatch.cc-full { background: var(--success); border-color: var(--success); }
         .cc-swatch.cc-half { background: #FDF1D6; border-color: #B8860B; }
         .cc-swatch.cc-phep { background: #FDE4E1; border-color: #C0392B; }
-        .cc-swatch.cc-weekend { background: #FFF9E6; }
+        .cc-swatch.cc-saturday { background: #FFF9E6; border-color: #B8860B; }
+        .cc-swatch.cc-sunday { background: #FFEEE3; border-color: #C2570C; }
+        .cc-swatch.cc-holiday { background: #F3ECFB; border-color: #7C3AED; }
         .cc-swatch.cc-night { background: #6366F1; border-color: #6366F1; }
 
         /* Popup Tăng ca */
