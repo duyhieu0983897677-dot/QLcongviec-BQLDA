@@ -756,14 +756,16 @@
             </div>
         </section>
 
-        <!-- TAB CON: BQLDA (mục "Quản lý dự án") — danh bạ liên hệ nhân sự Ban QLDA, ai cũng xem được,
-             chỉ Admin thêm/sửa/xóa được. ĐỘC LẬP với tài khoản đăng nhập (tab "Quản lý nhân sự"). -->
+        <!-- TAB CON: BQLDA (mục "Quản lý dự án") — danh bạ liên hệ nhân sự Ban QLDA, LẤY THẲNG từ danh
+             sách tài khoản (biến `users`, cùng nguồn với tab "Quản lý nhân sự") — không phải sổ riêng.
+             Ai cũng xem được; Admin bấm "Sửa" mở thẳng modal "Thêm/Sửa Giám sát" đã có sẵn để cập nhật
+             SĐT/Email/Ghi chú. Thêm nhân sự MỚI làm ở tab "Quản lý nhân sự". -->
         <section id="bqlda" class="tab-content">
             <div class="card">
                 <div class="card-header-row">
                     <div class="card-title"><i class="fa-solid fa-building-shield"></i> Danh bạ nhân sự BQLDA</div>
-                    <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openBqldaModal()"><i class="fa-solid fa-plus"></i> Thêm nhân sự</button>
                 </div>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin:0 0 12px;">Danh sách lấy từ tài khoản nhân sự (tab "Quản lý nhân sự") — thêm nhân sự mới ở tab đó, tại đây chỉ xem/sửa thông tin liên hệ.</p>
                 <div class="table-responsive">
                     <table class="data-table">
                         <thead><tr><th>STT</th><th>Tên nhân sự</th><th>Chức vụ</th><th>SĐT</th><th>Email</th><th>Ghi chú</th><th class="admin-only">Hành động</th></tr></thead>
@@ -984,6 +986,22 @@
                 <input type="text" id="userChucDanh" class="form-control" placeholder="vd: Giám sát hiện trường">
             </div>
             <div class="form-group" style="margin-bottom:10px;">
+                <label>Số điện thoại <span style="font-weight:400; color:var(--text-muted);">(hiện ở tab con BQLDA)</span></label>
+                <input type="text" id="userSdt" class="form-control" placeholder="vd: 0912345678">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Email <span style="font-weight:400; color:var(--text-muted);">(hiện ở tab con BQLDA)</span></label>
+                <input type="text" id="userEmail" class="form-control" placeholder="vd: ten@congty.com">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Ghi chú <span style="font-weight:400; color:var(--text-muted);">(hiện ở tab con BQLDA)</span></label>
+                <input type="text" id="userGhiChu" class="form-control" placeholder="Ghi chú thêm (nếu có)">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Thứ tự hiển thị ở BQLDA <span style="font-weight:400; color:var(--text-muted);">(để trống = tự xếp cuối, có thể sửa lại để đổi thứ tự, VD Trưởng ban trước)</span></label>
+                <input type="number" id="userSttBQLDA" class="form-control" min="1" step="1">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
                 <label>Phần mặc định <span style="font-weight:400; color:var(--text-muted);">(Công việc do người này tự tạo sẽ tự rơi vào phần này)</span></label>
                 <select id="userPhanMacDinh" class="form-control">
                     <option value="">-- Chưa gán --</option>
@@ -999,42 +1017,6 @@
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveUserModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeUserModal()">Hủy</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODAL: THÊM/SỬA NHÂN SỰ BQLDA (danh bạ liên hệ, tab con "BQLDA" — chỉ Admin) -->
-    <div id="bqldaModal" class="modal">
-        <div class="modal-content" style="max-width:450px;">
-            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-address-card"></i> <span id="bqldaModalTitle">Thêm nhân sự</span></h3>
-            <input type="hidden" id="bqldaEditId">
-            <div class="form-group" style="margin-bottom:10px;">
-                <label>Tên nhân sự</label>
-                <input type="text" id="bqldaHoTen" class="form-control" placeholder="vd: Nguyễn Văn A">
-            </div>
-            <div class="form-group" style="margin-bottom:10px;">
-                <label>Chức vụ <span style="font-weight:400; color:var(--text-muted);">(vd: Trưởng ban, Đại diện CĐT, QS, QAQC, Giám sát hiện trường…)</span></label>
-                <input type="text" id="bqldaChucVu" class="form-control" placeholder="vd: Giám sát hiện trường">
-            </div>
-            <div class="form-group" style="margin-bottom:10px;">
-                <label>Số điện thoại</label>
-                <input type="text" id="bqldaSdt" class="form-control" placeholder="vd: 0912345678">
-            </div>
-            <div class="form-group" style="margin-bottom:10px;">
-                <label>Email</label>
-                <input type="text" id="bqldaEmail" class="form-control" placeholder="vd: ten@congty.com">
-            </div>
-            <div class="form-group" style="margin-bottom:10px;">
-                <label>Ghi chú</label>
-                <input type="text" id="bqldaGhiChu" class="form-control" placeholder="Ghi chú thêm (nếu có)">
-            </div>
-            <div class="form-group" style="margin-bottom:10px;">
-                <label>Thứ tự hiển thị <span style="font-weight:400; color:var(--text-muted);">(để trống = tự xếp cuối danh sách, có thể sửa lại để đổi thứ tự)</span></label>
-                <input type="number" id="bqldaStt" class="form-control" min="1" step="1">
-            </div>
-            <div class="modal-actions">
-                <button class="btn" style="background:var(--success);" onclick="saveBqldaModal()">Lưu</button>
-                <button class="btn btn-danger" onclick="closeBqldaModal()">Hủy</button>
             </div>
         </div>
     </div>

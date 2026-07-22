@@ -4,113 +4,47 @@
    ------------------------------------------------------------------
    PHẠM VI: Tab con "BQLDA" trong mục "Quản lý dự án" — danh bạ liên hệ
    nhân sự Ban QLDA (Trưởng ban, Đại diện CĐT, QS, QAQC, Giám sát hiện
-   trường...). ĐỘC LẬP hoàn toàn với DanhSachUser (tài khoản đăng nhập)
-   — nhiều người ở đây (VD Đại diện CĐT) không cần và không có tài
-   khoản đăng nhập vào app, đây chỉ để tra cứu thông tin liên hệ.
-   Ai cũng xem được (không cần đăng nhập), chỉ Admin thêm/sửa/xóa được.
+   trường...). LẤY THẲNG từ biến toàn cục `users` (CÙNG nguồn dữ liệu
+   với tab "Quản lý nhân sự" — DanhSachUser), KHÔNG phải sổ riêng.
+
+   Sửa SĐT/Email/Ghi chú/Thứ tự hiển thị làm ngay tại modal "Thêm/Sửa
+   Giám sát" đã có sẵn (openUserModal(), xem 6_NguoiDung.html) — nút
+   Sửa ở đây mở thẳng ĐÚNG modal đó, không có modal riêng cho BQLDA.
+
+   Ẩn nhân sự đã "Nghỉ việc" khỏi danh bạ này (giống các danh sách chọn
+   khác trong app, VD giao việc/mời chat) — vẫn còn đủ ở "Quản lý nhân
+   sự". Sắp xếp theo sttBQLDA (Admin tự chỉnh trong modal Sửa — xem
+   field "Thứ tự hiển thị (BQLDA)") để giữ đúng thứ tự Trưởng ban →
+   Đại diện CĐT → QS/QAQC → Giám sát hiện trường... theo ý Admin.
 
    DANH SÁCH HÀM CHÍNH:
-   - renderBQLDA()        : Điểm vào (gọi khi mở tab con BQLDA) — tải lại danh sách từ server rồi vẽ
-   - openBqldaModal()      : Mở modal thêm/sửa 1 nhân sự
-   - saveBqldaModal()      : Lưu nhân sự từ Modal
-   - deleteBqldaNhanSu()   : Xóa 1 nhân sự khỏi danh bạ
+   - renderBQLDA() : Điểm vào (gọi khi mở tab con BQLDA) — lọc + sắp xếp `users` rồi vẽ lại
    ================================================================ */
-
-let nhanSuBQLDA = [];
 
 function renderBQLDA() {
     const body = document.getElementById('bqldaBody');
     if (!body) return;
-    body.innerHTML = '<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;"><i class="fa-solid fa-spinner fa-spin"></i> Đang tải…</td></tr>';
-    gsRun('getDanhSachNhanSuBQLDA')
-        .then(json => { nhanSuBQLDA = JSON.parse(json); veLaiBqldaBody_(); })
-        .catch(err => {
-            body.innerHTML = '<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Không tải được danh sách.</td></tr>';
-            handleBackendError(err);
-        });
-}
 
-function veLaiBqldaBody_() {
-    const body = document.getElementById('bqldaBody');
-    if (!body) return;
-    if (nhanSuBQLDA.length === 0) {
+    const list = users
+        .filter(u => u.trangThai !== 'Nghỉ việc')
+        .slice()
+        .sort((a, b) => (a.sttBQLDA || 0) - (b.sttBQLDA || 0));
+
+    if (list.length === 0) {
         body.innerHTML = '<tr><td colspan="7" class="text-center" style="color:gray; padding:15px;">Chưa có nhân sự nào.</td></tr>';
         return;
     }
-    body.innerHTML = nhanSuBQLDA.map((n, idx) => `<tr>
+
+    body.innerHTML = list.map((u, idx) => `<tr>
         <td class="text-center">${idx + 1}</td>
-        <td>${escapeHtml(n.hoTen)}</td>
-        <td>${escapeHtml(n.chucVu || '--')}</td>
-        <td>${escapeHtml(n.sdt || '--')}</td>
-        <td>${escapeHtml(n.email || '--')}</td>
-        <td>${escapeHtml(n.ghiChu || '--')}</td>
+        <td>${escapeHtml(u.name)}</td>
+        <td>${escapeHtml(u.chucDanh || '--')}</td>
+        <td>${escapeHtml(u.sdt || '--')}</td>
+        <td>${escapeHtml(u.email || '--')}</td>
+        <td>${escapeHtml(u.ghiChu || '--')}</td>
         <td class="admin-only text-center">
-            <div class="action-cell">
-                <button class="btn btn-sm" style="background:var(--primary);" onclick="openBqldaModal('${n.id}')" aria-label="Sửa nhân sự" title="Sửa nhân sự"><i class="fa-solid fa-pen"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="deleteBqldaNhanSu('${n.id}')" aria-label="Xóa nhân sự" title="Xóa nhân sự"><i class="fa-solid fa-trash"></i></button>
-            </div>
+            <button class="btn btn-sm" style="background:var(--primary);" onclick="openUserModal('${u.id}')" aria-label="Sửa nhân sự" title="Sửa (mở modal Quản lý nhân sự)"><i class="fa-solid fa-pen"></i></button>
         </td>
     </tr>`).join('');
-}
-
-function openBqldaModal(id) {
-    document.getElementById('bqldaEditId').value = id || '';
-    const n = id ? nhanSuBQLDA.find(x => x.id === id) : null;
-    document.getElementById('bqldaModalTitle').innerText = n ? 'Sửa nhân sự' : 'Thêm nhân sự';
-    document.getElementById('bqldaHoTen').value = n ? n.hoTen : '';
-    document.getElementById('bqldaChucVu').value = n ? (n.chucVu || '') : '';
-    document.getElementById('bqldaSdt').value = n ? (n.sdt || '') : '';
-    document.getElementById('bqldaEmail').value = n ? (n.email || '') : '';
-    document.getElementById('bqldaGhiChu').value = n ? (n.ghiChu || '') : '';
-    document.getElementById('bqldaStt').value = n && n.stt ? n.stt : '';
-    document.getElementById('bqldaModal').classList.add('active');
-}
-
-function closeBqldaModal() {
-    document.getElementById('bqldaModal').classList.remove('active');
-}
-
-function saveBqldaModal() {
-    const id = document.getElementById('bqldaEditId').value;
-    const hoTen = document.getElementById('bqldaHoTen').value.trim();
-    if (!hoTen) { showCustomAlert('Vui lòng nhập Tên nhân sự!', 'error'); return; }
-
-    const item = {
-        id, hoTen,
-        chucVu: document.getElementById('bqldaChucVu').value.trim(),
-        sdt: document.getElementById('bqldaSdt').value.trim(),
-        email: document.getElementById('bqldaEmail').value.trim(),
-        ghiChu: document.getElementById('bqldaGhiChu').value.trim(),
-        stt: document.getElementById('bqldaStt').value.trim()
-    };
-
-    const btn = document.getElementById('bqldaModal').querySelector('.btn:not(.btn-danger)');
-    const origText = btn.innerHTML;
-    btn.innerHTML = 'Đang lưu…'; btn.disabled = true;
-
-    gsRun('adminSaveNhanSuBQLDA', myUserId, myPassword, item)
-        .then(() => {
-            btn.innerHTML = origText; btn.disabled = false;
-            closeBqldaModal();
-            showCustomAlert('Đã lưu thông tin nhân sự.', 'success');
-            renderBQLDA();
-        })
-        .catch(err => {
-            btn.innerHTML = origText; btn.disabled = false;
-            handleBackendError(err);
-        });
-}
-
-function deleteBqldaNhanSu(id) {
-    const n = nhanSuBQLDA.find(x => x.id === id);
-    if (!n) return;
-    if (!confirm(`Xác nhận XÓA "${n.hoTen}" khỏi danh bạ BQLDA?`)) return;
-
-    gsRun('adminXoaNhanSuBQLDA', myUserId, myPassword, id)
-        .then(() => {
-            showCustomAlert('Đã xóa nhân sự.', 'success');
-            renderBQLDA();
-        })
-        .catch(handleBackendError);
 }
 </script>
