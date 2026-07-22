@@ -147,6 +147,10 @@ function thietLapBanDauSheet() {
     ss.insertSheet('NgayLe').getRange(1, 1, 1, NGAYLE_HEADERS_.length).setValues([NGAYLE_HEADERS_]);
   }
 
+  if (!ss.getSheetByName('NhanSuBQLDA')) {
+    ss.insertSheet('NhanSuBQLDA').getRange(1, 1, 1, NHANSUBQLDA_HEADERS_.length).setValues([NHANSUBQLDA_HEADERS_]);
+  }
+
   if (!ss.getSheetByName('ChamCongThang')) {
     ss.insertSheet('ChamCongThang').getRange(1, 1, 1, CHAMCONG_HEADERS_.length).setValues([CHAMCONG_HEADERS_]);
   }
@@ -197,7 +201,7 @@ function thietLapBanDauSheet() {
     }
   });
 
-  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, PhepThang, BuThang, NgayLe, ChamCongThang, ThongBao, BinhLuanCongViec, HopDong, BOQHangMuc, PhuLucHopDong, PhuLucThayDoi, NghiemThu, DotThanhToan, DotThanhToanChiTiet, QuyetToan.';
+  return 'Đã thiết lập xong: Data, DanhSachUser (admin/123456), NhatKy, HangMuc, GoiThau, CongViec, NhatKyTienDo, PhepThang, BuThang, NgayLe, NhanSuBQLDA, ChamCongThang, ThongBao, BinhLuanCongViec, HopDong, BOQHangMuc, PhuLucHopDong, PhuLucThayDoi, NghiemThu, DotThanhToan, DotThanhToanChiTiet, QuyetToan.';
 }
 
 // Chạy 1 lần khi cần xóa sạch toàn bộ Hạng mục + Công việc kiểu cũ để làm lại từ đầu.
@@ -1673,6 +1677,100 @@ function adminXoaNgayLe(userId, password, ngay) {
     }
   }
   throw new Error('Không tìm thấy ngày lễ này!');
+}
+
+// =======================================================
+// DANH BẠ NHÂN SỰ BQLDA — tab con "BQLDA" trong mục "Quản lý dự án" (Trưởng ban, Đại diện CĐT, QS,
+// QAQC, Giám sát hiện trường...). ĐỘC LẬP với DanhSachUser (tài khoản đăng nhập) — nhiều người ở đây
+// (VD Đại diện CĐT) không cần và không có tài khoản đăng nhập vào app, đây chỉ là danh bạ liên hệ.
+// stt cho phép Admin tự sắp xếp thứ tự hiển thị (VD Trưởng ban trước, Giám sát hiện trường sau) —
+// cùng quy ước với HangMuc/GoiThau (xem HANGMUC_HEADERS_ đầu file).
+// =======================================================
+const NHANSUBQLDA_HEADERS_ = ['id', 'hoTen', 'chucVu', 'sdt', 'email', 'ghiChu', 'active', 'stt'];
+
+function readNhanSuBQLDARows_(sheet) {
+  if (!sheet) return [];
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const values = sheet.getRange(2, 1, lastRow - 1, NHANSUBQLDA_HEADERS_.length).getValues();
+  const result = [];
+  values.forEach(r => {
+    const id = String(r[0] || '').trim();
+    if (!id) return;
+    if (!isActiveVal_(r[6])) return;
+    result.push({
+      id, hoTen: String(r[1] || '').trim(), chucVu: String(r[2] || '').trim(),
+      sdt: String(r[3] || '').trim(), email: String(r[4] || '').trim(), ghiChu: String(r[5] || '').trim(),
+      stt: parseInt(r[7], 10) || 0
+    });
+  });
+  return result;
+}
+
+// Ai cũng xem được (giống getData()), không cần đăng nhập.
+function getDanhSachNhanSuBQLDA() {
+  const sheet = layHoacTaoSheet_('NhanSuBQLDA', NHANSUBQLDA_HEADERS_);
+  const list = readNhanSuBQLDARows_(sheet).sort((a, b) => a.stt - b.stt);
+  return JSON.stringify(list);
+}
+
+// (Admin) Thêm mới hoặc sửa 1 nhân sự trong danh bạ BQLDA. item: { id (rỗng khi tạo mới), hoTen,
+// chucVu, sdt, email, ghiChu, stt (rỗng = tự tăng dần theo thứ tự thêm, giữ đúng thứ tự Trưởng ban
+// → Đại diện CĐT → QS/QAQC → Giám sát hiện trường... nếu Admin thêm theo đúng thứ tự đó).
+function adminSaveNhanSuBQLDA(userId, password, item) {
+  const user = login(userId, password);
+  if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền quản lý danh sách nhân sự BQLDA!');
+
+  const hoTen = String(item.hoTen || '').trim();
+  if (!hoTen) throw new Error('Vui lòng nhập Tên nhân sự!');
+
+  const sheet = layHoacTaoSheet_('NhanSuBQLDA', NHANSUBQLDA_HEADERS_);
+  const id = String(item.id || '').trim();
+  const data = sheet.getDataRange().getValues();
+  let stt = parseInt(item.stt, 10);
+
+  if (id) {
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === id) {
+        if (!stt) stt = parseInt(data[i][7], 10) || 0;
+        sheet.getRange(i + 1, 2, 1, 7).setValues([[
+          hoTen, String(item.chucVu || '').trim(), String(item.sdt || '').trim(),
+          String(item.email || '').trim(), String(item.ghiChu || '').trim(), true, stt
+        ]]);
+        logActivity(userId, user.name, 'Sửa nhân sự BQLDA', hoTen);
+        return 'Success';
+      }
+    }
+    throw new Error('Không tìm thấy nhân sự!');
+  }
+
+  if (!stt) {
+    let maxStt = 0;
+    data.forEach((r, i) => { if (i > 0) { const s = parseInt(r[7], 10) || 0; if (s > maxStt) maxStt = s; } });
+    stt = maxStt + 1;
+  }
+  const newId = sinhMaTuTang_(sheet, 'NS', new Date());
+  sheet.appendRow([newId, hoTen, String(item.chucVu || '').trim(), String(item.sdt || '').trim(), String(item.email || '').trim(), String(item.ghiChu || '').trim(), true, stt]);
+  logActivity(userId, user.name, 'Thêm nhân sự BQLDA', hoTen);
+  return 'Success';
+}
+
+// (Admin) Xóa hẳn 1 nhân sự khỏi danh bạ BQLDA — danh sách này không bị nơi nào khác tham chiếu chéo
+// (khác HangMuc/GoiThau/CongViec) nên xóa thật, không cần soft-delete.
+function adminXoaNhanSuBQLDA(userId, password, id) {
+  const user = login(userId, password);
+  if (user.role !== 'ADMIN') throw new Error('Chỉ Quản trị mới có quyền quản lý danh sách nhân sự BQLDA!');
+
+  const sheet = layHoacTaoSheet_('NhanSuBQLDA', NHANSUBQLDA_HEADERS_);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(id).trim()) {
+      sheet.deleteRow(i + 1);
+      logActivity(userId, user.name, 'Xóa nhân sự BQLDA', String(data[i][1] || ''));
+      return 'Success';
+    }
+  }
+  throw new Error('Không tìm thấy nhân sự!');
 }
 
 // =======================================================

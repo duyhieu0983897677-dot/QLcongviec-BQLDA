@@ -109,7 +109,16 @@
                     </div>
                 </div>
 
-                <button class="nav-btn side-nav-btn" onclick="switchTab('chamcong')"><i class="fa-solid fa-business-time"></i> Chấm công & Tăng ca</button>
+                <div class="nav-group">
+                    <div class="nav-group-header" onclick="toggleNavGroup(this)">
+                        <span><i class="fa-solid fa-building-shield"></i> Quản lý dự án</span>
+                        <i class="fa-solid fa-chevron-down nav-group-chev"></i>
+                    </div>
+                    <div class="nav-group-items">
+                        <button class="nav-btn side-nav-btn nav-child" onclick="switchTab('bqlda')">BQLDA</button>
+                        <button class="nav-btn side-nav-btn nav-child" onclick="switchTab('chamcong')">Điểm danh/Công tháng</button>
+                    </div>
+                </div>
                 <button class="nav-btn side-nav-btn admin-only" onclick="switchTab('nguoidung')"><i class="fa-solid fa-users-gear"></i> Quản lý nhân sự</button>
             </div>
         </aside>
@@ -142,8 +151,11 @@
                 <button class="nav-btn home-tile admin-only" onclick="switchTab('danhsach')" style="--tile-c: #64748b;">
                     <i class="fa-solid fa-sitemap"></i><span>Gói thầu/Hạng mục</span>
                 </button>
+                <button class="nav-btn home-tile" onclick="switchTab('bqlda')" style="--tile-c: #0891b2;">
+                    <i class="fa-solid fa-building-shield"></i><span>BQLDA</span>
+                </button>
                 <button class="nav-btn home-tile" onclick="switchTab('chamcong')" style="--tile-c: #6366F1;">
-                    <i class="fa-solid fa-business-time"></i><span>Chấm công</span>
+                    <i class="fa-solid fa-business-time"></i><span>Điểm danh/Công tháng</span>
                 </button>
             </div>
             <div class="home-tiles">
@@ -744,12 +756,30 @@
             </div>
         </section>
 
-        <!-- TAB: CHẤM CÔNG & TĂNG CA — ai cũng xem được, chỉ Admin/Thư ký BQLDA sửa được (gộp thay tab
-             "Điểm danh & Phép" cũ — tab đó chỉ chấm được Thứ 7/CN, trùng với tab này nên đã bỏ) -->
+        <!-- TAB CON: BQLDA (mục "Quản lý dự án") — danh bạ liên hệ nhân sự Ban QLDA, ai cũng xem được,
+             chỉ Admin thêm/sửa/xóa được. ĐỘC LẬP với tài khoản đăng nhập (tab "Quản lý nhân sự"). -->
+        <section id="bqlda" class="tab-content">
+            <div class="card">
+                <div class="card-header-row">
+                    <div class="card-title"><i class="fa-solid fa-building-shield"></i> Danh bạ nhân sự BQLDA</div>
+                    <button class="btn btn-sm admin-only" style="background:var(--accent);" onclick="openBqldaModal()"><i class="fa-solid fa-plus"></i> Thêm nhân sự</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead><tr><th>STT</th><th>Tên nhân sự</th><th>Chức vụ</th><th>SĐT</th><th>Email</th><th>Ghi chú</th><th class="admin-only">Hành động</th></tr></thead>
+                        <tbody id="bqldaBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB CON: ĐIỂM DANH/CÔNG THÁNG (mục "Quản lý dự án") — ai cũng xem được, chỉ Admin/Thư ký
+             BQLDA sửa được (gộp thay tab "Điểm danh & Phép" cũ — tab đó chỉ chấm được Thứ 7/CN, trùng
+             với tab này nên đã bỏ) -->
         <section id="chamcong" class="tab-content">
             <div class="card">
                 <div class="card-header-row">
-                    <div class="card-title"><i class="fa-solid fa-business-time"></i> Chấm công &amp; Tăng ca tháng</div>
+                    <div class="card-title"><i class="fa-solid fa-business-time"></i> Điểm danh &amp; Công tháng</div>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                         <input type="month" id="ccThangPicker" class="ntd-input" style="width:auto;">
                         <button type="button" class="btn btn-sm" style="background:var(--accent); width:auto;" onclick="ccLamMoi_()" title="Tải lại dữ liệu mới nhất từ máy chủ"><i class="fa-solid fa-rotate"></i> Làm mới</button>
@@ -969,6 +999,42 @@
             <div class="modal-actions">
                 <button class="btn" style="background:var(--success);" onclick="saveUserModal()">Lưu</button>
                 <button class="btn btn-danger" onclick="closeUserModal()">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: THÊM/SỬA NHÂN SỰ BQLDA (danh bạ liên hệ, tab con "BQLDA" — chỉ Admin) -->
+    <div id="bqldaModal" class="modal">
+        <div class="modal-content" style="max-width:450px;">
+            <h3 style="margin-bottom:15px; color:var(--primary-dark);"><i class="fa-solid fa-address-card"></i> <span id="bqldaModalTitle">Thêm nhân sự</span></h3>
+            <input type="hidden" id="bqldaEditId">
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Tên nhân sự</label>
+                <input type="text" id="bqldaHoTen" class="form-control" placeholder="vd: Nguyễn Văn A">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Chức vụ <span style="font-weight:400; color:var(--text-muted);">(vd: Trưởng ban, Đại diện CĐT, QS, QAQC, Giám sát hiện trường…)</span></label>
+                <input type="text" id="bqldaChucVu" class="form-control" placeholder="vd: Giám sát hiện trường">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Số điện thoại</label>
+                <input type="text" id="bqldaSdt" class="form-control" placeholder="vd: 0912345678">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Email</label>
+                <input type="text" id="bqldaEmail" class="form-control" placeholder="vd: ten@congty.com">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Ghi chú</label>
+                <input type="text" id="bqldaGhiChu" class="form-control" placeholder="Ghi chú thêm (nếu có)">
+            </div>
+            <div class="form-group" style="margin-bottom:10px;">
+                <label>Thứ tự hiển thị <span style="font-weight:400; color:var(--text-muted);">(để trống = tự xếp cuối danh sách, có thể sửa lại để đổi thứ tự)</span></label>
+                <input type="number" id="bqldaStt" class="form-control" min="1" step="1">
+            </div>
+            <div class="modal-actions">
+                <button class="btn" style="background:var(--success);" onclick="saveBqldaModal()">Lưu</button>
+                <button class="btn btn-danger" onclick="closeBqldaModal()">Hủy</button>
             </div>
         </div>
     </div>
@@ -1599,6 +1665,7 @@
     <?!= include('4_ViecCuaToi'); ?>
     <?!= include('5_Dashboard'); ?>
     <?!= include('6_NguoiDung'); ?>
+    <?!= include('7_BQLDA'); ?>
     <?!= include('8_ThongBao'); ?>
     <?!= include('9_HopDong'); ?>
     <?!= include('10_BOQ'); ?>
