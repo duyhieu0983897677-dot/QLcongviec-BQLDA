@@ -156,11 +156,18 @@ if (window.innerWidth < 768 && document.getElementById('home')) {
 }
 
 // KHÔNG đợi window.onload (chỉ bắn sau khi mọi ảnh/font/CDN script tải xong) — script này nằm
-// cuối <body> nên DOM cần dùng đã sẵn sàng, gọi getData() ngay để round-trip lên Apps Script chạy
-// SONG SONG với phần tải font/icon còn lại, thay vì phải đợi xong hết rồi mới bắt đầu.
+// cuối <body> nên DOM cần dùng đã sẵn sàng, gọi ngay để round-trip lên Apps Script chạy SONG SONG
+// với phần tải font/icon còn lại, thay vì phải đợi xong hết rồi mới bắt đầu.
+// Gộp getData()+getHopDongData() thành 1 lệnh getDataKhoiDong() duy nhất (xem Code.js) — trước đây
+// bắn 2 google.script.run riêng, mỗi lệnh tự mở 1 execution Apps Script (tốn thêm 1 lần chi phí cố
+// định mở Spreadsheet) chạy TRANH CHẤP với execution login() (nếu có khôi phục phiên đăng nhập ở
+// 1_DangNhap.html) — gộp còn 1 lệnh giúp trang tải lần đầu nhanh hơn mà không đổi dữ liệu nhận về.
 if (typeof google !== 'undefined') {
-    google.script.run.withSuccessHandler(applyLoadedData).getData();
-    google.script.run.withSuccessHandler(applyLoadedHopDongData).getHopDongData();
+    google.script.run.withSuccessHandler(function (res) {
+        const parsed = JSON.parse(res);
+        applyLoadedData(JSON.stringify(parsed.congViecData));
+        applyLoadedHopDongData(JSON.stringify(parsed.hopDongData));
+    }).getDataKhoiDong();
 } else {
     // Chế độ xem thử (không có backend Google Apps Script) — không load gì cả
     updateUI();
@@ -333,12 +340,6 @@ function setTienValue_(el, num) {
 // --- HÀM TIỆN ÍCH CÂY HẠNG MỤC (dùng chung nhiều nơi) ---
 function findHangMuc(maHangMuc) {
     return hangMuc.find(h => h.maHangMuc === maHangMuc);
-}
-
-function getGoiThauName(maGoiThau) {
-    if (!maGoiThau) return '';
-    const g = goiThau.find(x => x.maGoiThau === maGoiThau);
-    return g ? g.tenGoiThau : '';
 }
 
 function nameOfUser(id) {

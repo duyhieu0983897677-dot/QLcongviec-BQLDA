@@ -91,7 +91,6 @@ function ccCapNhatNutLuu_() {
 }
 
 function ccFmt1_(n) { return (Math.round((Number(n) || 0) * 10) / 10).toString().replace('.', ','); }
-function ccFmt2_(n) { return (Math.round((Number(n) || 0) * 100) / 100).toString().replace('.', ','); }
 // n === null nghĩa là nhân sự "Không chấm công chung" — hiện dấu "—" thay vì số (xem getChamCongThang).
 function ccFmtOrDash_(n, suffix) { return n === null ? '—' : ccFmt1_(n) + (suffix || ''); }
 function ccFmtDelta_(n) {

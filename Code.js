@@ -434,6 +434,16 @@ function getData() {
   return JSON.stringify({ hangMuc, goiThau, congViec, users: listSupervisors() });
 }
 
+// Gộp getData() + getHopDongData() vào ĐÚNG 1 round-trip cho lượt tải trang ĐẦU TIÊN (xem lệnh gọi
+// duy nhất ở cuối 0_TienIch.html) — trước đây 2 hàm này bắn 2 google.script.run song song, mỗi lệnh
+// tự mở 1 execution context Apps Script riêng (chi phí cố định SpreadsheetApp.getActiveSpreadsheet()
+// nhân đôi), là 1 phần nguyên nhân trang tải chậm lúc đầu. Chỉ gộp lệnh GỌI, KHÔNG đổi logic bên
+// trong getData()/getHopDongData() — reloadCongViecData()/reloadHopDongData() sau này vẫn gọi riêng
+// lẻ như cũ (không cần cả 2 khi chỉ vừa sửa 1 module).
+function getDataKhoiDong() {
+  return JSON.stringify({ congViecData: JSON.parse(getData()), hopDongData: JSON.parse(getHopDongData()) });
+}
+
 // Giống getData() nhưng chỉ giữ Công việc còn hoạt động (active) — dùng cho màn Báo cáo tổng hợp.
 // KHÔNG đọc lại NhatKyTienDo nữa (getData() ở trên đã gắn sẵn recentLogs), tránh round-trip kép.
 function getBaoCaoTongHop() {
@@ -1254,24 +1264,6 @@ function themNhatKyTienDoHangLoat(userId, password, payloadArray) {
     lock.releaseLock();
   }
   return results;
-}
-
-// Lưu ảnh hiện trường vào 1 thư mục cố định trên Drive của tài khoản chạy script, trả về URL.
-function uploadAnhHienTruong(userId, password, base64Data, tenFile) {
-  login(userId, password);
-  const FOLDER_NAME = 'NhatKyTienDo_AnhHienTruong';
-  const it = DriveApp.getFoldersByName(FOLDER_NAME);
-  const folder = it.hasNext() ? it.next() : DriveApp.createFolder(FOLDER_NAME);
-
-  const matches = String(base64Data).match(/^data:(.+);base64,(.*)$/);
-  const contentType = matches ? matches[1] : 'image/jpeg';
-  const rawBase64 = matches ? matches[2] : base64Data;
-  const bytes = Utilities.base64Decode(rawBase64);
-  const blob = Utilities.newBlob(bytes, contentType, tenFile || ('anh_' + new Date().getTime() + '.jpg'));
-
-  const file = folder.createFile(blob);
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return file.getUrl();
 }
 
 // =======================================================
