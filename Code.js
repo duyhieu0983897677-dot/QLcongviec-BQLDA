@@ -221,6 +221,25 @@ function doGet() {
 }
 
 // =======================================================
+// CACHE dữ liệu tham chiếu ÍT ĐỔI (HangMuc/GoiThau/DanhSachUser/NgayLe) — CacheService dùng CHUNG cho
+// MỌI execution/người dùng (khác biến toàn cục JS chỉ sống trong 1 lần chạy), giảm số lần đọc lại
+// Sheet khi nhiều lượt gọi backend rơi vào cùng khung thời gian ngắn (nhiều người mở trang gần nhau,
+// hoặc 1 người bấm qua lại nhiều tab). BẮT BUỘC gọi cacheXoa_(key) ngay sau MỌI lần ghi vào sheet
+// tương ứng (xem các hàm adminSave*/adminXoa*/adminDelete* liên quan) — nếu quên, dữ liệu cũ còn hiện
+// tới hết TTL. KHÔNG dùng cho CongViec/NhatKyTienDo/ChamCongThang (đổi liên tục, cache lợi bất cập hại).
+function cacheLay_(key, ttlGiay, fnDoc) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(key);
+  if (cached) return JSON.parse(cached);
+  const value = fnDoc();
+  try { cache.put(key, JSON.stringify(value), ttlGiay); } catch (e) { /* giá trị vượt 100KB — bỏ qua cache, vẫn trả đúng dữ liệu */ }
+  return value;
+}
+function cacheXoa_(key) {
+  CacheService.getScriptCache().remove(key);
+}
+
+// =======================================================
 // ĐỌC DỮ LIỆU: HangMuc (cây tham chiếu) + GoiThau + CongViec + NhatKyTienDo (log cộng dồn)
 // =======================================================
 
@@ -380,8 +399,9 @@ function readNhatKyRows_(sheet) {
 // hiển thị gạch ngang; getBaoCaoTongHop() bên dưới tự lọc bỏ trước khi trả về báo cáo tổng hợp.
 function getData() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const hangMuc = readHangMucRows_(ss.getSheetByName('HangMuc'));
-  const goiThau = readGoiThauRows_(ss.getSheetByName('GoiThau'));
+  // HangMuc/GoiThau đổi hiếm (chỉ Admin sửa tay) — cache 300s, xem cacheLay_/cacheXoa_ ở đầu file.
+  const hangMuc = cacheLay_('HangMuc_v1', 300, () => readHangMucRows_(ss.getSheetByName('HangMuc')));
+  const goiThau = cacheLay_('GoiThau_v1', 300, () => readGoiThauRows_(ss.getSheetByName('GoiThau')));
   const congViec = readCongViecRows_(ss.getSheetByName('CongViec'), true);
   const logs = readNhatKyRows_(ss.getSheetByName('NhatKyTienDo')).filter(l => l.active);
   const binhLuan = readBinhLuanRows_(ss.getSheetByName('BinhLuanCongViec'));
@@ -462,24 +482,27 @@ function getNhatKyGanNhat(maCongViec, limit) {
 }
 
 // Đọc danh sách tài khoản (Giám sát/Admin) trực tiếp từ tab DanhSachUser — KHÔNG trả về mật khẩu.
+// Cache 90s (xem cacheLay_ ở đầu file) — hàm này bị gọi lại nhiều nơi (getData/getChamCongThang...).
 function listSupervisors() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  const result = [];
-  for (let i = 1; i < data.length; i++) {
-    if (!data[i][0]) continue;
-    result.push({
-      id: String(data[i][0]).trim(),
-      role: String(data[i][2]).trim().toUpperCase(),
-      name: String(data[i][3]).trim(),
-      chucDanh: String(data[i][4] || '').trim(),
-      phanMacDinh: String(data[i][5] || '').trim(),
-      trangThai: String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_,
-      khongChamCongChung: data[i][8] === true || String(data[i][8] || '').trim().toUpperCase() === 'TRUE'
-    });
-  }
-  return result;
+  return cacheLay_('listSupervisors_v1', 90, () => {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('DanhSachUser');
+    if (!sheet) return [];
+    const data = sheet.getDataRange().getValues();
+    const result = [];
+    for (let i = 1; i < data.length; i++) {
+      if (!data[i][0]) continue;
+      result.push({
+        id: String(data[i][0]).trim(),
+        role: String(data[i][2]).trim().toUpperCase(),
+        name: String(data[i][3]).trim(),
+        chucDanh: String(data[i][4] || '').trim(),
+        phanMacDinh: String(data[i][5] || '').trim(),
+        trangThai: String(data[i][6] || '').trim() || TRANGTHAI_HOATDONG_,
+        khongChamCongChung: data[i][8] === true || String(data[i][8] || '').trim().toUpperCase() === 'TRUE'
+      });
+    }
+    return result;
+  });
 }
 
 // (Admin) Thêm mới hoặc sửa 1 tài khoản Giám sát trực tiếp vào tab DanhSachUser.
@@ -509,6 +532,7 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
         sheet.getRange(i + 1, 8).setValue(''); // xoá Salt cũ (nếu có) — kẻo login() so khớp nhầm mật khẩu thường với hash cũ
       }
       logActivity(adminId, adminUser.name, "Sửa Giám sát", `Sửa tài khoản ${targetId}`);
+      cacheXoa_('listSupervisors_v1');
       return "Success";
     }
   }
@@ -516,6 +540,7 @@ function adminSaveSupervisor(adminId, adminPass, targetId, name, role, newPasswo
   if (!newPassword) throw new Error("Vui lòng đặt mật khẩu ban đầu cho tài khoản mới!");
   sheet.appendRow([targetId, newPassword, role, name, chucDanh || '', phanMacDinh || '', TRANGTHAI_HOATDONG_]);
   logActivity(adminId, adminUser.name, "Thêm Giám sát", `Thêm tài khoản ${targetId}`);
+  cacheXoa_('listSupervisors_v1');
   return "Success";
 }
 
@@ -542,6 +567,7 @@ function adminSetTrangThaiNhanSu(adminId, adminPass, targetId, trangThai) {
     if (String(data[i][0]).trim() === String(targetId).trim()) {
       sheet.getRange(i + 1, 7).setValue(tt);
       logActivity(adminId, adminUser.name, "Đổi Trạng thái nhân sự", `${targetId} -> ${tt}`);
+      cacheXoa_('listSupervisors_v1');
       return "Success";
     }
   }
@@ -570,6 +596,7 @@ function adminSetKhongChamCongChung(adminId, adminPass, targetId, giaTri) {
     if (String(data[i][0]).trim() === targetIdStr) {
       sheet.getRange(i + 1, 9).setValue(coGiaTri);
       logActivity(adminId, adminUser.name, "Đổi Không chấm công chung", `${targetIdStr}: ${coGiaTri}`);
+      cacheXoa_('listSupervisors_v1');
       return "Success";
     }
   }
@@ -589,6 +616,7 @@ function adminDeleteSupervisor(adminId, adminPass, targetId) {
     if (String(data[i][0]).trim() === String(targetId).trim()) {
       sheet.deleteRow(i + 1);
       logActivity(adminId, adminUser.name, "Xóa Giám sát", `Xóa tài khoản ${targetId}`);
+      cacheXoa_('listSupervisors_v1');
       return "Success";
     }
   }
@@ -644,6 +672,8 @@ function adminSaveHangMuc(userId, password, node) {
   // Đổi mã thì phải cập nhật dây chuyền mọi nơi đang tham chiếu mã cũ, nếu không Hạng mục con/
   // Gói thầu/Công việc sẽ bị "mồ côi" (trỏ vào 1 mã không còn tồn tại).
   if (isRename) capNhatMaHangMucThamChieu_(ss, oldMaHangMuc, maHangMuc);
+  cacheXoa_('HangMuc_v1');
+  if (isRename) cacheXoa_('GoiThau_v1'); // capNhatMaHangMucThamChieu_ có thể đã sửa maHangMucList của GoiThau
   return 'Success';
 }
 
@@ -694,6 +724,7 @@ function adminDeleteHangMuc(userId, password, maHangMuc) {
     if (String(data[i][0]).trim() === String(maHangMuc).trim()) {
       sheet.getRange(i + 1, 5).setValue(false);
       logActivity(userId, user.name, 'Xoá Hạng mục', `Xoá ${maHangMuc}`);
+      cacheXoa_('HangMuc_v1');
       return 'Success';
     }
   }
@@ -720,6 +751,7 @@ function adminSaveGoiThau(userId, password, goiThau) {
         if (!stt) stt = parseInt(data[i][3], 10) || 0;
         sheet.getRange(i + 1, 2, 1, 3).setValues([[tenGoiThau, maHangMucList, stt]]);
         logActivity(userId, user.name, 'Sửa Gói thầu', tenGoiThau);
+        cacheXoa_('GoiThau_v1');
         return 'Success';
       }
     }
@@ -737,6 +769,7 @@ function adminSaveGoiThau(userId, password, goiThau) {
   if (!stt) stt = maxDisplayStt + 1;
   sheet.appendRow([maGoiThau, tenGoiThau, maHangMucList, stt]);
   logActivity(userId, user.name, 'Thêm Gói thầu', tenGoiThau);
+  cacheXoa_('GoiThau_v1');
   return 'Success';
 }
 
@@ -750,6 +783,7 @@ function adminDeleteGoiThau(userId, password, maGoiThau) {
     if (String(data[i][0]).trim() === String(maGoiThau).trim()) {
       sheet.deleteRow(i + 1);
       logActivity(userId, user.name, 'Xoá Gói thầu', maGoiThau);
+      cacheXoa_('GoiThau_v1');
       return 'Success';
     }
   }
@@ -1363,14 +1397,21 @@ function chotSoSachDenThangHienTai_(allUsers, ccByThang_) {
   const phepRowsToAppend = [];
   const buRowsToAppend = [];
 
+  // Gom sẵn theo userId trước vòng lặp (O(P+B) 1 lần) thay vì mỗi nhân sự tự .filter() lại NGUYÊN
+  // mảng allPhep/allBu (O(users × lịch sử) — càng nhiều tháng/nhân sự tích luỹ càng chậm dần).
+  const phepByUser_ = new Map();
+  allPhep.forEach(p => { if (!phepByUser_.has(p.userId)) phepByUser_.set(p.userId, []); phepByUser_.get(p.userId).push(p); });
+  const buByUser_ = new Map();
+  allBu.forEach(p => { if (!buByUser_.has(p.userId)) buByUser_.set(p.userId, []); buByUser_.get(p.userId).push(p); });
+
   allUsers.forEach(u => {
     const trangThai = u.trangThai || TRANGTHAI_HOATDONG_;
     if (trangThai === TRANGTHAI_NGHIVIEC_) return; // đã nghỉ việc — đóng băng cả 2 sổ, không chốt thêm.
     if (u.khongChamCongChung) return; // không chấm công chung với BQLDA — đóng băng Phép/Bù tương tự.
     const baseline = trangThai === TRANGTHAI_HOATDONG_ ? 1 : 0; // Thử việc: không có phép baseline (Bù vẫn có).
 
-    const phepOfUser = allPhep.filter(p => p.userId === u.id).sort((a, b) => a.thang.localeCompare(b.thang));
-    const buOfUser = allBu.filter(p => p.userId === u.id).sort((a, b) => a.thang.localeCompare(b.thang));
+    const phepOfUser = (phepByUser_.get(u.id) || []).sort((a, b) => a.thang.localeCompare(b.thang));
+    const buOfUser = (buByUser_.get(u.id) || []).sort((a, b) => a.thang.localeCompare(b.thang));
     let lastPhep = phepOfUser.length ? phepOfUser[phepOfUser.length - 1] : null;
     let lastBu = buOfUser.length ? buOfUser[buOfUser.length - 1] : null;
 
@@ -1504,10 +1545,16 @@ function readNgayLeRows_(sheet) {
   return result;
 }
 
+// Đọc NgayLe qua cache 3600s (đổi vài lần/năm, xem cacheLay_ ở đầu file) — dùng chung cho
+// getDanhSachNgayLe() và getChamCongThang() (đỡ đọc lại sheet mỗi lần mở/đổi tháng tab Chấm công).
+function docNgayLeCache_(sheet) {
+  return cacheLay_('NgayLe_v1', 3600, () => readNgayLeRows_(sheet));
+}
+
 // Ai cũng xem được (giống getData()), không cần đăng nhập.
 function getDanhSachNgayLe() {
   const sheet = layHoacTaoSheet_('NgayLe', NGAYLE_HEADERS_);
-  const list = readNgayLeRows_(sheet).sort((a, b) => a.ngay.localeCompare(b.ngay));
+  const list = docNgayLeCache_(sheet).slice().sort((a, b) => a.ngay.localeCompare(b.ngay));
   return JSON.stringify(list);
 }
 
@@ -1527,12 +1574,14 @@ function adminThemNgayLe(userId, password, ngay, tenLe) {
     if (formatDateCell_(data[i][0]) === ngayStr) {
       sheet.getRange(i + 1, 2).setValue(tenLeStr);
       logActivity(userId, user.name, 'Sửa Ngày lễ', `${ngayStr}: ${tenLeStr}`);
+      cacheXoa_('NgayLe_v1');
       return 'Success';
     }
   }
 
   sheet.appendRow([ngayStr, tenLeStr]);
   logActivity(userId, user.name, 'Thêm Ngày lễ', `${ngayStr}: ${tenLeStr}`);
+  cacheXoa_('NgayLe_v1');
   return 'Success';
 }
 
@@ -1548,6 +1597,7 @@ function adminXoaNgayLe(userId, password, ngay) {
     if (formatDateCell_(data[i][0]) === ngayStr) {
       sheet.deleteRow(i + 1);
       logActivity(userId, user.name, 'Xoá Ngày lễ', ngayStr);
+      cacheXoa_('NgayLe_v1');
       return 'Success';
     }
   }
@@ -1781,16 +1831,21 @@ function getChamCongThang(thang) {
   const { allPhep, allBu } = chotSoSachDenThangHienTai_(allUsers, ccByThang_);
 
   const ccThang = ccByThang_.get(thangXem) || [];
+  // Map tra cứu O(1)/nhân sự thay vì mỗi nhân sự tự .find()/.filter() lại NGUYÊN allPhep/allBu/ccThang.
+  const phepThangMap_ = new Map(allPhep.filter(p => p.thang === thangXem).map(p => [p.userId, p]));
+  const buThangMap_ = new Map(allBu.filter(p => p.thang === thangXem).map(p => [p.userId, p]));
+  const ccByUser_ = new Map();
+  ccThang.forEach(r => { if (!ccByUser_.has(r.userId)) ccByUser_.set(r.userId, []); ccByUser_.get(r.userId).push(r); });
 
   const rows = allUsers.map(u => {
-    const phepRow = allPhep.find(p => p.userId === u.id && p.thang === thangXem);
-    const buRow = allBu.find(p => p.userId === u.id && p.thang === thangXem);
+    const phepRow = phepThangMap_.get(u.id);
+    const buRow = buThangMap_.get(u.id);
     const phepDauThang = phepRow ? phepRow.phepDauThang : 0;
     const buDauThang = buRow ? buRow.buDauThang : 0;
     const gioTCDauThang = buRow ? buRow.gioTCDauThang : 0;
 
     const cc = {}, tc = {};
-    ccThang.filter(r => r.userId === u.id).forEach(r => {
+    (ccByUser_.get(u.id) || []).forEach(r => {
       if (r.buoi !== '') cc[r.ngay] = r.buoi;
       if (r.gioBatDauTC && r.gioKetThucTC) tc[r.ngay] = { start: r.gioBatDauTC, end: r.gioKetThucTC };
     });
@@ -1856,7 +1911,7 @@ function getChamCongThang(thang) {
   // ảnh hưởng "Số công tính lương" của từng nhân sự (xem NGAYLE_HEADERS_ ở đầu file):
   //   = (số ngày thường trong tháng − số ngày lễ rơi vào ngày thường) + định mức cuối tuần (quotaThu7)
   const soNgayThuongThang = soNgay - saturdays.length - sundays.length;
-  const ngayLeThang = readNgayLeRows_(layHoacTaoSheet_('NgayLe', NGAYLE_HEADERS_))
+  const ngayLeThang = docNgayLeCache_(layHoacTaoSheet_('NgayLe', NGAYLE_HEADERS_))
     .filter(nl => nl.ngay.slice(0, 7) === thangXem && !saturdays.includes(nl.ngay) && !sundays.includes(nl.ngay));
   const soNgayCongChuan = Math.round((soNgayThuongThang - ngayLeThang.length + quotaThu7) * 10) / 10;
 
